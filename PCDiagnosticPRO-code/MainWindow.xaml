@@ -31,6 +31,34 @@
         <conv:ScoreToHealthColorConverter x:Key="ScoreToHealthColor"/>
         <conv:HealthSeverityToAlertVisibilityConverter x:Key="SeverityToAlertVisibility"/>
         <sys:Double x:Key="CompactPanelHeight">140</sys:Double>
+        
+        <!-- Style pour texte sélectionnable et copiable dans les tableaux -->
+        <Style x:Key="SelectableTextStyle" TargetType="TextBox">
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Cursor" Value="IBeam"/>
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <ContextMenu>
+                        <MenuItem Header="Copier" Command="ApplicationCommands.Copy"/>
+                        <MenuItem Header="Tout sélectionner" Command="ApplicationCommands.SelectAll"/>
+                    </ContextMenu>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <Style x:Key="SelectableTextSecondaryStyle" TargetType="TextBox" BasedOn="{StaticResource SelectableTextStyle}">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -848,12 +876,16 @@
                                                                 <ItemsControl ItemsSource="{Binding EvidenceData}">
                                                                     <ItemsControl.ItemTemplate>
                                                                         <DataTemplate>
-                                                                            <StackPanel Orientation="Horizontal" Margin="0,2">
-                                                                                <TextBlock Text="{Binding Key}" FontSize="11" Width="120"
-                                                                                           Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                                                <TextBlock Text="{Binding Value}" FontSize="11"
-                                                                                           Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                                            </StackPanel>
+                                                                            <Grid Margin="0,2">
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="130"/>
+                                                                                    <ColumnDefinition Width="*"/>
+                                                                                </Grid.ColumnDefinitions>
+                                                                                <TextBox Grid.Column="0" Text="{Binding Key, Mode=OneWay}" 
+                                                                                         Style="{StaticResource SelectableTextSecondaryStyle}"/>
+                                                                                <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" 
+                                                                                         Style="{StaticResource SelectableTextStyle}"/>
+                                                                            </Grid>
                                                                         </DataTemplate>
                                                                     </ItemsControl.ItemTemplate>
                                                                 </ItemsControl>
@@ -964,7 +996,16 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <Border Grid.Row="2" Height="1" Background="Transparent"/>
+                    <!-- BOUTON RAPPORT.TXT CENTRÉ EN BAS -->
+                    <Border Grid.Row="2" Padding="0,15,0,10">
+                        <Button Content="📄 Rapport.txt" 
+                                Style="{StaticResource FuturisticButton}"
+                                Command="{Binding OpenReportTxtCommand}"
+                                HorizontalAlignment="Center"
+                                Padding="20,10"
+                                FontSize="14"
+                                ToolTip="Ouvre le rapport texte dans Bloc-notes"/>
+                    </Border>
                 </Grid>
 
                 <Grid Visibility="{Binding IsViewingArchives, Converter={StaticResource BoolToVisibility}}">

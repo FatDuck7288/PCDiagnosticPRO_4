@@ -351,17 +351,17 @@ namespace PCDiagnosticPro.ViewModels
                 ["ArchiveMenuText"] = "Archivar",
                 ["DeleteMenuText"] = "Eliminar",
                 ["ScoreLegendTitle"] = "Leyenda / Cálculo del puntaje",
-                ["ScoreRulesTitle"] = "Reglas de puntaje",
+                ["ScoreRulesTitle"] = "Reglas de puntaje (GradeEngine)",
                 ["ScoreGradesTitle"] = "Calificaciones",
-                ["ScoreRuleInitial"] = "• Puntaje inicial: 100",
-                ["ScoreRuleCritical"] = "• Errores críticos: criticalCount × 25 (-25 por crítico)",
-                ["ScoreRuleError"] = "• Errores: errorCount × 10 (-10 por error)",
-                ["ScoreRuleWarning"] = "• Advertencias: warningCount × 5 (-5 por advertencia)",
+                ["ScoreRuleInitial"] = "• Puntaje = promedio ponderado de 8 dominios",
+                ["ScoreRuleCritical"] = "• Dominios: SO, CPU, GPU, RAM, Almacenamiento, Red, Estabilidad, Controladores",
+                ["ScoreRuleError"] = "• Penalizaciones aplicadas según problemas detectados",
+                ["ScoreRuleWarning"] = "• Pesos: Almacenamiento (20%), SO/CPU/RAM (15%), GPU/Red/Estabilidad (10%), Controladores (5%)",
                 ["ScoreRuleMin"] = "• Puntaje mínimo: 0",
                 ["ScoreRuleMax"] = "• Puntaje máximo: 100",
-                ["ScoreGradeA"] = "• ❤️ ≥ 90 : A",
-                ["ScoreGradeB"] = "• 👍 ≥ 75 y < 90 : B",
-                ["ScoreGradeC"] = "• ⚠️ ≥ 60 y < 75 : C",
+                ["ScoreGradeA"] = "• 💎 ≥ 95 : A+ (Excelente) | ❤️ ≥ 90 : A (Muy bien)",
+                ["ScoreGradeB"] = "• 👍 ≥ 80 : B+ (Bien) | 👌 ≥ 70 : B (Aceptable)",
+                ["ScoreGradeC"] = "• ⚠️ ≥ 60 : C (Degradado - Atención)",
                 ["ScoreGradeD"] = "• 💀 ≥ 40 y < 60 : D",
                 ["ScoreGradeF"] = "• 🧨 < 40 : F",
                 ["DeleteScanConfirmTitle"] = "Confirmación",
@@ -855,6 +855,7 @@ namespace PCDiagnosticPro.ViewModels
         public ICommand StartScanCommand { get; }
         public ICommand CancelScanCommand { get; }
         public ICommand OpenReportCommand { get; }
+        public ICommand OpenReportTxtCommand { get; }
         public ICommand RestartAsAdminCommand { get; }
         public ICommand ExportResultsCommand { get; }
         public ICommand NavigateToScannerCommand { get; }
@@ -931,6 +932,7 @@ namespace PCDiagnosticPro.ViewModels
             StartScanCommand = new AsyncRelayCommand(StartScanAsync, () => CanStartScan);
             CancelScanCommand = new RelayCommand(CancelScan, () => IsScanning);
             OpenReportCommand = new RelayCommand(OpenReport, () => HasScanResult);
+            OpenReportTxtCommand = new RelayCommand(OpenReportTxt, () => HasScanResult);
             RestartAsAdminCommand = new RelayCommand(RestartAsAdmin);
             ExportResultsCommand = new RelayCommand(ExportResults, () => HasScanResult);
             NavigateToScannerCommand = new RelayCommand(() => { CurrentView = "Home"; SelectedHistoryScan = null; IsViewingArchives = false; });
@@ -976,6 +978,35 @@ namespace PCDiagnosticPro.ViewModels
                     App.LogMessage("Scan déjà en cours");
                     return;
                 }
+            }
+
+            // VÉRIFICATION MODE ADMIN - Proposer relance si non-admin
+            if (!Services.AdminHelper.IsRunningAsAdmin())
+            {
+                App.LogMessage("[Admin] Application non en mode administrateur");
+                var adminMessage = "Pour un diagnostic complet, le mode administrateur est recommandé.\n\n" +
+                    Services.AdminHelper.GetAdminExplanation() + "\n\n" +
+                    "Sans droits admin, certaines données peuvent être incomplètes.";
+                
+                var result = System.Windows.MessageBox.Show(
+                    adminMessage,
+                    "Mode administrateur recommandé",
+                    System.Windows.MessageBoxButton.YesNoCancel,
+                    System.Windows.MessageBoxImage.Question);
+
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    // Relancer en admin
+                    Services.AdminHelper.RestartAsAdmin();
+                    return;
+                }
+                else if (result == System.Windows.MessageBoxResult.Cancel)
+                {
+                    // Annuler le scan
+                    return;
+                }
+                // No = continuer sans admin
+                App.LogMessage("[Admin] Utilisateur continue sans droits admin");
             }
 
             try
@@ -1486,12 +1517,18 @@ namespace PCDiagnosticPro.ViewModels
                     App.LogMessage($"[HealthReport] Construit: Score={healthReport.GlobalScore}, Grade={healthReport.Grade}, " +
                         $"Sections={healthReport.Sections.Count}, Confiance={healthReport.ConfidenceModel.ConfidenceLevel}");
                     
-                    // Synchroniser le score si scoreV2 disponible
-                    if (healthReport.ScoreV2.Score > 0 && healthReport.ScoreV2.Score != result.Summary.Score)
+                    // SYNCHRONISER LE SCORE UNIFIÉ
+                    // GradeEngine est la source de vérité (intègre capteurs + PS)
+                    // On synchronise Summary.Score pour que TOUTE l'UI affiche le même score
+                    var unifiedScore = healthReport.GlobalScore;
+                    var unifiedGrade = healthReport.Grade;
+                    
+                    if (result.Summary.Score != unifiedScore)
                     {
-                        App.LogMessage($"[HealthReport] Synchronisation score: Legacy={result.Summary.Score} -> ScoreV2={healthReport.ScoreV2.Score}");
-                        result.Summary.Score = healthReport.ScoreV2.Score;
-                        result.Summary.Grade = healthReport.ScoreV2.Grade;
+                        App.LogMessage($"[ScoreUnifié] Synchronisation: Legacy={result.Summary.Score} -> GradeEngine={unifiedScore} ({unifiedGrade})");
+                        App.LogMessage($"[ScoreUnifié] Divergence PS({healthReport.ScoreV2.Score}) vs App({unifiedScore}) = delta {healthReport.Divergence.Delta}");
+                        result.Summary.Score = unifiedScore;
+                        result.Summary.Grade = unifiedGrade;
                     }
                 }
                 catch (Exception ex)
@@ -1871,6 +1908,94 @@ namespace PCDiagnosticPro.ViewModels
                     SelectedHistoryScan = ScanHistory[0];
                 }
             }
+        }
+
+        /// <summary>
+        /// Ouvre le rapport TXT dans Bloc-notes
+        /// </summary>
+        private void OpenReportTxt()
+        {
+            try
+            {
+                // Chercher le fichier Rapport.txt dans le dossier des rapports
+                var reportTxtPath = FindReportTxtPath();
+                
+                if (string.IsNullOrEmpty(reportTxtPath) || !File.Exists(reportTxtPath))
+                {
+                    System.Windows.MessageBox.Show(
+                        "Le fichier Rapport.txt n'a pas été trouvé.\n\n" +
+                        "Lancez d'abord un scan pour générer le rapport.",
+                        "Rapport introuvable",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                    return;
+                }
+
+                // Ouvrir dans Notepad
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "notepad.exe",
+                    Arguments = $"\"{reportTxtPath}\"",
+                    UseShellExecute = true
+                };
+                Process.Start(startInfo);
+                
+                App.LogMessage($"[Rapport] Ouverture: {reportTxtPath}");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[Rapport] Erreur ouverture: {ex.Message}");
+                System.Windows.MessageBox.Show(
+                    $"Impossible d'ouvrir le rapport.\n\n{ex.Message}",
+                    "Erreur",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Recherche le fichier Rapport.txt le plus récent
+        /// </summary>
+        private string? FindReportTxtPath()
+        {
+            var searchDirs = new[]
+            {
+                _reportsDir,
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PCDiagnosticPro", "Rapports"),
+                Path.GetDirectoryName(_resultJsonPath) ?? ""
+            };
+
+            var patterns = new[] { "Rapport*.txt", "*_report.txt", "scan_result*.txt" };
+
+            foreach (var dir in searchDirs.Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d)))
+            {
+                foreach (var pattern in patterns)
+                {
+                    var files = Directory.GetFiles(dir, pattern, SearchOption.TopDirectoryOnly);
+                    if (files.Length > 0)
+                    {
+                        // Retourner le plus récent
+                        return files.OrderByDescending(f => File.GetLastWriteTime(f)).First();
+                    }
+                }
+            }
+
+            // Fallback: chercher à côté du JSON
+            if (!string.IsNullOrEmpty(_resultJsonPath))
+            {
+                var dir = Path.GetDirectoryName(_resultJsonPath);
+                if (dir != null)
+                {
+                    var txtPath = Path.Combine(dir, "Rapport.txt");
+                    if (File.Exists(txtPath)) return txtPath;
+
+                    // Essayer avec le même nom que le JSON mais en .txt
+                    txtPath = Path.ChangeExtension(_resultJsonPath, ".txt");
+                    if (File.Exists(txtPath)) return txtPath;
+                }
+            }
+
+            return null;
         }
 
         private void SelectHistoryScan(ScanHistoryItem? item)

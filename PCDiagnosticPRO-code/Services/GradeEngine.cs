@@ -288,6 +288,31 @@ namespace PCDiagnosticPro.Services
                 }
             }
 
+            // PÉNALITÉ TEMPÉRATURE DISQUES (capteurs hardware)
+            if (section.EvidenceData.TryGetValue("TempMax Disques", out var diskTempStr))
+            {
+                if (double.TryParse(diskTempStr.Replace("°C", "").Trim(), out var diskTemp))
+                {
+                    if (diskTemp > 70) penalties.Add((25, $"Température disque critique ({diskTemp}°C > 70°C)"));
+                    else if (diskTemp > 60) penalties.Add((15, $"Température disque élevée ({diskTemp}°C > 60°C)"));
+                    else if (diskTemp > 50) penalties.Add((5, $"Température disque à surveiller ({diskTemp}°C > 50°C)"));
+                }
+            }
+            
+            // Vérifier aussi les températures individuelles des disques
+            foreach (var kvp in section.EvidenceData.Where(k => k.Key.StartsWith("Disque ")))
+            {
+                var parts = kvp.Value.Split(':');
+                if (parts.Length > 1)
+                {
+                    var tempPart = parts[1].Replace("°C", "").Trim();
+                    if (double.TryParse(tempPart, out var temp) && temp > 60)
+                    {
+                        penalties.Add((10, $"{kvp.Key} température élevée ({temp}°C)"));
+                    }
+                }
+            }
+
             // Vérifier les erreurs SMART
             var smartErrors = report.Errors.Count(e => 
                 e.Section.Contains("Smart", StringComparison.OrdinalIgnoreCase) ||
