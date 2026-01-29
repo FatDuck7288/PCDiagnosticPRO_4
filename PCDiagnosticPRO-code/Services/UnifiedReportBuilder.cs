@@ -37,20 +37,46 @@ namespace PCDiagnosticPro.Services
                 HardwareSensorsResult? sensors = null;
                 JsonElement? psData = null;
 
-                // 1. Lire le JSON combiné
+                // 1. Lire le JSON combiné (RÉTROCOMPATIBLE: accepte camelCase ET snake_case)
                 if (File.Exists(combinedJsonPath))
                 {
                     var jsonContent = await File.ReadAllTextAsync(combinedJsonPath, Encoding.UTF8);
                     using var doc = JsonDocument.Parse(jsonContent);
+                    var root = doc.RootElement;
                     
-                    if (doc.RootElement.TryGetProperty("sensorsCsharp", out var sensorsElement))
+                    // ROBUSTE: Chercher capteurs C# avec fallback snake_case → camelCase
+                    JsonElement sensorsElement = default;
+                    bool foundSensors = TryGetPropertyRobust(root, out sensorsElement, "sensors_csharp", "sensorsCsharp");
+                    
+                    if (foundSensors && sensorsElement.ValueKind == JsonValueKind.Object)
                     {
-                        sensors = JsonSerializer.Deserialize<HardwareSensorsResult>(sensorsElement.GetRawText());
+                        try
+                        {
+                            sensors = JsonSerializer.Deserialize<HardwareSensorsResult>(sensorsElement.GetRawText());
+                            App.LogMessage($"[UnifiedReport] Capteurs C# chargés depuis JSON combiné (clés trouvées)");
+                        }
+                        catch (Exception ex)
+                        {
+                            App.LogMessage($"[UnifiedReport] ERREUR désérialisation capteurs: {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        App.LogMessage($"[UnifiedReport] ATTENTION: Aucune clé capteurs trouvée (sensors_csharp/sensorsCsharp)");
                     }
                     
-                    if (doc.RootElement.TryGetProperty("scanPowershell", out var psElement))
+                    // ROBUSTE: Chercher données PS avec fallback snake_case → camelCase
+                    JsonElement psElement = default;
+                    bool foundPs = TryGetPropertyRobust(root, out psElement, "scan_powershell", "scanPowershell");
+                    
+                    if (foundPs)
                     {
                         psData = psElement.Clone();
+                        App.LogMessage($"[UnifiedReport] Données PS chargées depuis JSON combiné");
+                    }
+                    else
+                    {
+                        App.LogMessage($"[UnifiedReport] ATTENTION: Aucune clé PS trouvée (scan_powershell/scanPowershell)");
                     }
                 }
 
@@ -192,9 +218,15 @@ namespace PCDiagnosticPro.Services
             if (sensors == null)
             {
                 sb.AppendLine("  ❌ Données capteurs non disponibles");
+                sb.AppendLine("     Raison: Objet HardwareSensorsResult null (JSON combiné mal lu ou capteurs non collectés)");
                 sb.AppendLine();
+                App.LogMessage("[UnifiedReport] Section capteurs: sensors == null");
                 return;
             }
+            
+            // Vérifier si les capteurs ont été réellement collectés
+            var (available, total) = sensors.GetAvailabilitySummary();
+            App.LogMessage($"[UnifiedReport] Section capteurs: {available}/{total} capteurs disponibles");
 
             sb.AppendLine($"  Collecté à : {sensors.CollectedAt:yyyy-MM-dd HH:mm:ss}");
             sb.AppendLine();
@@ -484,6 +516,37 @@ namespace PCDiagnosticPro.Services
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Recherche robuste de propriété JSON avec fallback sur plusieurs noms de clés.
+        /// Permet rétrocompatibilité snake_case / camelCase.
+        /// </summary>
+        private static bool TryGetPropertyRobust(JsonElement element, out JsonElement value, params string[] propertyNames)
+        {
+            value = default;
+            
+            if (element.ValueKind != JsonValueKind.Object)
+                return false;
+                
+            foreach (var name in propertyNames)
+            {
+                if (element.TryGetProperty(name, out value))
+                {
+                    App.LogMessage($"[UnifiedReport] Clé JSON trouvée: '{name}'");
+                    return true;
+                }
+            }
+            
+            // Log des clés disponibles pour debug
+            var availableKeys = new List<string>();
+            foreach (var prop in element.EnumerateObject())
+            {
+                availableKeys.Add(prop.Name);
+            }
+            App.LogMessage($"[UnifiedReport] Clés cherchées: [{string.Join(", ", propertyNames)}] | Clés disponibles: [{string.Join(", ", availableKeys)}]");
+            
+            return false;
         }
     }
 }

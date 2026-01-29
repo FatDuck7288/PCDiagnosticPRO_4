@@ -259,7 +259,8 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
-        /// Construit le modèle de confiance (coverage + cohérence)
+        /// Construit le modèle de confiance (coverage + cohérence).
+        /// ConfidenceScore pénalise l'ABSENCE de données, pas les anomalies (c'est HealthScore).
         /// </summary>
         private static ConfidenceModel BuildConfidenceModel(HealthReport report, HardwareSensorsResult? sensors)
         {
@@ -278,38 +279,117 @@ namespace PCDiagnosticPro.Services
                 model.SensorsAvailable = available;
                 model.SensorsTotal = total;
             }
+            else
+            {
+                model.SensorsCoverage = 0;
+                model.SensorsAvailable = 0;
+                model.SensorsTotal = 6; // GPU name, GPU temp, GPU load, VRAM total, VRAM used, CPU temp
+            }
             
-            // 3. Score de confiance global
+            // 3. Score de confiance global - PÉNALITÉS SPÉCIFIQUES
             model.ConfidenceScore = 100;
             
-            // Pénalités
+            // === PÉNALITÉS CAPTEURS C# CRITIQUES ===
+            if (sensors == null)
+            {
+                model.ConfidenceScore -= 20;
+                model.Warnings.Add("Capteurs hardware C# non collectés (objet null)");
+            }
+            else
+            {
+                // CPU température manquante = critique pour évaluer la santé thermique
+                if (!sensors.Cpu.CpuTempC.Available)
+                {
+                    model.ConfidenceScore -= 8;
+                    model.Warnings.Add($"Température CPU indisponible ({sensors.Cpu.CpuTempC.Reason ?? "capteur absent"})");
+                }
+                
+                // GPU température manquante
+                if (!sensors.Gpu.GpuTempC.Available)
+                {
+                    model.ConfidenceScore -= 5;
+                    model.Warnings.Add($"Température GPU indisponible ({sensors.Gpu.GpuTempC.Reason ?? "capteur absent"})");
+                }
+                
+                // VRAM = important pour évaluer les problèmes graphiques
+                if (!sensors.Gpu.VramTotalMB.Available || !sensors.Gpu.VramUsedMB.Available)
+                {
+                    model.ConfidenceScore -= 3;
+                    model.Warnings.Add("VRAM indisponible (limitation driver ou permissions)");
+                }
+                
+                // GPU Load manquant
+                if (!sensors.Gpu.GpuLoadPercent.Available)
+                {
+                    model.ConfidenceScore -= 2;
+                    model.Warnings.Add("Charge GPU indisponible");
+                }
+                
+                // Températures disques = vérifie la couverture
+                var disksWithTemp = sensors.Disks.Count(d => d.TempC.Available);
+                var totalDisks = sensors.Disks.Count;
+                if (totalDisks > 0 && disksWithTemp == 0)
+                {
+                    model.ConfidenceScore -= 5;
+                    model.Warnings.Add($"Aucune température disque disponible (0/{totalDisks} disques)");
+                }
+            }
+            
+            // === PÉNALITÉS POWERSHELL ===
             if (report.Metadata.PartialFailure)
             {
-                model.ConfidenceScore -= 15;
-                model.Warnings.Add("Scan partiel - certaines données manquantes");
+                model.ConfidenceScore -= 10;
+                model.Warnings.Add("Scan PowerShell partiel - certaines sections manquantes");
             }
             
             if (model.SectionsCoverage < 0.7)
             {
-                model.ConfidenceScore -= 10;
-                model.Warnings.Add($"Couverture sections faible ({model.SectionsCoverage:P0})");
+                model.ConfidenceScore -= 8;
+                model.Warnings.Add($"Couverture sections PS faible ({model.SectionsCoverage:P0})");
             }
             
-            if (model.SensorsCoverage < 0.5)
+            // Erreurs de collecteurs (WMI, SMART, etc.)
+            if (report.ScoreV2.Breakdown.CollectorErrors > 0)
             {
-                model.ConfidenceScore -= 10;
-                model.Warnings.Add($"Capteurs hardware partiellement disponibles ({model.SensorsCoverage:P0})");
+                var penalty = Math.Min(report.ScoreV2.Breakdown.CollectorErrors * 3, 15);
+                model.ConfidenceScore -= penalty;
+                model.Warnings.Add($"Erreurs collecteurs: {report.ScoreV2.Breakdown.CollectorErrors} (pénalité -{penalty})");
             }
             
-            if (report.ScoreV2.Breakdown.Timeouts > 2)
+            // Timeouts = données potentiellement incomplètes
+            if (report.ScoreV2.Breakdown.Timeouts > 0)
             {
-                model.ConfidenceScore -= 10;
-                model.Warnings.Add($"Timeouts multiples ({report.ScoreV2.Breakdown.Timeouts})");
+                var penalty = Math.Min(report.ScoreV2.Breakdown.Timeouts * 5, 15);
+                model.ConfidenceScore -= penalty;
+                model.Warnings.Add($"Timeouts: {report.ScoreV2.Breakdown.Timeouts} (pénalité -{penalty})");
             }
             
-            model.ConfidenceScore = Math.Max(0, model.ConfidenceScore);
-            model.ConfidenceLevel = model.ConfidenceScore >= 80 ? "Élevé" :
-                                    model.ConfidenceScore >= 60 ? "Modéré" : "Faible";
+            // MissingData du rapport PS
+            if (report.MissingData.Count > 0)
+            {
+                var penalty = Math.Min(report.MissingData.Count * 2, 10);
+                model.ConfidenceScore -= penalty;
+                model.Warnings.Add($"Données PS manquantes: {report.MissingData.Count} éléments");
+            }
+            
+            // Erreurs explicites dans le rapport
+            var criticalErrors = report.Errors.Count(e => 
+                e.Code.Contains("WMI", StringComparison.OrdinalIgnoreCase) ||
+                e.Code.Contains("SMART", StringComparison.OrdinalIgnoreCase) ||
+                e.Message.Contains("invalid", StringComparison.OrdinalIgnoreCase));
+            if (criticalErrors > 0)
+            {
+                model.ConfidenceScore -= criticalErrors * 3;
+                model.Warnings.Add($"Erreurs critiques détectées: {criticalErrors} (WMI/SMART/invalid)");
+            }
+            
+            // Finaliser
+            model.ConfidenceScore = Math.Max(0, Math.Min(100, model.ConfidenceScore));
+            model.ConfidenceLevel = model.ConfidenceScore >= 80 ? "Élevée" :
+                                    model.ConfidenceScore >= 60 ? "Moyenne" : "Faible";
+            
+            App.LogMessage($"[ConfidenceModel] Score={model.ConfidenceScore}, Level={model.ConfidenceLevel}, " +
+                $"Sensors={model.SensorsAvailable}/{model.SensorsTotal}, Warnings={model.Warnings.Count}");
             
             return model;
         }

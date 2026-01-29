@@ -30,6 +30,7 @@
         <conv:HealthSeverityToIconConverter x:Key="SeverityToIcon"/>
         <conv:ScoreToHealthColorConverter x:Key="ScoreToHealthColor"/>
         <conv:HealthSeverityToAlertVisibilityConverter x:Key="SeverityToAlertVisibility"/>
+        <conv:HexToSolidColorBrushConverter x:Key="HexToColorBrush"/>
         <sys:Double x:Key="CompactPanelHeight">140</sys:Double>
         
         <!-- Style pour texte sélectionnable et copiable dans les tableaux -->
@@ -785,6 +786,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
                                             <TextBlock Text="🩺 Santé de votre PC" FontWeight="Bold" FontSize="18"
@@ -792,15 +794,34 @@
                                             <TextBlock Text="{Binding GlobalHealthMessage}" FontSize="12" TextWrapping="Wrap"
                                                        Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                                         </StackPanel>
-                                        <Border Grid.Column="1" Width="60" Height="60" CornerRadius="30"
-                                                Background="{Binding HealthReport.GlobalSeverity, Converter={StaticResource SeverityToColor}}">
-                                            <StackPanel VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding GlobalHealthScore}" FontSize="18" FontWeight="Bold"
-                                                           Foreground="White" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="{Binding GlobalHealthGrade}" FontSize="10"
-                                                           Foreground="White" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
+                                        <!-- HEALTH SCORE (état machine) -->
+                                        <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                            <TextBlock Text="État" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" 
+                                                       HorizontalAlignment="Center"/>
+                                            <Border Width="60" Height="60" CornerRadius="30"
+                                                    Background="{Binding HealthReport.GlobalSeverity, Converter={StaticResource SeverityToColor}}">
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding GlobalHealthScore}" FontSize="18" FontWeight="Bold"
+                                                               Foreground="White" HorizontalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding GlobalHealthGrade}" FontSize="10"
+                                                               Foreground="White" HorizontalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                        <!-- CONFIDENCE SCORE (qualité collecte) -->
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Fiabilité" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" 
+                                                       HorizontalAlignment="Center"/>
+                                            <Border Width="60" Height="60" CornerRadius="30"
+                                                    Background="{Binding ConfidenceColor, Converter={StaticResource HexToColorBrush}}">
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding ConfidenceScore}" FontSize="18" FontWeight="Bold"
+                                                               Foreground="White" HorizontalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding ConfidenceLevel}" FontSize="8"
+                                                               Foreground="White" HorizontalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
                                     </Grid>
                                     
                                     <!-- Liste des 8 domaines - CLIQUABLES avec expansion -->
@@ -927,7 +948,9 @@
                                                           CanUserAddRows="False" CanUserDeleteRows="False"
                                                           GridLinesVisibility="None" HeadersVisibility="Column"
                                                           ColumnWidth="*" HorizontalScrollBarVisibility="Disabled"
-                                                          MaxHeight="260">
+                                                          MaxHeight="260"
+                                                          SelectionMode="Extended" SelectionUnit="CellOrRowHeader"
+                                                          ClipboardCopyMode="IncludeHeader">
                                                     <DataGrid.Columns>
                                                         <DataGridTextColumn Header="Clé" Binding="{Binding Key}" Width="2*"/>
                                                         <DataGridTextColumn Header="Valeur" Binding="{Binding Value, TargetNullValue=Non disponible}" Width="3*">
@@ -951,7 +974,9 @@
                                                                           CanUserAddRows="False" CanUserDeleteRows="False"
                                                                           GridLinesVisibility="None" HeadersVisibility="Column"
                                                                           ColumnWidth="*" HorizontalScrollBarVisibility="Disabled"
-                                                                          MaxHeight="260"/>
+                                                                          MaxHeight="260"
+                                                                          SelectionMode="Extended" SelectionUnit="CellOrRowHeader"
+                                                                          ClipboardCopyMode="IncludeHeader"/>
                                                             </StackPanel>
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>

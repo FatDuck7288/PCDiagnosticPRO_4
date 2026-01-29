@@ -561,6 +561,11 @@ namespace PCDiagnosticPro.ViewModels
                     OnPropertyChanged(nameof(GlobalHealthMessage));
                     OnPropertyChanged(nameof(GlobalHealthColor));
                     OnPropertyChanged(nameof(GlobalHealthIcon));
+                    // Confidence Score
+                    OnPropertyChanged(nameof(ConfidenceScore));
+                    OnPropertyChanged(nameof(ConfidenceLevel));
+                    OnPropertyChanged(nameof(ConfidenceDisplay));
+                    OnPropertyChanged(nameof(ConfidenceColor));
                     UpdateHealthSections();
                 }
             }
@@ -576,6 +581,13 @@ namespace PCDiagnosticPro.ViewModels
         public string GlobalHealthIcon => HealthReport != null 
             ? Models.HealthReport.SeverityToIcon(HealthReport.GlobalSeverity) 
             : "?";
+        
+        // === CONFIDENCE SCORE (qualité de collecte) ===
+        public int ConfidenceScore => HealthReport?.ConfidenceModel?.ConfidenceScore ?? 0;
+        public string ConfidenceLevel => HealthReport?.ConfidenceModel?.ConfidenceLevel ?? "N/A";
+        public string ConfidenceDisplay => $"{ConfidenceScore}/100 ({ConfidenceLevel})";
+        public string ConfidenceColor => ConfidenceScore >= 80 ? "#4CAF50" : 
+                                          ConfidenceScore >= 60 ? "#FFC107" : "#F44336";
 
         private ObservableCollection<HealthSection> _healthSections = new();
         public ObservableCollection<HealthSection> HealthSections
