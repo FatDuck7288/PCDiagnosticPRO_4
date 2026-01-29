@@ -1537,6 +1537,11 @@ namespace PCDiagnosticPro.ViewModels
                     HealthReport = null;
                 }
                 // ===== FIN HEALTH REPORT =====
+                
+                // ===== GÉNÉRATION TXT UNIFIÉ (PS + SENSORS + SCORE) =====
+                var outputDir = Path.GetDirectoryName(_resultJsonPath) ?? _reportsDir;
+                await GenerateUnifiedTxtReportAsync(outputDir);
+                // ===== FIN TXT UNIFIÉ =====
 
                 App.LogMessage($"Scan terminé: Score={result.Summary.Score} | JSON={_resultJsonPath}");
                 App.LogMessage("Parse OK");
@@ -1798,12 +1803,75 @@ namespace PCDiagnosticPro.ViewModels
                 var combinedJson = JsonSerializer.Serialize(combined, HardwareSensorsResult.JsonOptions);
                 await File.WriteAllTextAsync(combinedPath, combinedJson, Encoding.UTF8);
                 App.LogMessage($"Rapport combiné généré: {combinedPath}");
+                
+                // Stocker le chemin pour la génération TXT unifiée
+                _combinedJsonPath = combinedPath;
             }
             catch (Exception ex)
             {
                 App.LogMessage($"Erreur création rapport combiné: {ex.Message}");
             }
         }
+        
+        // Chemin du JSON combiné pour TXT unifié
+        private string _combinedJsonPath = string.Empty;
+
+        /// <summary>
+        /// Génère le rapport TXT UNIFIÉ = PowerShell + Hardware Sensors + Score + Metadata.
+        /// Appelé après que le HealthReport soit construit.
+        /// </summary>
+        private async Task GenerateUnifiedTxtReportAsync(string outputDir)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_combinedJsonPath) || !File.Exists(_combinedJsonPath))
+                {
+                    App.LogMessage("[UnifiedTXT] JSON combiné introuvable, génération TXT annulée");
+                    return;
+                }
+
+                // Trouver le TXT PowerShell original
+                var originalTxtPath = Services.UnifiedReportBuilder.FindLatestPsTxtReport(outputDir);
+                if (originalTxtPath == null)
+                {
+                    // Chercher aussi dans le dossier parent
+                    var parentDir = Path.GetDirectoryName(outputDir);
+                    if (parentDir != null)
+                    {
+                        originalTxtPath = Services.UnifiedReportBuilder.FindLatestPsTxtReport(parentDir);
+                    }
+                }
+                
+                App.LogMessage($"[UnifiedTXT] TXT PowerShell trouvé: {originalTxtPath ?? "AUCUN"}");
+
+                // Chemin du TXT unifié final
+                var unifiedTxtPath = Path.Combine(outputDir, $"Rapport_Unifie_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+
+                // Générer le rapport unifié
+                var success = await Services.UnifiedReportBuilder.BuildUnifiedReportAsync(
+                    _combinedJsonPath,
+                    originalTxtPath,
+                    unifiedTxtPath,
+                    HealthReport);
+
+                if (success)
+                {
+                    App.LogMessage($"[UnifiedTXT] ✅ Rapport unifié généré: {unifiedTxtPath}");
+                    _lastUnifiedTxtPath = unifiedTxtPath;
+                }
+                else
+                {
+                    App.LogMessage("[UnifiedTXT] ❌ Échec génération rapport unifié");
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[UnifiedTXT] ERREUR: {ex.Message}");
+            }
+        }
+        
+        // Chemin du dernier TXT unifié généré
+        private string _lastUnifiedTxtPath = string.Empty;
 
         private void UpdateScanItemsFromResult(ScanResult result)
         {
@@ -1954,10 +2022,16 @@ namespace PCDiagnosticPro.ViewModels
         }
 
         /// <summary>
-        /// Recherche le fichier Rapport.txt le plus récent
+        /// Recherche le fichier Rapport.txt le plus récent (priorité au TXT unifié)
         /// </summary>
         private string? FindReportTxtPath()
         {
+            // PRIORITÉ 1: TXT unifié le plus récent (contient PS + Sensors)
+            if (!string.IsNullOrEmpty(_lastUnifiedTxtPath) && File.Exists(_lastUnifiedTxtPath))
+            {
+                return _lastUnifiedTxtPath;
+            }
+
             var searchDirs = new[]
             {
                 _reportsDir,
@@ -1965,7 +2039,18 @@ namespace PCDiagnosticPro.ViewModels
                 Path.GetDirectoryName(_resultJsonPath) ?? ""
             };
 
-            var patterns = new[] { "Rapport*.txt", "*_report.txt", "scan_result*.txt" };
+            // PRIORITÉ 2: Rapport_Unifie (pattern TXT unifié)
+            foreach (var dir in searchDirs.Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d)))
+            {
+                var unifiedFiles = Directory.GetFiles(dir, "Rapport_Unifie*.txt", SearchOption.TopDirectoryOnly);
+                if (unifiedFiles.Length > 0)
+                {
+                    return unifiedFiles.OrderByDescending(f => File.GetLastWriteTime(f)).First();
+                }
+            }
+
+            // PRIORITÉ 3: Autres patterns TXT
+            var patterns = new[] { "Scan_*.txt", "Rapport*.txt", "*_report.txt" };
 
             foreach (var dir in searchDirs.Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d)))
             {
