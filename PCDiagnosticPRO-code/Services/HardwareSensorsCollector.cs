@@ -70,6 +70,8 @@ namespace PCDiagnosticPro.Services
             
             res.Cpu = new CpuMetrics();
             res.Cpu.CpuTempC = UnavailableDouble("Temperature CPU non collectee");
+            res.Cpu.CpuTempSource = "N/A";
+            res.Cpu.CpuLoadPercent = UnavailableDouble("Charge CPU: utiliser donnees PowerShell");
             
             res.Disks = new List<DiskMetrics>();
             
@@ -84,6 +86,8 @@ namespace PCDiagnosticPro.Services
             result.Gpu.GpuLoadPercent = UnavailableDouble(reason);
             result.Gpu.GpuTempC = UnavailableDouble(reason);
             result.Cpu.CpuTempC = UnavailableDouble(reason);
+            result.Cpu.CpuTempSource = "Erreur";
+            result.Cpu.CpuLoadPercent = UnavailableDouble(reason);
             result.Disks.Clear();
             
             var diskMetric = new DiskMetrics();
@@ -168,6 +172,7 @@ namespace PCDiagnosticPro.Services
                 if (cpu == null)
                 {
                     result.Cpu.CpuTempC = UnavailableDouble("CPU introuvable");
+                    result.Cpu.CpuTempSource = "N/A";
                     return;
                 }
 
@@ -175,16 +180,100 @@ namespace PCDiagnosticPro.Services
                 UpdateSubHardware(cpu);
 
                 var sensors = GetAllSensors(cpu).ToList();
-                var cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Package", "CPU");
+                
+                // === STRATÉGIE ROBUSTE POUR CPU TEMP (Intel + AMD Ryzen) ===
+                // Priorité 1: CPU Package (Intel standard)
+                // Priorité 2: Tctl (AMD Ryzen - température de contrôle)
+                // Priorité 3: Tdie (AMD Ryzen - température réelle du die)
+                // Priorité 4: Core (CCD) Average ou Max
+                // Priorité 5: Tout capteur température disponible
+                
+                double? cpuTemp = null;
+                string tempSource = "N/A";
+                
+                // Priorité 1: CPU Package (Intel standard, aussi certains AMD)
+                cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Package");
+                if (cpuTemp.HasValue)
+                {
+                    tempSource = "CPU Package";
+                }
+                
+                // Priorité 2: Tctl (AMD Ryzen - température de contrôle, peut être +10°C offset)
+                if (!cpuTemp.HasValue)
+                {
+                    cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Tctl");
+                    if (cpuTemp.HasValue)
+                    {
+                        tempSource = "Tctl (AMD)";
+                        // Note: Tctl peut avoir un offset de +10°C sur certains Ryzen
+                        // On garde la valeur brute et on documente la source
+                    }
+                }
+                
+                // Priorité 3: Tdie (AMD Ryzen - température réelle du die, préférable à Tctl)
+                if (!cpuTemp.HasValue)
+                {
+                    cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Tdie");
+                    if (cpuTemp.HasValue)
+                    {
+                        tempSource = "Tdie (AMD)";
+                    }
+                }
+                
+                // Priorité 4: Core (CCD) - moyenne ou max des cores
+                if (!cpuTemp.HasValue)
+                {
+                    cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Core (Tctl/Tdie)");
+                    if (cpuTemp.HasValue)
+                    {
+                        tempSource = "Core (Tctl/Tdie)";
+                    }
+                }
+                
+                // Priorité 5: CCD Average
+                if (!cpuTemp.HasValue)
+                {
+                    cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "CCD");
+                    if (cpuTemp.HasValue)
+                    {
+                        tempSource = "CCD Average";
+                    }
+                }
+                
+                // Priorité 6: Fallback sur n'importe quel capteur température CPU
+                if (!cpuTemp.HasValue)
+                {
+                    var anyTempSensor = sensors.FirstOrDefault(s => 
+                        s.SensorType == SensorType.Temperature && s.Value.HasValue);
+                    if (anyTempSensor != null)
+                    {
+                        cpuTemp = anyTempSensor.Value.Value;
+                        tempSource = $"Fallback ({anyTempSensor.Name})";
+                    }
+                }
                 
                 if (cpuTemp.HasValue)
+                {
                     result.Cpu.CpuTempC = Available(cpuTemp.Value);
+                    result.Cpu.CpuTempSource = tempSource;
+                    App.LogMessage($"[Sensors→CPU] Température collectée: {cpuTemp.Value:F1}°C (source: {tempSource})");
+                }
                 else
-                    result.Cpu.CpuTempC = UnavailableDouble("Temperature CPU indisponible");
+                {
+                    // Log tous les capteurs pour debug
+                    var tempSensors = sensors.Where(s => s.SensorType == SensorType.Temperature).ToList();
+                    var sensorNames = string.Join(", ", tempSensors.Select(s => $"{s.Name}={s.Value}"));
+                    App.LogMessage($"[Sensors→CPU] AUCUNE température trouvée. Capteurs dispo: [{sensorNames}]");
+                    
+                    result.Cpu.CpuTempC = UnavailableDouble($"Aucun capteur température CPU compatible (trouvés: {tempSensors.Count})");
+                    result.Cpu.CpuTempSource = "N/A";
+                }
             }
             catch (Exception ex)
             {
                 result.Cpu.CpuTempC = UnavailableDouble(string.Format("Erreur CPU: {0}", ex.Message));
+                result.Cpu.CpuTempSource = "Erreur";
+                App.LogMessage($"[Sensors→CPU] ERREUR: {ex.Message}");
             }
         }
 

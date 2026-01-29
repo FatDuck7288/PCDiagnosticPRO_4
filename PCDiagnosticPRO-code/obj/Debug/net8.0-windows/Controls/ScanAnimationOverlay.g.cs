@@ -100,7 +100,7 @@ namespace PCDiagnosticPro.Controls {
                 return;
             }
             _contentLoaded = true;
-            System.Uri resourceLocater = new System.Uri("/PCDiagnosticPro;V1.0.0.0;component/controls/scananimationoverlay.xaml", System.UriKind.Relative);
+            System.Uri resourceLocater = new System.Uri("/PCDiagnosticPro;component/controls/scananimationoverlay.xaml", System.UriKind.Relative);
             
             #line 1 "..\..\..\..\Controls\ScanAnimationOverlay.xaml"
             System.Windows.Application.LoadComponent(this, resourceLocater);

@@ -1,20 +1,20 @@
 ﻿PCDiagnosticPro
-1.0.0.0
+
 
 winexe
 C#
 .cs
-d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\
 PCDiagnosticPro
 none
 false
 TRACE;DEBUG;NET;NET8_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_OR_GREATER;NET7_0_OR_GREATER;NET8_0_OR_GREATER;NETCOREAPP3_0_OR_GREATER;NETCOREAPP3_1_OR_GREATER;WINDOWS7_0_OR_GREATER
-d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\App.xaml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\App.xaml
 3591735949
 14740115
-31-1187765463
-2121363407265
+311188077359
+212426861137
 Controls\ScanAnimationOverlay.xaml;MainWindow.xaml;Styles\FuturisticStyles.xaml;
 
-True
+False
 

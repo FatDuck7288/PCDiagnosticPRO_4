@@ -39,6 +39,14 @@ namespace PCDiagnosticPro.Models
     {
         [JsonPropertyName("cpuTempC")]
         public MetricValue<double> CpuTempC { get; set; } = new MetricValue<double>();
+        
+        /// <summary>Source du capteur température (Package, Tctl, Tdie, etc.)</summary>
+        [JsonPropertyName("cpuTempSource")]
+        public string CpuTempSource { get; set; } = "N/A";
+        
+        /// <summary>Charge CPU % (provient du PS, pas de LHM)</summary>
+        [JsonPropertyName("cpuLoadPercent")]
+        public MetricValue<double> CpuLoadPercent { get; set; } = new MetricValue<double>();
     }
 
     public class DiskMetrics

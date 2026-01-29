@@ -666,6 +666,15 @@ namespace PCDiagnosticPro.Services
                                     var firstCpu = cpuList.EnumerateArray().FirstOrDefault();
                                     if (firstCpu.TryGetProperty("name", out var name)) evidence["Modèle"] = name.GetString() ?? "";
                                     if (firstCpu.TryGetProperty("cores", out var cores)) evidence["Cœurs"] = cores.ToString();
+                                    // === P0-B: CPU LOAD depuis PowerShell ===
+                                    if (firstCpu.TryGetProperty("currentLoad", out var load))
+                                    {
+                                        evidence["Charge CPU (PS)"] = $"{load.GetDouble():F0}%";
+                                    }
+                                    else if (firstCpu.TryGetProperty("load", out var load2))
+                                    {
+                                        evidence["Charge CPU (PS)"] = $"{load2.GetDouble():F0}%";
+                                    }
                                 }
                             }
                             break;
@@ -704,6 +713,44 @@ namespace PCDiagnosticPro.Services
                                     }
                                     evidence["Disques"] = diskCount.ToString();
                                     evidence["Capacité totale"] = $"{totalSpace:F0} GB";
+                                }
+                                
+                                // === P0-C: Volume C: espace libre ===
+                                if (data.TryGetProperty("volumes", out var volumes) && volumes.ValueKind == JsonValueKind.Array)
+                                {
+                                    double? minFreePercent = null;
+                                    string criticalVolume = "";
+                                    
+                                    foreach (var vol in volumes.EnumerateArray())
+                                    {
+                                        string letter = "";
+                                        double sizeGB = 0, freeGB = 0;
+                                        
+                                        if (vol.TryGetProperty("driveLetter", out var dl)) letter = dl.GetString() ?? "";
+                                        if (vol.TryGetProperty("sizeGB", out var s)) sizeGB = s.GetDouble();
+                                        if (vol.TryGetProperty("freeSpaceGB", out var f)) freeGB = f.GetDouble();
+                                        
+                                        double freePercent = sizeGB > 0 ? (freeGB / sizeGB * 100) : 0;
+                                        
+                                        // Volume C: spécifiquement
+                                        if (letter.ToUpper() == "C")
+                                        {
+                                            evidence["C: Espace libre"] = $"{freeGB:F1} GB ({freePercent:F0}%)";
+                                            evidence["C: Taille"] = $"{sizeGB:F1} GB";
+                                        }
+                                        
+                                        // Trouver le volume le plus critique
+                                        if (!minFreePercent.HasValue || freePercent < minFreePercent)
+                                        {
+                                            minFreePercent = freePercent;
+                                            criticalVolume = $"{letter}: {freeGB:F1} GB ({freePercent:F0}%)";
+                                        }
+                                    }
+                                    
+                                    if (!string.IsNullOrEmpty(criticalVolume))
+                                    {
+                                        evidence["Volume critique"] = criticalVolume;
+                                    }
                                 }
                             }
                             break;
