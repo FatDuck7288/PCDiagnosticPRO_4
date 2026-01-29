@@ -89,9 +89,17 @@ namespace PCDiagnosticPro.Services
         };
 
         /// <summary>
-        /// Construit un HealthReport depuis le JSON brut du PowerShell
+        /// Construit un HealthReport depuis le JSON brut du PowerShell (sans capteurs)
         /// </summary>
         public static HealthReport Build(string jsonContent)
+        {
+            return Build(jsonContent, null);
+        }
+
+        /// <summary>
+        /// Construit un HealthReport depuis le JSON brut du PowerShell AVEC données capteurs hardware
+        /// </summary>
+        public static HealthReport Build(string jsonContent, HardwareSensorsResult? sensors)
         {
             var report = new HealthReport();
             
@@ -103,7 +111,7 @@ namespace PCDiagnosticPro.Services
                 // 1. Extraire metadata
                 report.Metadata = ExtractMetadata(root);
                 
-                // 2. Extraire scoreV2 (SOURCE DE VÉRITÉ)
+                // 2. Extraire scoreV2 (SOURCE DE VÉRITÉ PS)
                 report.ScoreV2 = ExtractScoreV2(root);
                 report.GlobalScore = report.ScoreV2.Score;
                 report.Grade = report.ScoreV2.Grade;
@@ -118,14 +126,48 @@ namespace PCDiagnosticPro.Services
                 // 5. Construire les sections par domaine
                 report.Sections = BuildHealthSections(root, report.ScoreV2);
                 
-                // 6. APPLIQUER LE GRADE ENGINE APPLICATION (remplace le score PS)
+                // 6. INJECTER LES DONNÉES CAPTEURS HARDWARE dans EvidenceData
+                // C'est ici que les températures/charges réelles sont connectées au scoring
+                if (sensors != null)
+                {
+                    InjectHardwareSensors(report, sensors);
+                }
+                
+                // 7. Sauvegarder le score PS original avant GradeEngine
+                var psScore = report.ScoreV2.Score;
+                var psGrade = report.ScoreV2.Grade;
+                
+                // 8. APPLIQUER LE GRADE ENGINE APPLICATION (remplace le score PS)
                 // Le GradeEngine est la SOURCE DE VÉRITÉ pour les grades UI
+                // Il peut maintenant utiliser les données capteurs via EvidenceData
                 GradeEngine.ApplyGrades(report);
                 
-                // 7. Générer les recommandations
+                // 9. Documenter la divergence PS vs GradeEngine
+                report.Divergence = new ScoreDivergence
+                {
+                    PowerShellScore = psScore,
+                    PowerShellGrade = psGrade,
+                    GradeEngineScore = report.GlobalScore,
+                    GradeEngineGrade = report.Grade,
+                    SourceOfTruth = "GradeEngine",
+                    Explanation = report.GlobalScore != psScore 
+                        ? $"Score recalculé avec capteurs hardware (PS:{psScore} → UI:{report.GlobalScore})"
+                        : "Scores cohérents entre PS et GradeEngine"
+                };
+                
+                if (!report.Divergence.IsCoherent)
+                {
+                    App.LogMessage($"[Divergence] Score PS={psScore} vs GradeEngine={report.GlobalScore} (delta={report.Divergence.Delta})");
+                }
+                
+                // 10. Générer les recommandations
                 report.Recommendations = GenerateRecommendations(report);
                 
-                App.LogMessage($"[HealthReportBuilder] Rapport construit avec GradeEngine: Score={report.GlobalScore}, Grade={report.Grade}, Sections={report.Sections.Count}");
+                // 9. Calculer le modèle de confiance
+                report.ConfidenceModel = BuildConfidenceModel(report, sensors);
+                
+                App.LogMessage($"[HealthReportBuilder] Rapport construit: Score={report.GlobalScore}, Grade={report.Grade}, " +
+                    $"Sections={report.Sections.Count}, SensorsCoverage={report.ConfidenceModel.SensorsCoverage:P0}");
             }
             catch (Exception ex)
             {
@@ -141,6 +183,135 @@ namespace PCDiagnosticPro.Services
             }
             
             return report;
+        }
+
+        /// <summary>
+        /// Injecte les données des capteurs hardware dans les EvidenceData des sections correspondantes
+        /// </summary>
+        private static void InjectHardwareSensors(HealthReport report, HardwareSensorsResult sensors)
+        {
+            // Trouver les sections concernées
+            var cpuSection = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.CPU);
+            var gpuSection = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.GPU);
+            var storageSection = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.Storage);
+
+            // Injection CPU
+            if (cpuSection != null && sensors.Cpu.CpuTempC.Available)
+            {
+                cpuSection.EvidenceData["Temperature"] = $"{sensors.Cpu.CpuTempC.Value:F1}°C";
+                cpuSection.HasData = true;
+                App.LogMessage($"[Sensors→CPU] Température injectée: {sensors.Cpu.CpuTempC.Value:F1}°C");
+            }
+
+            // Injection GPU
+            if (gpuSection != null)
+            {
+                if (sensors.Gpu.Name.Available)
+                    gpuSection.EvidenceData["GPU"] = sensors.Gpu.Name.Value ?? "N/A";
+                
+                if (sensors.Gpu.GpuTempC.Available)
+                {
+                    gpuSection.EvidenceData["Temperature"] = $"{sensors.Gpu.GpuTempC.Value:F1}°C";
+                    App.LogMessage($"[Sensors→GPU] Température injectée: {sensors.Gpu.GpuTempC.Value:F1}°C");
+                }
+                
+                if (sensors.Gpu.GpuLoadPercent.Available)
+                {
+                    gpuSection.EvidenceData["Load"] = $"{sensors.Gpu.GpuLoadPercent.Value:F0}%";
+                    App.LogMessage($"[Sensors→GPU] Charge injectée: {sensors.Gpu.GpuLoadPercent.Value:F0}%");
+                }
+                
+                if (sensors.Gpu.VramTotalMB.Available && sensors.Gpu.VramUsedMB.Available)
+                {
+                    var vramUsedPct = (sensors.Gpu.VramUsedMB.Value / sensors.Gpu.VramTotalMB.Value) * 100;
+                    gpuSection.EvidenceData["VRAM Total"] = $"{sensors.Gpu.VramTotalMB.Value:F0} MB";
+                    gpuSection.EvidenceData["VRAM Utilisée"] = $"{sensors.Gpu.VramUsedMB.Value:F0} MB ({vramUsedPct:F0}%)";
+                }
+                
+                gpuSection.HasData = true;
+            }
+
+            // Injection Stockage (températures disques)
+            if (storageSection != null && sensors.Disks.Count > 0)
+            {
+                var maxDiskTemp = sensors.Disks
+                    .Where(d => d.TempC.Available)
+                    .Select(d => d.TempC.Value)
+                    .DefaultIfEmpty(0)
+                    .Max();
+                    
+                if (maxDiskTemp > 0)
+                {
+                    storageSection.EvidenceData["TempMax Disques"] = $"{maxDiskTemp:F0}°C";
+                    App.LogMessage($"[Sensors→Storage] Temp max disques: {maxDiskTemp:F0}°C");
+                }
+                
+                // Ajouter chaque disque
+                for (int i = 0; i < sensors.Disks.Count && i < 5; i++)
+                {
+                    var disk = sensors.Disks[i];
+                    if (disk.Name.Available && disk.TempC.Available)
+                    {
+                        storageSection.EvidenceData[$"Disque {i+1}"] = $"{disk.Name.Value}: {disk.TempC.Value:F0}°C";
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Construit le modèle de confiance (coverage + cohérence)
+        /// </summary>
+        private static ConfidenceModel BuildConfidenceModel(HealthReport report, HardwareSensorsResult? sensors)
+        {
+            var model = new ConfidenceModel();
+            
+            // 1. Coverage des sections PS
+            int expectedSections = 8; // 8 domaines
+            int availableSections = report.Sections.Count(s => s.HasData);
+            model.SectionsCoverage = (double)availableSections / expectedSections;
+            
+            // 2. Coverage des capteurs hardware
+            if (sensors != null)
+            {
+                var (available, total) = sensors.GetAvailabilitySummary();
+                model.SensorsCoverage = total > 0 ? (double)available / total : 0;
+                model.SensorsAvailable = available;
+                model.SensorsTotal = total;
+            }
+            
+            // 3. Score de confiance global
+            model.ConfidenceScore = 100;
+            
+            // Pénalités
+            if (report.Metadata.PartialFailure)
+            {
+                model.ConfidenceScore -= 15;
+                model.Warnings.Add("Scan partiel - certaines données manquantes");
+            }
+            
+            if (model.SectionsCoverage < 0.7)
+            {
+                model.ConfidenceScore -= 10;
+                model.Warnings.Add($"Couverture sections faible ({model.SectionsCoverage:P0})");
+            }
+            
+            if (model.SensorsCoverage < 0.5)
+            {
+                model.ConfidenceScore -= 10;
+                model.Warnings.Add($"Capteurs hardware partiellement disponibles ({model.SensorsCoverage:P0})");
+            }
+            
+            if (report.ScoreV2.Breakdown.Timeouts > 2)
+            {
+                model.ConfidenceScore -= 10;
+                model.Warnings.Add($"Timeouts multiples ({report.ScoreV2.Breakdown.Timeouts})");
+            }
+            
+            model.ConfidenceScore = Math.Max(0, model.ConfidenceScore);
+            model.ConfidenceLevel = model.ConfidenceScore >= 80 ? "Élevé" :
+                                    model.ConfidenceScore >= 60 ? "Modéré" : "Faible";
+            
+            return model;
         }
 
         private static ScanMetadata ExtractMetadata(JsonElement root)

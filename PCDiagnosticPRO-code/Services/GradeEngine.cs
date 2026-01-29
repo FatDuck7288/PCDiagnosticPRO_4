@@ -434,28 +434,102 @@ namespace PCDiagnosticPro.Services
             explanations.Add($"Score global : {result.FinalScore}/100 (Grade {result.Grade})");
             explanations.Add(result.Verdict);
 
-            // Top 3 des domaines les plus impactés
+            // === TOP 3 NÉGATIFS (domaines les plus impactés) ===
             var worstDomains = result.DomainDetails
                 .Where(d => d.Value.HasData && d.Value.Penalties.Count > 0)
                 .OrderByDescending(d => d.Value.Penalties.Sum(p => p.penalty))
-                .Take(3);
+                .Take(3)
+                .ToList();
 
             foreach (var (domain, score) in worstDomains)
             {
                 var topPenalty = score.Penalties.OrderByDescending(p => p.penalty).FirstOrDefault();
                 if (topPenalty.reason != null)
                 {
-                    explanations.Add($"• {domain}: {topPenalty.reason}");
+                    var negText = $"{GetDomainFriendlyName(domain)}: {topPenalty.reason}";
+                    result.TopNegatives.Add(negText);
+                    explanations.Add($"⚠️ {negText}");
                 }
+            }
+
+            // === TOP 3 POSITIFS (domaines sans pénalités ou très bien notés) ===
+            var bestDomains = result.DomainDetails
+                .Where(d => d.Value.HasData && d.Value.Score >= 80)
+                .OrderByDescending(d => d.Value.Score)
+                .Take(3)
+                .ToList();
+
+            foreach (var (domain, score) in bestDomains)
+            {
+                var posText = $"{GetDomainFriendlyName(domain)}: {GetPositiveMessage(domain, score.Score)}";
+                result.TopPositives.Add(posText);
+                explanations.Add($"✅ {posText}");
             }
 
             // Pénalités critiques
             foreach (var penalty in result.CriticalPenalties)
             {
-                explanations.Add($"⚠️ {penalty}");
+                explanations.Add($"🔴 {penalty}");
             }
 
+            // === EXPLICATION UTILISATEUR NON-TECHNIQUE ===
+            result.UserFriendlyExplanation = GenerateUserFriendlyText(result, worstDomains.Count, bestDomains.Count);
+
             return explanations;
+        }
+
+        /// <summary>
+        /// Génère un texte simple et compréhensible pour un utilisateur non-technique
+        /// </summary>
+        private static string GenerateUserFriendlyText(GradeResult result, int problemsCount, int strengthsCount)
+        {
+            var text = result.FinalScore switch
+            {
+                >= 90 => "Votre PC est en excellent état ! Continuez à le maintenir ainsi.",
+                >= 70 => problemsCount == 0 
+                    ? "Votre PC fonctionne bien. Aucun problème majeur détecté." 
+                    : $"Votre PC fonctionne correctement mais {problemsCount} point(s) mérite(nt) votre attention.",
+                >= 50 => $"Votre PC montre des signes de fatigue. {problemsCount} problème(s) détecté(s) qui peuvent affecter ses performances.",
+                _ => $"Attention : votre PC nécessite une intervention. {problemsCount} problème(s) critique(s) détecté(s)."
+            };
+
+            if (strengthsCount > 0 && result.FinalScore < 90)
+            {
+                text += $" Cependant, {strengthsCount} composant(s) fonctionnent parfaitement.";
+            }
+
+            return text;
+        }
+
+        /// <summary>
+        /// Nom convivial d'un domaine pour l'affichage utilisateur
+        /// </summary>
+        private static string GetDomainFriendlyName(HealthDomain domain)
+        {
+            return domain switch
+            {
+                HealthDomain.OS => "Système Windows",
+                HealthDomain.CPU => "Processeur",
+                HealthDomain.GPU => "Carte graphique",
+                HealthDomain.RAM => "Mémoire",
+                HealthDomain.Storage => "Disques",
+                HealthDomain.Network => "Réseau",
+                HealthDomain.SystemStability => "Stabilité",
+                HealthDomain.Drivers => "Pilotes",
+                _ => domain.ToString()
+            };
+        }
+
+        /// <summary>
+        /// Message positif selon le domaine et le score
+        /// </summary>
+        private static string GetPositiveMessage(HealthDomain domain, int score)
+        {
+            if (score >= 95)
+                return "Excellent état, performances optimales";
+            if (score >= 85)
+                return "Très bon état, aucun souci";
+            return "Bon fonctionnement général";
         }
 
         #endregion
@@ -476,6 +550,15 @@ namespace PCDiagnosticPro.Services
         public Dictionary<HealthDomain, DomainScore> DomainDetails { get; set; } = new();
         public List<string> CriticalPenalties { get; set; } = new();
         public List<string> Explanations { get; set; } = new();
+        
+        /// <summary>Top 3 points positifs (domaines sans pénalités)</summary>
+        public List<string> TopPositives { get; set; } = new();
+        
+        /// <summary>Top 3 points négatifs (domaines les plus impactés)</summary>
+        public List<string> TopNegatives { get; set; } = new();
+        
+        /// <summary>Explication utilisateur non-technique (texte simple)</summary>
+        public string UserFriendlyExplanation { get; set; } = "";
     }
 
     /// <summary>

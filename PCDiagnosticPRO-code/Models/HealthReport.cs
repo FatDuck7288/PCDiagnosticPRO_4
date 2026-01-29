@@ -77,6 +77,12 @@ namespace PCDiagnosticPro.Models
         /// <summary>Date de génération du rapport</summary>
         public DateTime GeneratedAt { get; set; } = DateTime.Now;
         
+        /// <summary>Modèle de confiance (coverage + cohérence)</summary>
+        public ConfidenceModel ConfidenceModel { get; set; } = new();
+        
+        /// <summary>Divergence entre score PS et score GradeEngine</summary>
+        public ScoreDivergence Divergence { get; set; } = new();
+        
         /// <summary>Calcule la sévérité depuis un score</summary>
         public static HealthSeverity ScoreToSeverity(int score)
         {
@@ -300,5 +306,65 @@ namespace PCDiagnosticPro.Models
         
         [JsonPropertyName("exceptionType")]
         public string ExceptionType { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Modèle de confiance du score - coverage + cohérence
+    /// </summary>
+    public class ConfidenceModel
+    {
+        /// <summary>Score de confiance global 0-100</summary>
+        public int ConfidenceScore { get; set; } = 100;
+        
+        /// <summary>Niveau de confiance textuel</summary>
+        public string ConfidenceLevel { get; set; } = "Élevé";
+        
+        /// <summary>Ratio de couverture des sections PS (0-1)</summary>
+        public double SectionsCoverage { get; set; } = 1.0;
+        
+        /// <summary>Ratio de couverture des capteurs hardware (0-1)</summary>
+        public double SensorsCoverage { get; set; } = 0.0;
+        
+        /// <summary>Nombre de capteurs disponibles</summary>
+        public int SensorsAvailable { get; set; }
+        
+        /// <summary>Nombre total de capteurs attendus</summary>
+        public int SensorsTotal { get; set; }
+        
+        /// <summary>Avertissements sur la qualité des données</summary>
+        public List<string> Warnings { get; set; } = new();
+        
+        /// <summary>Indique si le score est fiable</summary>
+        public bool IsReliable => ConfidenceScore >= 70;
+    }
+
+    /// <summary>
+    /// Traçabilité de la divergence entre score PS et score GradeEngine
+    /// </summary>
+    public class ScoreDivergence
+    {
+        /// <summary>Score original du PowerShell (scoreV2)</summary>
+        public int PowerShellScore { get; set; }
+        
+        /// <summary>Grade original du PowerShell</summary>
+        public string PowerShellGrade { get; set; } = "N/A";
+        
+        /// <summary>Score calculé par GradeEngine (UI)</summary>
+        public int GradeEngineScore { get; set; }
+        
+        /// <summary>Grade calculé par GradeEngine (UI)</summary>
+        public string GradeEngineGrade { get; set; } = "N/A";
+        
+        /// <summary>Différence absolue entre les deux scores</summary>
+        public int Delta => Math.Abs(GradeEngineScore - PowerShellScore);
+        
+        /// <summary>Indique si les deux scores sont cohérents (delta &lt;= 10)</summary>
+        public bool IsCoherent => Delta <= 10;
+        
+        /// <summary>Explication de la divergence</summary>
+        public string Explanation { get; set; } = "";
+        
+        /// <summary>Source de vérité utilisée pour l'affichage UI</summary>
+        public string SourceOfTruth { get; set; } = "GradeEngine";
     }
 }

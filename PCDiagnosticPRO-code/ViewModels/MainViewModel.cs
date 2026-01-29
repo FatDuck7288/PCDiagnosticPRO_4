@@ -42,6 +42,9 @@ namespace PCDiagnosticPro.ViewModels
         private CancellationTokenSource? _scanCts;
         private readonly object _scanLock = new object();
         private bool _cancelHandled;
+        
+        // Résultat capteurs hardware pour injection dans HealthReport
+        private HardwareSensorsResult? _lastSensorsResult;
 
         // Chemins relatifs
         private readonly string _baseDir = AppContext.BaseDirectory;
@@ -1168,10 +1171,14 @@ namespace PCDiagnosticPro.ViewModels
                 try
                 {
                     sensorsResult = await _hardwareSensorsCollector.CollectAsync(_scanCts.Token);
+                    _lastSensorsResult = sensorsResult; // Stocker pour injection dans HealthReport
+                    var (avail, total) = sensorsResult.GetAvailabilitySummary();
+                    App.LogMessage($"[Sensors] Collectés: {avail}/{total} métriques disponibles");
                 }
                 catch (Exception ex)
                 {
                     sensorsResult = new HardwareSensorsResult();
+                    _lastSensorsResult = null;
                     App.LogMessage($"Erreur collecte capteurs: {ex.Message}");
                 }
 
@@ -1470,12 +1477,14 @@ namespace PCDiagnosticPro.ViewModels
                 var result = _jsonMapper.Parse(jsonContent, _resultJsonPath, _scanStopwatch.Elapsed);
                 result.Summary.TotalItems = result.Items.Count;
                 
-                // ===== CONSTRUCTION HEALTH REPORT INDUSTRIEL =====
+                // ===== CONSTRUCTION HEALTH REPORT INDUSTRIEL AVEC CAPTEURS =====
                 try
                 {
-                    var healthReport = HealthReportBuilder.Build(jsonContent);
+                    // Passer les capteurs hardware pour injection dans EvidenceData
+                    var healthReport = HealthReportBuilder.Build(jsonContent, _lastSensorsResult);
                     HealthReport = healthReport;
-                    App.LogMessage($"[HealthReport] Construit: Score={healthReport.GlobalScore}, Grade={healthReport.Grade}, Sections={healthReport.Sections.Count}");
+                    App.LogMessage($"[HealthReport] Construit: Score={healthReport.GlobalScore}, Grade={healthReport.Grade}, " +
+                        $"Sections={healthReport.Sections.Count}, Confiance={healthReport.ConfidenceModel.ConfidenceLevel}");
                     
                     // Synchroniser le score si scoreV2 disponible
                     if (healthReport.ScoreV2.Score > 0 && healthReport.ScoreV2.Score != result.Summary.Score)
