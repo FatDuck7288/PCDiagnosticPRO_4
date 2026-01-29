@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>PCDiagnosticPro</RootNamespace>
+    <AssemblyName>PCDiagnosticPro</AssemblyName>
+    <Version>1.0.0</Version>
+    <Authors>alexD inc</Authors>
+    <Company>alexD inc</Company>
+    <Product>PC Diagnostic Pro</Product>
+    <Description>Outil de diagnostic système professionnel</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Scripts\Total_PS_PC_Scan.ps1" />
+    <None Remove="Scripts\Total_PS_PC_Scan_v7.0.ps1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Scripts\Total_PS_PC_Scan_v7.0.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>Scripts\Total_PS_PC_Scan_v7.0.ps1</Link>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.2" />
+  </ItemGroup>
+
+</Project>

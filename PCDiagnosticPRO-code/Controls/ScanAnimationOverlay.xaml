@@ -1,0 +1,135 @@
+<UserControl x:Class="PCDiagnosticPro.Controls.ScanAnimationOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" 
+             d:DesignHeight="80" d:DesignWidth="400"
+             x:Name="ScanOverlayControl">
+    
+    <UserControl.Resources>
+        <!-- Animation pluie matrix verticale -->
+        <Storyboard x:Key="MatrixRainAnimation" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="MatrixTransform"
+                             Storyboard.TargetProperty="Y"
+                             From="-20" To="20" Duration="0:0:2.5"/>
+        </Storyboard>
+        
+        <!-- Animation fichiers droite → gauche (train 1) - traverse toute la largeur -->
+        <Storyboard x:Key="Files1Animation" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="Files1Transform"
+                             Storyboard.TargetProperty="X"
+                             From="700" To="-150" Duration="0:0:10"/>
+        </Storyboard>
+        
+        <!-- Animation fichiers droite → gauche (train 2, décalé) -->
+        <Storyboard x:Key="Files2Animation" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="Files2Transform"
+                             Storyboard.TargetProperty="X"
+                             From="700" To="-150" Duration="0:0:10"
+                             BeginTime="0:0:5"/>
+        </Storyboard>
+        
+        <!-- Animation loupe gauche → droite avec effet zoom - traverse TOUTE la largeur -->
+        <Storyboard x:Key="LoupeAnimation" RepeatBehavior="Forever">
+            <!-- Déplacement X de bord à bord (0 → 620 pour une fenêtre typique) -->
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LoupeTransform"
+                                           Storyboard.TargetProperty="X">
+                <LinearDoubleKeyFrame Value="-10" KeyTime="0:0:0"/>
+                <LinearDoubleKeyFrame Value="620" KeyTime="0:0:4"/>
+                <LinearDoubleKeyFrame Value="620" KeyTime="0:0:4.4"/>
+                <LinearDoubleKeyFrame Value="-10" KeyTime="0:0:4.6"/>
+            </DoubleAnimationUsingKeyFrames>
+            <!-- Effet zoom à la fin (quand loupe arrive au bord droit) -->
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LoupeScale"
+                                           Storyboard.TargetProperty="ScaleX">
+                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:0"/>
+                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:3.7"/>
+                <LinearDoubleKeyFrame Value="1.3" KeyTime="0:0:4.15"/>
+                <LinearDoubleKeyFrame Value="1.3" KeyTime="0:0:4.4"/>
+                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:4.6"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LoupeScale"
+                                           Storyboard.TargetProperty="ScaleY">
+                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:0"/>
+                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:3.7"/>
+                <LinearDoubleKeyFrame Value="1.3" KeyTime="0:0:4.15"/>
+                <LinearDoubleKeyFrame Value="1.3" KeyTime="0:0:4.4"/>
+                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:4.6"/>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+    </UserControl.Resources>
+    
+    <UserControl.Triggers>
+        <EventTrigger RoutedEvent="Loaded">
+            <BeginStoryboard Storyboard="{StaticResource MatrixRainAnimation}"/>
+            <BeginStoryboard Storyboard="{StaticResource Files1Animation}"/>
+            <BeginStoryboard Storyboard="{StaticResource Files2Animation}"/>
+            <BeginStoryboard Storyboard="{StaticResource LoupeAnimation}"/>
+        </EventTrigger>
+    </UserControl.Triggers>
+    
+    <Grid ClipToBounds="True" Background="Transparent">
+        
+        <!-- FOND: Pluie Matrix (0/1 qui descend) -->
+        <Rectangle Opacity="0.08">
+            <Rectangle.Fill>
+                <VisualBrush TileMode="Tile" Viewport="0,0,45,22" ViewportUnits="Absolute" Stretch="None">
+                    <VisualBrush.Visual>
+                        <TextBlock Text="01001&#x0a;10110" FontFamily="Consolas" FontSize="9"
+                                   Foreground="#FF5252" Opacity="0.7"/>
+                    </VisualBrush.Visual>
+                </VisualBrush>
+            </Rectangle.Fill>
+            <Rectangle.RenderTransform>
+                <TranslateTransform x:Name="MatrixTransform"/>
+            </Rectangle.RenderTransform>
+        </Rectangle>
+        
+        <!-- PLAN MILIEU: Fichiers défilant (train 1) -->
+        <Canvas ClipToBounds="True" Margin="5,0">
+            <Border Canvas.Top="20" Padding="6,3" CornerRadius="3"
+                    Background="#2D333B" Opacity="0.7">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="Files1Transform"/>
+                </Border.RenderTransform>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📄" FontSize="10" Margin="0,0,4,0"/>
+                    <TextBlock Text="system32.dll" FontFamily="Consolas" FontSize="9" Foreground="#8B949E"/>
+                </StackPanel>
+            </Border>
+            
+            <Border Canvas.Top="42" Padding="6,3" CornerRadius="3"
+                    Background="#2D333B" Opacity="0.6">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="Files2Transform"/>
+                </Border.RenderTransform>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📄" FontSize="10" Margin="0,0,4,0"/>
+                    <TextBlock Text="config.json" FontFamily="Consolas" FontSize="9" Foreground="#8B949E"/>
+                </StackPanel>
+            </Border>
+        </Canvas>
+        
+        <!-- PLAN AVANT: Loupe scanner -->
+        <Grid Width="32" Height="32" HorizontalAlignment="Left" VerticalAlignment="Center" 
+              Margin="10,0,0,0" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform x:Name="LoupeScale"/>
+                    <TranslateTransform x:Name="LoupeTransform"/>
+                </TransformGroup>
+            </Grid.RenderTransform>
+            
+            <Ellipse Width="22" Height="22" Stroke="#FF5252" StrokeThickness="2" 
+                     Opacity="0.8" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+            <Line X1="18" Y1="18" X2="30" Y2="30" Stroke="#FF5252" 
+                  StrokeThickness="2.5" Opacity="0.8"/>
+        </Grid>
+        
+        <!-- Texte status -->
+        <TextBlock Text="Analyse en cours..." HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                   FontFamily="Consolas" FontSize="10" Foreground="#8B949E" Opacity="0.6"
+                   Margin="0,0,0,2"/>
+    </Grid>
+</UserControl>
