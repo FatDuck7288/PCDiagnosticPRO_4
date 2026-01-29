@@ -92,10 +92,13 @@ namespace PCDiagnosticPro.Services
                 // 5. Ajouter le contenu PowerShell original
                 await BuildPowerShellSection(sb, originalTxtPath, psData);
 
-                // 6. Section SCORE & GRADE ENGINE
+                // 6. Section COLLECTE: ERREURS ET LIMITATIONS (BLOC 3)
+                BuildCollectionDiagnosticsSection(sb, healthReport, sensors, psData);
+
+                // 7. Section SCORE & GRADE ENGINE
                 BuildScoreSection(sb, healthReport);
 
-                // 7. Footer avec signature
+                // 8. Footer avec signature
                 BuildFooter(sb, sensors);
 
                 // 8. Écrire le fichier
@@ -231,26 +234,36 @@ namespace PCDiagnosticPro.Services
             sb.AppendLine($"  Collecté à : {sensors.CollectedAt:yyyy-MM-dd HH:mm:ss}");
             sb.AppendLine();
 
-            // CPU
+            // CPU avec VALIDATION (BLOC 2: règle P1)
             sb.AppendLine("  ┌─ CPU ─────────────────────────────────────────────────────────────────────┐");
-            WriteMetric(sb, "Temperature", sensors.Cpu.CpuTempC, "°C", "HardwareSensorsCollector");
+            var cpuTempValidation = MetricValidation.ValidateCpuTemp(sensors.Cpu.CpuTempC);
+            WriteValidatedMetric(sb, "Temperature", cpuTempValidation, "°C", sensors.Cpu.CpuTempSource);
             sb.AppendLine("  └─────────────────────────────────────────────────────────────────────────────┘");
             sb.AppendLine();
 
-            // GPU
+            // GPU avec VALIDATION
             sb.AppendLine("  ┌─ GPU ─────────────────────────────────────────────────────────────────────┐");
             WriteMetricString(sb, "Nom", sensors.Gpu.Name, "HardwareSensorsCollector");
-            WriteMetric(sb, "Temperature", sensors.Gpu.GpuTempC, "°C", "HardwareSensorsCollector");
+            var gpuTempValidation = MetricValidation.ValidateGpuTemp(sensors.Gpu.GpuTempC);
+            WriteValidatedMetric(sb, "Temperature", gpuTempValidation, "°C", "HardwareSensorsCollector");
             WriteMetric(sb, "Charge GPU", sensors.Gpu.GpuLoadPercent, "%", "HardwareSensorsCollector");
             WriteMetric(sb, "VRAM Total", sensors.Gpu.VramTotalMB, "MB", "HardwareSensorsCollector");
             WriteMetric(sb, "VRAM Utilisée", sensors.Gpu.VramUsedMB, "MB", "HardwareSensorsCollector");
             
-            if (sensors.Gpu.VramTotalMB.Available && sensors.Gpu.VramUsedMB.Available && sensors.Gpu.VramTotalMB.Value > 0)
+            // Validation VRAM (règle P1: used > total = invalide)
+            var vramValidation = MetricValidation.ValidateVram(sensors.Gpu.VramTotalMB, sensors.Gpu.VramUsedMB);
+            if (vramValidation.Validity == MetricValidity.Valid)
             {
-                var vramPct = (sensors.Gpu.VramUsedMB.Value / sensors.Gpu.VramTotalMB.Value) * 100;
+                var vramPct = (vramValidation.Value.used / vramValidation.Value.total) * 100;
                 sb.AppendLine($"  │  VRAM Usage %       : {vramPct:F1}%");
                 sb.AppendLine($"  │    Source           : Derived (VramUsed/VramTotal)");
-                sb.AppendLine($"  │    Confidence       : High");
+                sb.AppendLine($"  │    Validity         : ✓ Valid");
+            }
+            else if (vramValidation.Validity == MetricValidity.Invalid)
+            {
+                sb.AppendLine($"  │  VRAM Usage %       : N/A");
+                sb.AppendLine($"  │    Source           : Derived");
+                sb.AppendLine($"  │    Validity         : ✗ Invalid ({vramValidation.Reason})");
             }
             sb.AppendLine("  └─────────────────────────────────────────────────────────────────────────────┘");
             sb.AppendLine();
@@ -269,13 +282,18 @@ namespace PCDiagnosticPro.Services
                     WriteMetric(sb, $"  {name}", disk.TempC, "°C", "HardwareSensorsCollector");
                 }
                 
-                var maxTemp = sensors.Disks.Where(d => d.TempC.Available).Select(d => d.TempC.Value).DefaultIfEmpty(0).Max();
-                if (maxTemp > 0)
+                var validDiskTemps = sensors.Disks
+                    .Where(d => d.TempC.Available && !MetricValidation.IsSentinelValue(d.TempC.Value))
+                    .Select(d => d.TempC.Value)
+                    .ToList();
+                    
+                if (validDiskTemps.Any())
                 {
+                    var maxTemp = validDiskTemps.Max();
                     sb.AppendLine($"  │  ──────────────────────────────────────────────────────────────────────");
                     sb.AppendLine($"  │  TEMP MAX DISQUES   : {maxTemp:F0}°C");
-                    sb.AppendLine($"  │    Source           : Derived (Max of all disks)");
-                    sb.AppendLine($"  │    Confidence       : High");
+                    sb.AppendLine($"  │    Source           : Derived (Max of {validDiskTemps.Count} disks)");
+                    sb.AppendLine($"  │    Validity         : ✓ Valid");
                     
                     if (maxTemp > 60)
                         sb.AppendLine($"  │    ⚠️ ATTENTION    : Température élevée (>60°C)");
@@ -285,6 +303,38 @@ namespace PCDiagnosticPro.Services
             }
             sb.AppendLine("  └─────────────────────────────────────────────────────────────────────────────┘");
             sb.AppendLine();
+        }
+        
+        /// <summary>
+        /// Écrit une métrique validée avec son statut de validité
+        /// </summary>
+        private static void WriteValidatedMetric(StringBuilder sb, string label, ValidatedMetric<double> metric, string unit, string source)
+        {
+            var padLabel = label.PadRight(18);
+            
+            switch (metric.Validity)
+            {
+                case MetricValidity.Valid:
+                    sb.AppendLine($"  │  {padLabel} : {metric.Value:F1}{unit}");
+                    sb.AppendLine($"  │    Source           : {source}");
+                    sb.AppendLine($"  │    Validity         : ✓ Valid");
+                    break;
+                    
+                case MetricValidity.Invalid:
+                    sb.AppendLine($"  │  {padLabel} : Non disponible (capteur invalide)");
+                    sb.AppendLine($"  │    Source           : {source}");
+                    sb.AppendLine($"  │    Validity         : ✗ Invalid");
+                    sb.AppendLine($"  │    Raison           : {metric.Reason ?? "Valeur hors plage"}");
+                    break;
+                    
+                case MetricValidity.Missing:
+                default:
+                    sb.AppendLine($"  │  {padLabel} : N/A");
+                    sb.AppendLine($"  │    Source           : {source}");
+                    sb.AppendLine($"  │    Validity         : ○ Missing");
+                    sb.AppendLine($"  │    Raison           : {metric.Reason ?? "Capteur indisponible"}");
+                    break;
+            }
         }
 
         private static void WriteMetric(StringBuilder sb, string label, MetricValue<double> metric, string unit, string source)
@@ -365,6 +415,192 @@ namespace PCDiagnosticPro.Services
             }
 
             sb.AppendLine();
+        }
+
+        /// <summary>
+        /// BLOC 3: Section "Collecte : erreurs et limitations"
+        /// Expose transparentement tous les problèmes de collecte
+        /// </summary>
+        private static void BuildCollectionDiagnosticsSection(StringBuilder sb, HealthReport? healthReport, HardwareSensorsResult? sensors, JsonElement? psData)
+        {
+            sb.AppendLine(SEPARATOR);
+            sb.AppendLine("  [COLLECTE : ERREURS ET LIMITATIONS]");
+            sb.AppendLine(SEPARATOR);
+            sb.AppendLine();
+
+            var diagnostics = new CollectionDiagnostics();
+            
+            // 1. Erreurs PowerShell (WMI_ERROR, TEMP_WARN, etc.)
+            if (healthReport?.Errors != null && healthReport.Errors.Count > 0)
+            {
+                diagnostics.AddFromPsErrors(healthReport.Errors);
+            }
+            
+            // 2. MissingData PowerShell
+            if (healthReport?.MissingData != null && healthReport.MissingData.Count > 0)
+            {
+                diagnostics.AddFromPsMissingData(healthReport.MissingData);
+            }
+            
+            // 3. Validation capteurs C# (détection valeurs invalides)
+            if (sensors != null)
+            {
+                var cpuValid = MetricValidation.ValidateCpuTemp(sensors.Cpu.CpuTempC);
+                if (cpuValid.Validity == MetricValidity.Invalid)
+                    diagnostics.AddInvalidMetric("CPU Temperature", cpuValid.Reason ?? "valeur invalide");
+                else if (cpuValid.Validity == MetricValidity.Missing)
+                    diagnostics.MissingData.Add($"CPU Temperature: {cpuValid.Reason}");
+                    
+                var gpuValid = MetricValidation.ValidateGpuTemp(sensors.Gpu.GpuTempC);
+                if (gpuValid.Validity == MetricValidity.Invalid)
+                    diagnostics.AddInvalidMetric("GPU Temperature", gpuValid.Reason ?? "valeur invalide");
+                    
+                var vramValid = MetricValidation.ValidateVram(sensors.Gpu.VramTotalMB, sensors.Gpu.VramUsedMB);
+                if (vramValid.Validity == MetricValidity.Invalid)
+                    diagnostics.AddInvalidMetric("VRAM", vramValid.Reason ?? "valeur incohérente");
+            }
+            else
+            {
+                diagnostics.Warnings.Add("Capteurs hardware C# non disponibles");
+            }
+            
+            // 4. Vérifier PerfCounters pour sentinelles (BLOC 4)
+            if (psData.HasValue)
+            {
+                ExtractPerfCounterDiagnostics(psData.Value, diagnostics);
+            }
+            
+            // === AFFICHAGE ===
+            
+            // Statut global
+            var statusIcon = diagnostics.CollectionStatus switch
+            {
+                "COMPLÈTE" => "✅",
+                "PARTIELLE" => "⚠️",
+                "ÉCHOUÉE" => "❌",
+                _ => "❓"
+            };
+            sb.AppendLine($"  STATUT COLLECTE: {statusIcon} {diagnostics.CollectionStatus}");
+            sb.AppendLine();
+            
+            // Erreurs collecteur
+            if (diagnostics.Errors.Count > 0)
+            {
+                sb.AppendLine("  ┌─ ERREURS COLLECTEUR ──────────────────────────────────────────────────────┐");
+                foreach (var err in diagnostics.Errors)
+                {
+                    sb.AppendLine($"  │  ❌ {err}");
+                }
+                sb.AppendLine("  └─────────────────────────────────────────────────────────────────────────────┘");
+                sb.AppendLine();
+            }
+            
+            // Métriques invalides
+            if (diagnostics.InvalidMetrics.Count > 0)
+            {
+                sb.AppendLine("  ┌─ MÉTRIQUES INVALIDES (valeurs hors plage/sentinelles) ────────────────────┐");
+                foreach (var inv in diagnostics.InvalidMetrics)
+                {
+                    sb.AppendLine($"  │  ⚠️ {inv}");
+                }
+                sb.AppendLine("  └─────────────────────────────────────────────────────────────────────────────┘");
+                sb.AppendLine();
+            }
+            
+            // Données manquantes
+            if (diagnostics.MissingData.Count > 0)
+            {
+                sb.AppendLine("  ┌─ DONNÉES MANQUANTES ──────────────────────────────────────────────────────┐");
+                foreach (var miss in diagnostics.MissingData.Take(15))
+                {
+                    sb.AppendLine($"  │  ○ {miss}");
+                }
+                if (diagnostics.MissingData.Count > 15)
+                    sb.AppendLine($"  │  ... et {diagnostics.MissingData.Count - 15} autres");
+                sb.AppendLine("  └─────────────────────────────────────────────────────────────────────────────┘");
+                sb.AppendLine();
+            }
+            
+            // Avertissements
+            if (diagnostics.Warnings.Count > 0)
+            {
+                sb.AppendLine("  ┌─ LIMITATIONS CONNUES ─────────────────────────────────────────────────────┐");
+                foreach (var warn in diagnostics.Warnings)
+                {
+                    sb.AppendLine($"  │  ℹ️ {warn}");
+                }
+                sb.AppendLine("  └─────────────────────────────────────────────────────────────────────────────┘");
+                sb.AppendLine();
+            }
+            
+            // Si tout va bien
+            if (diagnostics.Errors.Count == 0 && diagnostics.InvalidMetrics.Count == 0 && diagnostics.MissingData.Count == 0)
+            {
+                sb.AppendLine("  ✅ Aucune erreur de collecte détectée");
+                sb.AppendLine();
+            }
+        }
+        
+        /// <summary>
+        /// BLOC 4: Extrait les diagnostics des PerfCounters (sentinelles)
+        /// </summary>
+        private static void ExtractPerfCounterDiagnostics(JsonElement psData, CollectionDiagnostics diagnostics)
+        {
+            try
+            {
+                // Chercher dans sections.PerformanceCounters ou PerformanceCounters direct
+                JsonElement perfCounters = default;
+                bool found = false;
+                
+                if (psData.TryGetProperty("sections", out var sections) &&
+                    sections.TryGetProperty("PerformanceCounters", out var pc))
+                {
+                    perfCounters = pc;
+                    found = true;
+                }
+                else if (psData.TryGetProperty("PerformanceCounters", out var pcDirect))
+                {
+                    perfCounters = pcDirect;
+                    found = true;
+                }
+                
+                if (!found) return;
+                
+                // Vérifier status
+                if (perfCounters.TryGetProperty("status", out var status))
+                {
+                    var s = status.GetString();
+                    if (s == "FAILED" || s == "ERROR")
+                    {
+                        diagnostics.Errors.Add("PerformanceCounters: Collecte échouée");
+                        return;
+                    }
+                }
+                
+                // Chercher les données
+                JsonElement data = perfCounters;
+                if (perfCounters.TryGetProperty("data", out var dataElem))
+                    data = dataElem;
+                
+                // Parcourir et détecter sentinelles (-1, NaN)
+                foreach (var prop in data.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.Number)
+                    {
+                        var val = prop.Value.GetDouble();
+                        var validation = MetricValidation.ValidatePerfCounter(val, prop.Name);
+                        
+                        if (validation.Validity == MetricValidity.Invalid)
+                        {
+                            diagnostics.AddInvalidMetric($"PerfCounter.{prop.Name}", validation.Reason ?? "sentinelle");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[UnifiedReport] Erreur extraction PerfCounters: {ex.Message}");
+            }
         }
 
         private static void ExtractPsJsonSections(StringBuilder sb, JsonElement psData)
