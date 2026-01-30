@@ -1122,11 +1122,16 @@ function Get-DiskTemperatures {
                 if ($null -eq $temp -and $null -ne $tempRaw) {
                     Add-ErrorLog -Type 'TEMP_WARN' -Source 'DiskTemperature' -Message "Lecture disque invalide (StorageReliabilityCounter): $tempRaw"
                 }
+                $available = $null -ne $temp
+                $reason = if ($available) { $null } elseif ($null -ne $tempRaw) { 'storage_reliability_invalid' } else { 'storage_reliability_unavailable' }
                 $disks += [ordered]@{
                     model = Get-SafePropValue $item 'FriendlyName' $null
                     serial = Protect-SerialNumber (Get-SafePropValue $item 'SerialNumber' $null)
                     tempC = $temp
                     source = 'StorageReliabilityCounter'
+                    available = $available
+                    reason = $reason
+                    timestamp = (Get-Date).ToString('o')
                 }
             }
             if ((Get-SafeCount $disks) -gt 0) { return $disks }
@@ -1152,11 +1157,16 @@ function Get-DiskTemperatures {
             if ($null -eq $temp -and $null -ne $tempRaw) {
                 Add-ErrorLog -Type 'TEMP_WARN' -Source 'DiskTemperature' -Message "Lecture SMART invalide: $tempRaw"
             }
+            $available = $null -ne $temp
+            $reason = if ($available) { $null } elseif ($null -ne $tempRaw) { 'smart_invalid' } else { 'smart_unavailable' }
             $disks += [ordered]@{
                 model = Get-SafePropValue $disk 'Model' $null
                 serial = Protect-SerialNumber (Get-SafePropValue $disk 'SerialNumber' $null)
                 tempC = $temp
                 source = 'SMART'
+                available = $available
+                reason = $reason
+                timestamp = (Get-Date).ToString('o')
             }
         }
     } catch { }
@@ -2428,8 +2438,38 @@ function Collect-Processes {
                 $source = 'CIM'
             }
             catch { 
-                $content += "[INFO] Collecte processus non disponible"
-                Add-MissingData -Section 'Processes' -Item 'ProcessList' -Reason 'Get-Process et CIM ont echoue'
+                # Fallback: tasklist
+                try {
+                    $tasklist = tasklist /fo csv /nh 2>$null
+                    $rows = @()
+                    foreach ($line in @($tasklist)) {
+                        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                        $parts = $line -split '","'
+                        if ((Get-SafeCount $parts) -lt 5) { continue }
+                        $name = $parts[0].Trim('"')
+                        $pid = [int]($parts[1].Trim('"'))
+                        $memRaw = $parts[4].Trim('"') -replace '[^\d,]', ''
+                        $memValue = 0
+                        if ($memRaw -match '\d') {
+                            $memValue = [double]($memRaw -replace ',', '.')
+                        }
+                        $rows += [ordered]@{ name = $name; pid = $pid; memoryKB = $memValue }
+                    }
+                    $rows = $rows | Sort-Object memoryKB -Descending | Select-Object -First 15
+                    foreach ($r in @($rows)) {
+                        $memMB = [math]::Round(($r.memoryKB / 1024), 1)
+                        $content += "$($r.name) (PID $($r.pid)) - $memMB MB"
+                        $memList += [ordered]@{ name = $r.name; pid = $r.pid; memoryMB = $memMB }
+                    }
+                    if ((Get-SafeCount $memList) -gt 0) {
+                        $source = 'tasklist'
+                    } else {
+                        throw "tasklist empty"
+                    }
+                } catch {
+                    $content += "[INFO] Collecte processus non disponible"
+                    Add-MissingData -Section 'Processes' -Item 'ProcessList' -Reason 'Get-Process, CIM et tasklist ont echoue'
+                }
             }
         }
         $data['topMemory'] = $memList
@@ -2773,14 +2813,44 @@ function Collect-PerformanceCounters {
     $content = @(); $data = [ordered]@{}
     try {
         $content += "COMPTEURS DE PERFORMANCE"; $content += ("-" * 50)
+        $timestamp = (Get-Date).ToString('o')
         try {
             $diskQueue = Get-Counter '\PhysicalDisk(_Total)\Avg. Disk Queue Length' -SampleInterval 1 -MaxSamples 1 -ErrorAction Stop
             $samples = @(Get-SafePropValue $diskQueue 'CounterSamples' @())
             if ((Get-SafeCount $samples) -gt 0) {
                 $queueValue = [math]::Round((Get-SafePropValue $samples[0] 'CookedValue' 0), 2)
-                $data['diskQueueLength'] = $queueValue; $content += "Disk Queue Length        : $queueValue"
+                $data['diskQueueLength'] = $queueValue
+                $data['diskQueueLengthAvailable'] = $true
+                $data['diskQueueLengthSource'] = 'Get-Counter'
+                $data['diskQueueLengthReason'] = $null
+                $data['diskQueueLengthTimestamp'] = $timestamp
+                $content += "Disk Queue Length        : $queueValue"
             }
-        } catch { $data['diskQueueLength'] = -1 }
+        } catch {
+            try {
+                $perfDisk = Get-CimInstance -ClassName Win32_PerfFormattedData_PerfDisk_PhysicalDisk -ErrorAction Stop |
+                    Where-Object { (Get-SafePropValue $_ 'Name' '') -eq '_Total' } | Select-Object -First 1
+                if ($null -ne $perfDisk) {
+                    $queueValue = [math]::Round((Get-SafePropValue $perfDisk 'AvgDiskQueueLength' 0), 2)
+                    if ($queueValue -ge 0) {
+                        $data['diskQueueLength'] = $queueValue
+                        $data['diskQueueLengthAvailable'] = $true
+                        $data['diskQueueLengthSource'] = 'Win32_PerfFormattedData_PerfDisk_PhysicalDisk'
+                        $data['diskQueueLengthReason'] = $null
+                        $data['diskQueueLengthTimestamp'] = $timestamp
+                        $content += "Disk Queue Length        : $queueValue (WMI)"
+                    }
+                }
+            } catch { }
+        }
+        if (-not (Test-SafeHasKey $data 'diskQueueLength')) {
+            $data['diskQueueLength'] = $null
+            $data['diskQueueLengthAvailable'] = $false
+            $data['diskQueueLengthSource'] = 'perf_counter_not_supported'
+            $data['diskQueueLengthReason'] = 'perf_counter_not_supported'
+            $data['diskQueueLengthTimestamp'] = $timestamp
+            $content += "Disk Queue Length        : N/A (perf_counter_not_supported)"
+        }
         
         try {
             $diskRead = Get-Counter '\PhysicalDisk(_Total)\Disk Read Bytes/sec' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue
@@ -2912,9 +2982,13 @@ function Collect-SmartDetails {
                                             if ($null -ne $tempC) {
                                                 $content += "  Temperature            : $tempC C"
                                                 $diskInfo['temperature'] = $tempC
+                                                $diskInfo['temperatureAvailable'] = $true
+                                                $diskInfo['temperatureReason'] = $null
                                             } else {
                                                 $content += "  Temperature            : N/A (invalid reading)"
                                                 $diskInfo['temperature'] = $null
+                                                $diskInfo['temperatureAvailable'] = $false
+                                                $diskInfo['temperatureReason'] = 'smart_invalid'
                                                 Add-ErrorLog -Type 'TEMP_WARN' -Source 'Collect-SmartDetails' -Message "Temperature SMART invalide: $attrRaw"
                                             }
                                         }

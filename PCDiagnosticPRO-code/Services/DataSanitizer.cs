@@ -14,14 +14,14 @@ namespace PCDiagnosticPro.Services
     {
         #region Physical Ranges (Based on Audit Requirements)
 
-        /// <summary>CPU Temperature: 5°C - 110°C (0°C = Invalid sentinel)</summary>
-        public static readonly (double Min, double Max) CpuTempRange = (5.0, 110.0);
+        /// <summary>CPU Temperature: >5°C and <115°C (<=5 or >=115 = invalid)</summary>
+        public static readonly (double Min, double Max) CpuTempRange = (5.0, 115.0);
 
         /// <summary>GPU Temperature: 5°C - 120°C</summary>
         public static readonly (double Min, double Max) GpuTempRange = (5.0, 120.0);
 
-        /// <summary>Disk Temperature: 5°C - 95°C</summary>
-        public static readonly (double Min, double Max) DiskTempRange = (5.0, 95.0);
+        /// <summary>Disk Temperature: 0°C - 90°C</summary>
+        public static readonly (double Min, double Max) DiskTempRange = (0.0, 90.0);
 
         /// <summary>SMART Temperature: max 200°C (917541 = corrupt)</summary>
         public static readonly double SmartTempMaxReasonable = 200.0;
@@ -83,24 +83,9 @@ namespace PCDiagnosticPro.Services
             var value = metric.Value;
 
             // Check sentinel values
-            if (IsSentinel(value))
+            if (IsSentinel(value) || value <= CpuTempRange.Min || value >= CpuTempRange.Max)
             {
-                var reason = $"capteur invalide: valeur sentinelle {value}";
-                LogSanitize("CPU Temp", value.ToString(), reason);
-                return SanitizedValue<double>.Invalid(reason);
-            }
-
-            // Check range
-            if (value < CpuTempRange.Min)
-            {
-                var reason = $"capteur invalide: {value:F1}°C < {CpuTempRange.Min}°C";
-                LogSanitize("CPU Temp", value.ToString(), reason);
-                return SanitizedValue<double>.Invalid(reason);
-            }
-
-            if (value > CpuTempRange.Max)
-            {
-                var reason = $"capteur invalide: {value:F1}°C > {CpuTempRange.Max}°C";
+                var reason = "sentinel_out_of_range";
                 LogSanitize("CPU Temp", value.ToString(), reason);
                 return SanitizedValue<double>.Invalid(reason);
             }

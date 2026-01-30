@@ -13,15 +13,17 @@ namespace PCDiagnosticPro.Services
     /// </summary>
     public static class DataReliabilityEngine
     {
-        private static readonly int[] ErrorToScoreMap = { 100, 92, 85, 78, 70 };
+        private static readonly int[] ErrorToScoreMap = { 100, 95, 90, 84, 78, 72 };
 
         /// <summary>Poids métier des missing data : plus élevé = plus impact sur DRS</summary>
         private static readonly (string[] Keywords, int Penalty)[] MissingDataWeights =
         {
-            (new[] { "Security", "Defender", "Firewall", "Malware", "AV" }, 8),
+            (new[] { "Security", "Defender", "Firewall", "Malware", "AV" }, 10),
             (new[] { "SMART", "Disk", "Storage", "Volume" }, 6),
-            (new[] { "Memory", "RAM", "GPU", "VRAM" }, 4),
-            (new[] { "CPU", "Temp", "Network", "EventLog", "Reliability" }, 2),
+            (new[] { "EventLog", "Reliability", "BSOD", "Minidump" }, 5),
+            (new[] { "Network", "Latency" }, 3),
+            (new[] { "Memory", "RAM", "GPU", "VRAM" }, 3),
+            (new[] { "CPU", "Temp" }, 2),
             (new[] { "Process", "Startup", "App" }, 1)
         };
 
@@ -45,7 +47,7 @@ namespace PCDiagnosticPro.Services
             {
                 score = collectorErrorsCount <= ErrorToScoreMap.Length
                     ? ErrorToScoreMap[collectorErrorsCount - 1]
-                    : Math.Max(0, 70 - (collectorErrorsCount - 5) * 5);
+                    : Math.Max(0, 72 - (collectorErrorsCount - 6) * 4);
             }
 
             // 2. MissingData pondéré par importance métier

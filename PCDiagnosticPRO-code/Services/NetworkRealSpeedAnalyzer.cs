@@ -15,7 +15,7 @@ namespace PCDiagnosticPro.Services
     {
         private static readonly HttpClient SharedClient = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(15),
+            Timeout = TimeSpan.FromSeconds(8),
             DefaultRequestHeaders = { { "User-Agent", "PC-Diagnostic-Pro/1.0" } }
         };
 
@@ -54,7 +54,7 @@ namespace PCDiagnosticPro.Services
                 if (downloadMbps.HasValue)
                 {
                     result.SpeedTier = GetSpeedTier(downloadMbps.Value);
-                    result.Recommendation = GetRecommendation(downloadMbps.Value);
+                    result.Recommendation = GetRecommendation(downloadMbps.Value, result.LatencyMs);
                     result.Success = true;
                 }
                 else if (result.LatencyMs.HasValue)
@@ -112,17 +112,34 @@ namespace PCDiagnosticPro.Services
         private static string GetSpeedTier(double downloadMbps)
         {
             if (downloadMbps < 5) return "Navigation only";
-            if (downloadMbps < 20) return "Streaming HD";
-            if (downloadMbps < 100) return "Gaming OK";
-            return "Gaming compétitif / Cloud ready";
+            if (downloadMbps < 20) return "Streaming HD possible";
+            if (downloadMbps < 100) return "Gaming possible";
+            return "Gaming compétitif / Cloud possible";
         }
 
-        private static string GetRecommendation(double downloadMbps)
+        private static string GetRecommendation(double downloadMbps, double? latencyMs)
         {
-            if (downloadMbps < 5) return "Débit limité — navigation et messagerie uniquement.";
-            if (downloadMbps < 20) return "Streaming HD et télétravail OK.";
-            if (downloadMbps < 100) return "Jeux et visio fluides.";
-            return "Très bon débit — cloud et compétitif.";
+            if (downloadMbps < 5)
+            {
+                return "Débit faible — navigation et messagerie uniquement, gaming déconseillé.";
+            }
+            if (downloadMbps < 20)
+            {
+                if (latencyMs.HasValue && latencyMs.Value > 80)
+                {
+                    return "Streaming HD possible, gaming déconseillé si latence élevée.";
+                }
+                return "Streaming HD possible, gaming à éviter si la latence monte.";
+            }
+            if (downloadMbps < 100)
+            {
+                return "Gaming possible, privilégiez une latence < 50 ms pour confort.";
+            }
+            if (latencyMs.HasValue && latencyMs.Value > 50)
+            {
+                return "Très bon débit — cloud possible mais la latence limite le compétitif.";
+            }
+            return "Très bon débit — gaming compétitif et cloud possibles si latence basse.";
         }
     }
 }
