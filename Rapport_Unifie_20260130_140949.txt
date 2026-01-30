@@ -2,13 +2,13 @@
                     PC DIAGNOSTIC PRO — RAPPORT UNIFIÉ
 ════════════════════════════════════════════════════════════════════════════════
 
-  Date de génération : 2026-01-30 10:42:33
+  Date de génération : 2026-01-30 14:09:49
   Machine            : DESKTOP-LAKVT49
   Utilisateur        : rams_
   OS                 : Microsoft Windows NT 10.0.26200.0
   Mode Admin         : OUI
 
-  ✅ SCORE GLOBAL : 91/100 (Grade A)
+  ✅ SCORE GLOBAL : 99/100 (Grade A+)
      Verdict : Collecte partielle : interprétation prudente
 
 ════════════════════════════════════════════════════════════════════════════════
@@ -28,47 +28,44 @@
     └─ Disk Temps       : 2/5
 
   CONFIDENCE MODEL:
-    ├─ Score Confiance  : 62/100 (Moyenne)
+    ├─ Score Confiance  : 84/100 (Élevée)
     ├─ Sections PS      : 100 %
     └─ Capteurs HW      : 75 %
 
   AVERTISSEMENTS:
-    ⚠️ Température CPU indisponible (capteur invalide: valeur sentinelle 0)
-    ⚠️ Scan PowerShell partiel - certaines sections manquantes
-    ⚠️ Erreurs collecteur: 2 (pénalité -6)
+    ⚠️ Température CPU indisponible (capteur invalide: valeur sentinelle 0; fallback WMI: thermal_zone_not_available)
     ⚠️ Données PS manquantes: 4 éléments
-    ⚠️ Erreurs critiques détectées: 2 (WMI/SMART/invalid)
 
 ════════════════════════════════════════════════════════════════════════════════
   [HARDWARE SENSORS — DONNÉES TEMPS RÉEL C#]
 ════════════════════════════════════════════════════════════════════════════════
 
-  Collecté à : 2026-01-30 10:42:27
+  Collecté à : 2026-01-30 14:09:16
 
   ┌─ CPU ─────────────────────────────────────────────────────────────────────┐
   │  Temperature        : N/A
   │    Source           : Tctl (AMD)
   │    Validity         : ○ Missing
-  │    Raison           : capteur invalide: valeur sentinelle 0
+  │    Raison           : capteur invalide: valeur sentinelle 0; fallback WMI: thermal_zone_not_available
   └─────────────────────────────────────────────────────────────────────────────┘
 
   ┌─ GPU ─────────────────────────────────────────────────────────────────────┐
   │  Nom                : NVIDIA GeForce RTX 3090
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
-  │  Temperature        : 77,0°C
+  │  Temperature        : 82,0°C
   │    Source           : HardwareSensorsCollector
   │    Validity         : ✓ Valid
-  │  Charge GPU         : 77,0%
+  │  Charge GPU         : 82,0%
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
   │  VRAM Total         : 24576,0MB
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
-  │  VRAM Utilisée      : 11398,5MB
+  │  VRAM Utilisée      : 11419,8MB
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
-  │  VRAM Usage %       : 46,4%
+  │  VRAM Usage %       : 46,5%
   │    Source           : Derived (VramUsed/VramTotal)
   │    Validity         : ✓ Valid
   └─────────────────────────────────────────────────────────────────────────────┘
@@ -78,14 +75,14 @@
   │    Source           : HardwareSensorsCollector
   │    Reason           : Temperature disque indisponible
   │    Confidence       : Low
-  │    Micron_2210_MTFDHBA1T0QFD : 61,0°C
+  │    Micron_2210_MTFDHBA1T0QFD : 65,0°C
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
   │    Micron CT2000X9PROSSD9 : N/A
   │    Source           : HardwareSensorsCollector
   │    Reason           : Temperature disque indisponible
   │    Confidence       : Low
-  │    Samsung SSD 990 PRO with Heatsink 2TB : 53,0°C
+  │    Samsung SSD 990 PRO with Heatsink 2TB : 59,0°C
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
   │    TOSHIBA DT01ACA200 : N/A
@@ -93,7 +90,7 @@
   │    Reason           : Temperature disque indisponible
   │    Confidence       : Low
   │  ──────────────────────────────────────────────────────────────────────
-  │  TEMP MAX DISQUES   : 61°C
+  │  TEMP MAX DISQUES   : 65°C
   │    Source           : Derived (Max of 2 disks)
   │    Validity         : ✓ Valid
   │    ⚠️ ATTENTION    : Température élevée (>60°C)
@@ -103,7 +100,7 @@
   [POWERSHELL SCAN — DONNÉES SYSTÈME]
 ════════════════════════════════════════════════════════════════════════════════
 
-  Source: Scan_38f26e58-48b4-42b4-9649-4cc9231c5c91_20260130_103800.txt
+  Source: Scan_41e35e48-3de6-431a-a1ba-805fea3eb244_20260130_140253.txt
 ────────────────────────────────────────────────────────────────────────────────
 
 ####################################################################################################
@@ -113,9 +110,9 @@ Ce rapport contient des DONNEES BRUTES uniquement.
 L'analyse et l'interpretation sont effectuees par l'IA externe.
 METADATA
 --------------------------------------------------
-Run ID               : 38f26e58-48b4-42b4-9649-4cc9231c5c91
+Run ID               : 41e35e48-3de6-431a-a1ba-805fea3eb244
 Version              : 7.0
-Date                 : 2026-01-30 10:38:00
+Date                 : 2026-01-30 14:02:53
 Machine              : PC-52391b
 Admin                : True
 Redaction            : Full
@@ -137,7 +134,7 @@ Build                    : 26200
 UPTIME
 --------------------------------------------------
 Dernier Boot             : 2026-01-26 21:57
-Uptime                   : 3j 12h
+Uptime                   : 3j 16h
 FABRICANT
 --------------------------------------------------
 Fabricant                : Micro-Star International Co., Ltd.
@@ -169,15 +166,15 @@ PROCESSEUR(S)
 CPU: AMD Ryzen 9 5900X 12-Core Processor            
   Cores/Threads          : 12 / 24
   Frequence Max          : 3701 MHz
-  Charge Actuelle        : 33%
+  Charge Actuelle        : 16%
 ====================================================================================================
 [4. MEMOIRE]
 ====================================================================================================
 MEMOIRE PHYSIQUE (RAM)
 --------------------------------------------------
 Memoire Totale           : 95.93 GB
-Memoire Libre            : 70.01 GB
-Utilisation              : 27%
+Memoire Libre            : 67.92 GB
+Utilisation              : 29.2%
 MODULES
 --------------------------------------------------
 [DIMM 0] 32 GB DDR4 @ 3200 MHz
@@ -203,7 +200,7 @@ Disque: TOSHIBA DT01ACA200
   Type: HDD | Taille: 1863.01 GB | Status: OK
 VOLUMES
 --------------------------------------------------
-C: 952.65 GB | Libre: 365.97 GB (61.6% utilise)
+C: 952.65 GB | Libre: 365.55 GB (61.6% utilise)
 D: 1863.02 GB | Libre: 1095.09 GB (41.2% utilise)
 E: 1862.17 GB | Libre: 1518.89 GB (18.4% utilise)
 G: 1862.98 GB | Libre: 1443.98 GB (22.5% utilise)
@@ -244,7 +241,7 @@ Interface: RZ616 Wi-Fi 6E 160MHz
   IP: 192.168.x.x, fe80::xxxx | Gateway: 192.168.x.x | MAC: 48:45:E6:XX:XX:XX
 CONNEXIONS
 --------------------------------------------------
-Total connexions: 206 | Ports en ecoute: 38
+Total connexions: 207 | Ports en ecoute: 39
 ====================================================================================================
 [8. SECURITE]
 ====================================================================================================
@@ -274,7 +271,7 @@ SERVICES CRITIQUES
 [OK] Pare-feu Windows Defender
 [OK] Journal d’événements Windows
 [OK] Services de chiffrement
-Total: 310 | Running: 134
+Total: 310 | Running: 137
 ====================================================================================================
 [10. DEMARRAGE]
 ====================================================================================================
@@ -305,7 +302,7 @@ REDEMARRAGE REQUIS
 JOURNAUX D'EVENEMENTS
 --------------------------------------------------
 === System ===
-Critiques: 0 | Erreurs: 41 (7 jours)
+Critiques: 0 | Erreurs: 45 (7 jours)
 === Application ===
 Critiques: 0 | Erreurs: 50 (7 jours)
 BSOD (30 jours)
@@ -382,7 +379,7 @@ Total: 87 applications
 ====================================================================================================
 TACHES PLANIFIEES
 --------------------------------------------------
-Total: 292 | Actives: 236
+Total: 292 | Actives: 235
 ====================================================================================================
 [18. PROCESSUS]
 ====================================================================================================
@@ -428,9 +425,9 @@ Points disponibles: 3
 ====================================================================================================
 FICHIERS TEMPORAIRES
 --------------------------------------------------
-Temp User : 1,74 GB
-Temp Windows : 116,36 MB
-TOTAL: 1,85 GB
+Temp User : 1,81 GB
+Temp Windows : 116,55 MB
+TOTAL: 1,92 GB
 ====================================================================================================
 [25. VARIABLES ENVIRONNEMENT]
 ====================================================================================================
@@ -516,6 +513,7 @@ Crashes applications: 0
 ====================================================================================================
 COMPTEURS DE PERFORMANCE
 --------------------------------------------------
+Disk Queue Length        : 0 [WMI]
 ====================================================================================================
 [34. LATENCE RESEAU]
 ====================================================================================================
@@ -537,8 +535,8 @@ SMART DETAILLE
 Disque: 5&221baba8&0&020000_0
   Prediction defaillance : Non
   Reallocated Sectors    : 0
-  Power-On Hours         : 22908 h
-  Temperature            : N/A (invalid reading)
+  Power-On Hours         : 22912 h
+  Temperature            : 37 C
   Reallocation Events    : 0
   Pending Sectors        : 0
   Uncorrectable Sectors  : 0
@@ -548,12 +546,12 @@ Disque: 5&221baba8&0&020000_0
 SIGNES DYNAMIQUES (DONNEES BRUTES)
 ==================================================
 [CONFIG] Duree: 10s | Echantillons: 10
-CPU: moyenne 0% | max 0% | min 0% [WMI-Fallback]
-Memoire: 27.44% utilisee | 71272.02 MB libres [WMI-Fallback]
+CPU: moyenne 4% | max 4% | min 4% [WMI-Fallback]
+Memoire: 30.91% utilisee | 67863.27 MB libres [WMI-Fallback]
 Disque: utilisation 0% | file 0 [WMI-Fallback]
 Top CPU: dwm
-Top RAM: Cursor (1367.54 MB)
-Reseau: 0.00 Mbps | erreurs: 0
+Top RAM: Cursor (1648.77 MB)
+Reseau: 0.01 Mbps | erreurs: 0
 ====================================================================================================
 [37. ANALYSE AVANCEE]
 ====================================================================================================
@@ -587,11 +585,9 @@ DETECTION MALWARE
 ====================================================================================================
 ERREURS DE COLLECTE
 ==================================================
-Total erreurs: 2
+Total erreurs: 1
 [WMI_ERROR] Unknown
   No message
-[TEMP_WARN] Collect-SmartDetails
-  Temperature SMART invalide: 917538
 ====================================================================================================
 [RESUME FINAL]
 ====================================================================================================
@@ -600,8 +596,8 @@ RESUME DE COLLECTE
 METADATA
 --------------------------------------------------
 Version              : 7.0
-Run ID               : 38f26e58-48b4-42b4-9649-4cc9231c5c91
-Date                 : 2026-01-30 10:38:50
+Run ID               : 41e35e48-3de6-431a-a1ba-805fea3eb244
+Date                 : 2026-01-30 14:03:46
 Admin                : True
 Redaction            : Full
 QuickScan            : False
@@ -648,34 +644,25 @@ Sections: 37
   - AdvancedAnalysis
 ERREURS
 --------------------------------------------------
-Erreurs de collecte: 2
+Erreurs de collecte: 1
 ####################################################################################################
-Duree collecte       : 50 secondes
-Genere le            : 2026-01-30 10:38:50
-Hash (SHA256): B7EC5A401055A649FD2773A27223BD6FF3CE16B8CF4D064F746EB6D59C49939D
+Duree collecte       : 53.4 secondes
+Genere le            : 2026-01-30 14:03:46
+Hash (SHA256): 845CE0AC3F45DAE61B68BEB1DA052EC24945A71FF2165E88529D736BDA4AE0DA
 
 ════════════════════════════════════════════════════════════════════════════════
   [COLLECTE : ERREURS ET LIMITATIONS]
 ════════════════════════════════════════════════════════════════════════════════
 
-  Erreurs collecteur (logique): 2
+  Erreurs collecteur (logique): 0
   STATUT COLLECTE: ⚠️ PARTIELLE
-
-  ┌─ ERREURS COLLECTEUR ──────────────────────────────────────────────────────┐
-  │  ❌ [WMI_ERROR] : Unknown error
-  │  ❌ [TEMP_WARN] Collect-SmartDetails: Temperature SMART invalide: 917538
-  └─────────────────────────────────────────────────────────────────────────────┘
-
-  ┌─ MÉTRIQUES INVALIDES (valeurs hors plage/sentinelles) ────────────────────┐
-  │  ⚠️ PerfCounter.diskQueueLength: Counter 'diskQueueLength' valeur sentinelle: -1
-  └─────────────────────────────────────────────────────────────────────────────┘
 
   ┌─ DONNÉES MANQUANTES ──────────────────────────────────────────────────────┐
   │  ○ section: Processes
-  │  ○ timestamp: 2026-01-30T10:38:23.5806112-05:00
+  │  ○ timestamp: 2026-01-30T14:03:17.4223153-05:00
   │  ○ item: ProcessList
-  │  ○ reason: Get-Process et CIM ont echoue
-  │  ○ CPU Temperature: capteur invalide: valeur sentinelle 0
+  │  ○ reason: Get-Process, CIM et tasklist ont echoue
+  │  ○ CPU Temperature: capteur invalide: valeur sentinelle 0; fallback WMI: thermal_zone_not_available
   └─────────────────────────────────────────────────────────────────────────────┘
 
 ════════════════════════════════════════════════════════════════════════════════
@@ -683,14 +670,16 @@ Hash (SHA256): B7EC5A401055A649FD2773A27223BD6FF3CE16B8CF4D064F746EB6D59C49939D
 ════════════════════════════════════════════════════════════════════════════════
 
   UDIS — UNIFIED DIAGNOSTIC INTELLIGENCE SCORING
-  Score global (UDIS): 91/100
-  GRADE: A
+  Score global (UDIS): 99/100
+  GRADE: A+
   SÉVÉRITÉ: Healthy
   Verdict: Collecte partielle : interprétation prudente
 
   AFFICHAGE MODE INDUSTRIE (séparé):
-    Machine Health Score  : 90/100 (70% du total)
-    Data Reliability Score: 89/100 (20% du total)
+    Machine Health Score  : 100/100 (70% du total)
+    Data Reliability Score: 96/100 (20% du total)
+      ├─ Courbe progressive: 0err=100, 1=95, 2=90, 3=84, 4=78, 5=72, +=-4/err
+      └─ Note: Collecte partielle ≠ PC mauvais; DRS mesure la fiabilité du diagnostic
     Diagnostic Clarity    : 100/100 (10% du total)
     Source de vérité      : UDIS (Unified Diagnostic Intelligence Scoring)
     AutoFix autorisé      : Oui
@@ -704,9 +693,9 @@ Hash (SHA256): B7EC5A401055A649FD2773A27223BD6FF3CE16B8CF4D064F746EB6D59C49939D
     Network Speed         : Non mesuré
 
   RÉFÉRENCE (lecture JSON):
-    Score PS (legacy) : 99
-    Score UDIS        : 91
-    Delta             : 8
+    Score PS (legacy) : 100
+    Score UDIS        : 99
+    Delta             : 1
 
   SCORES PAR DOMAINE:
   ┌────────────────────────┬───────┬────────────────────────────────────┐
@@ -734,6 +723,6 @@ Hash (SHA256): B7EC5A401055A649FD2773A27223BD6FF3CE16B8CF4D064F746EB6D59C49939D
   DATA COVERAGE: 12/16 capteurs disponibles (75%)
 
   ═══════════════════════════════════════════════════════════════════════════════
-  Généré le 2026-01-30 à 10:42:33
+  Généré le 2026-01-30 à 14:09:49
   PC Diagnostic PRO — Rapport Unifié v1.0
   ═══════════════════════════════════════════════════════════════════════════════

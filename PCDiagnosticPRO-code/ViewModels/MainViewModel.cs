@@ -48,6 +48,9 @@ namespace PCDiagnosticPro.ViewModels
         
         // Résultat compteurs de performance pour enrichir les métriques
         private PerfCounterCollector.PerfCounterResult? _lastPerfCounterResult;
+        
+        // Résultat des signaux diagnostiques avancés (10 mesures GOD TIER)
+        private DiagnosticsSignals.DiagnosticSignalsResult? _lastDiagnosticSignals;
 
         // Chemins relatifs
         private readonly string _baseDir = AppContext.BaseDirectory;
@@ -1352,6 +1355,21 @@ namespace PCDiagnosticPro.ViewModels
                 }
                 UpdateProgress(90, "Performance counters collected");
 
+                // === PHASE 2C: Collecte des signaux diagnostiques avancés (10 mesures GOD TIER) ===
+                try
+                {
+                    UpdateProgress(91, "Collecting diagnostic signals...");
+                    var signalsOrchestrator = new DiagnosticsSignals.SignalsOrchestrator();
+                    _lastDiagnosticSignals = await signalsOrchestrator.CollectAllAsync(_scanCts.Token);
+                    App.LogMessage($"[DiagnosticSignals] Collected: {_lastDiagnosticSignals.SuccessCount} success, {_lastDiagnosticSignals.FailCount} fail, {_lastDiagnosticSignals.TotalDurationMs}ms");
+                }
+                catch (Exception ex)
+                {
+                    _lastDiagnosticSignals = null;
+                    App.LogMessage($"[DiagnosticSignals] Erreur: {ex.Message}");
+                }
+                UpdateProgress(93, "Diagnostic signals collected");
+
                 _resultJsonPath = await ResolveResultJsonPathAsync(outputDir, _scanStartTime, _scanCts.Token);
                 await WriteCombinedResultAsync(outputDir, sensorsResult);
                 UpdateProgress(95, "JSON resolved");
@@ -1641,7 +1659,6 @@ namespace PCDiagnosticPro.ViewModels
                 App.LogMessage($"Fichier JSON final choisi: {_resultJsonPath}");
                 var jsonContent = await File.ReadAllTextAsync(_resultJsonPath, Encoding.UTF8);
                 App.LogMessage($"Taille du fichier JSON: {jsonContent.Length} caractères");
-                var outputDir = Path.GetDirectoryName(_resultJsonPath) ?? _reportsDir;
                 
                 // Parse legacy pour compatibilité
                 var result = _jsonMapper.Parse(jsonContent, _resultJsonPath, _scanStopwatch.Elapsed);
@@ -1670,18 +1687,6 @@ namespace PCDiagnosticPro.ViewModels
                         result.Summary.Score = unifiedScore;
                         result.Summary.Grade = unifiedGrade;
                     }
-
-                    if (healthReport.UdisReport != null)
-                    {
-                        using var speedCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-                        await UnifiedDiagnosticScoreEngine.AddNetworkSpeedTestAsync(healthReport.UdisReport, speedCts.Token);
-                        OnPropertyChanged(nameof(NetworkDownloadMbps));
-                        OnPropertyChanged(nameof(NetworkLatencyMs));
-                        OnPropertyChanged(nameof(NetworkSpeedTier));
-                        OnPropertyChanged(nameof(NetworkRecommendation));
-                    }
-
-                    await UpdateCombinedResultWithHealthReportAsync(outputDir, healthReport);
                 }
                 catch (Exception ex)
                 {
@@ -1691,6 +1696,7 @@ namespace PCDiagnosticPro.ViewModels
                 // ===== FIN HEALTH REPORT =====
                 
                 // ===== GÉNÉRATION TXT UNIFIÉ (PS + SENSORS + SCORE) =====
+                var outputDir = Path.GetDirectoryName(_resultJsonPath) ?? _reportsDir;
                 await GenerateUnifiedTxtReportAsync(outputDir);
                 // ===== FIN TXT UNIFIÉ =====
 
@@ -1957,7 +1963,7 @@ namespace PCDiagnosticPro.ViewModels
                 {
                     ScanPowershell = doc.RootElement.Clone(),
                     SensorsCsharp = sensorsResult,
-                    FindingsNote = "UDIS non calculé lors de l'écriture initiale."
+                    DiagnosticSignals = _lastDiagnosticSignals?.Signals
                 };
 
                 var combinedPath = Path.Combine(outputDir, "scan_result_combined.json");
@@ -2027,49 +2033,6 @@ namespace PCDiagnosticPro.ViewModels
             catch (Exception ex)
             {
                 App.LogMessage($"[UnifiedTXT] ERREUR: {ex.Message}");
-            }
-        }
-
-        private async Task UpdateCombinedResultWithHealthReportAsync(string outputDir, HealthReport? healthReport)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(_resultJsonPath) || !File.Exists(_resultJsonPath))
-                {
-                    App.LogMessage("[CombinedJSON] JSON PowerShell introuvable pour enrichissement.");
-                    return;
-                }
-
-                var jsonContent = await File.ReadAllTextAsync(_resultJsonPath, Encoding.UTF8);
-                using var doc = JsonDocument.Parse(jsonContent);
-
-                var sensors = _lastSensorsResult ?? new HardwareSensorsResult();
-                DataSanitizer.SanitizeSensors(sensors);
-
-                var findings = healthReport?.UdisFindings ?? new List<DiagnosticFinding>();
-                var combined = new CombinedScanResult
-                {
-                    ScanPowershell = doc.RootElement.Clone(),
-                    SensorsCsharp = sensors,
-                    UdisReport = healthReport?.UdisReport,
-                    Findings = findings,
-                    FindingsNote = findings.Count == 0 ? "Aucun finding normalisé détecté." : null,
-                    NormalizedMetrics = NormalizedMetricsBuilder.Build(doc.RootElement, sensors, healthReport)
-                };
-
-                var combinedPath = string.IsNullOrEmpty(_combinedJsonPath)
-                    ? Path.Combine(outputDir, "scan_result_combined.json")
-                    : _combinedJsonPath;
-
-                var combinedJson = JsonSerializer.Serialize(combined, HardwareSensorsResult.JsonOptions);
-                await File.WriteAllTextAsync(combinedPath, combinedJson, Encoding.UTF8);
-                _combinedJsonPath = combinedPath;
-
-                App.LogMessage($"[CombinedJSON] Enrichi avec UDIS/findings: {combinedPath}");
-            }
-            catch (Exception ex)
-            {
-                App.LogMessage($"[CombinedJSON] ERREUR enrichissement: {ex.Message}");
             }
         }
         

@@ -10,7 +10,7 @@
         "projectUniqueName": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
         "projectName": "PCDiagnosticPro",
         "projectPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
-        "packagesPath": "C:\\Users\\rams_\\AppData\\Local\\Temp\\cursor-sandbox-cache\\1ae7c84bedf4239ecdce36aadccfeb62\\nuget",
+        "packagesPath": "C:\\Users\\rams_\\.nuget\\packages\\",
         "outputPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [

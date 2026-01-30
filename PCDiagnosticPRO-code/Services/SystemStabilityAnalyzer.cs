@@ -34,30 +34,18 @@ namespace PCDiagnosticPro.Services
                 {
                     if (sections.TryGetProperty("EventLogs", out var eventLogs) && eventLogs.TryGetProperty("data", out var elData))
                     {
-                        if (elData.TryGetProperty("logs", out var logs) && logs.ValueKind == JsonValueKind.Object)
-                        {
-                            if (logs.TryGetProperty("System", out var systemLog))
-                            {
-                                if (systemLog.TryGetProperty("errorCount", out var err)) inputs.SystemErrors7d = err.GetInt32();
-                            }
-                            if (logs.TryGetProperty("Application", out var appLog))
-                            {
-                                if (appLog.TryGetProperty("errorCount", out var err)) inputs.AppErrors7d = err.GetInt32();
-                            }
-                            inputs.CriticalEventLogs7d = inputs.SystemErrors7d + inputs.AppErrors7d;
-                        }
-
-                        if (elData.TryGetProperty("bsodCount", out var bsod)) inputs.BsodCount = bsod.GetInt32();
+                        if (elData.TryGetProperty("systemErrors7d", out var se)) inputs.SystemErrors7d = se.GetInt32();
+                        if (elData.TryGetProperty("appErrors7d", out var ae)) inputs.AppErrors7d = ae.GetInt32();
+                        inputs.CriticalEventLogs7d = inputs.SystemErrors7d + inputs.AppErrors7d;
                     }
                     if (sections.TryGetProperty("ReliabilityHistory", out var rel) && rel.TryGetProperty("data", out var relData))
                     {
                         if (relData.TryGetProperty("crashCount30d", out var cc)) inputs.ReliabilityCrashes30d = cc.GetInt32();
-                        if (relData.TryGetProperty("appCrashes", out var appCrashes)) inputs.ReliabilityCrashes30d = Math.Max(inputs.ReliabilityCrashes30d, appCrashes.GetInt32());
-                        if (relData.TryGetProperty("bsodCount", out var relBsod)) inputs.BsodCount = Math.Max(inputs.BsodCount, relBsod.GetInt32());
+                        if (relData.TryGetProperty("bsodCount", out var bsod)) inputs.BsodCount = bsod.GetInt32();
                     }
                     if (sections.TryGetProperty("MinidumpAnalysis", out var minidump) && minidump.TryGetProperty("data", out var mdData))
                     {
-                        if (mdData.TryGetProperty("bsodCount", out var b)) inputs.BsodCount = Math.Max(inputs.BsodCount, b.GetInt32());
+                        if (mdData.TryGetProperty("bsodCount", out var b)) inputs.BsodCount = b.GetInt32();
                         if (mdData.TryGetProperty("kernelCrashCount", out var k)) inputs.KernelCrashCount = k.GetInt32();
                     }
                 }

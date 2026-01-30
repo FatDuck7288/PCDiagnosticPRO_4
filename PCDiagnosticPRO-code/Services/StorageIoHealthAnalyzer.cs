@@ -44,7 +44,7 @@ namespace PCDiagnosticPro.Services
                 // Chercher PerformanceCounters
                 if (sections.TryGetProperty("PerformanceCounters", out var perf) && perf.TryGetProperty("data", out var data))
                 {
-                    if (data.TryGetProperty("diskQueueLength", out var dql) && dql.ValueKind == JsonValueKind.Number)
+                    if (data.TryGetProperty("diskQueueLength", out var dql))
                     {
                         var val = dql.GetDouble();
                         if (val >= 0 && val < 1000) // Exclure sentinelles
@@ -52,17 +52,17 @@ namespace PCDiagnosticPro.Services
                             result.AvgDiskQueueLength = val;
                         }
                     }
-                    if (data.TryGetProperty("diskReadBytesPerSec", out var dr) && dr.ValueKind == JsonValueKind.Number)
+                    if (data.TryGetProperty("diskReadBytesPerSec", out var dr))
                     {
                         var val = dr.GetDouble();
                         if (val >= 0) result.DiskReadBytesPerSec = val;
                     }
-                    if (data.TryGetProperty("diskWriteBytesPerSec", out var dw) && dw.ValueKind == JsonValueKind.Number)
+                    if (data.TryGetProperty("diskWriteBytesPerSec", out var dw))
                     {
                         var val = dw.GetDouble();
                         if (val >= 0) result.DiskWriteBytesPerSec = val;
                     }
-                    if (data.TryGetProperty("diskIdlePercent", out var di) && di.ValueKind == JsonValueKind.Number)
+                    if (data.TryGetProperty("diskIdlePercent", out var di))
                     {
                         var val = di.GetDouble();
                         if (val >= 0 && val <= 100) result.DiskIdlePercent = val;

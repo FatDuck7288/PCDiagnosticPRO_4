@@ -15,12 +15,6 @@ namespace PCDiagnosticPro.Models
 
         [JsonPropertyName("reason")]
         public string? Reason { get; set; }
-
-        [JsonPropertyName("source")]
-        public string? Source { get; set; }
-
-        [JsonPropertyName("timestamp")]
-        public DateTimeOffset? Timestamp { get; set; }
     }
 
     public class GpuMetrics

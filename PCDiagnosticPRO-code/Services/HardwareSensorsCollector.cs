@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Management;
 using System.Threading;
 using System.Threading.Tasks;
 using LibreHardwareMonitor.Hardware;
@@ -18,8 +17,7 @@ namespace PCDiagnosticPro.Services
 
         private HardwareSensorsResult CollectInternal(CancellationToken ct)
         {
-            var collectedAt = DateTimeOffset.Now;
-            var result = CreateDefaultResult(collectedAt);
+            var result = CreateDefaultResult();
             Computer computer = null;
 
             try
@@ -30,15 +28,15 @@ namespace PCDiagnosticPro.Services
                 computer.IsStorageEnabled = true;
                 computer.Open();
 
-                TryCollectGpuMetrics(computer, result, collectedAt);
-                TryCollectCpuMetrics(computer, result, collectedAt);
-                TryCollectDiskMetrics(computer, result, collectedAt);
+                TryCollectGpuMetrics(computer, result);
+                TryCollectCpuMetrics(computer, result);
+                TryCollectDiskMetrics(computer, result);
 
-                result.CollectedAt = collectedAt;
+                result.CollectedAt = DateTimeOffset.Now;
             }
             catch (Exception ex)
             {
-                MarkAllUnavailable(result, string.Format("Erreur globale: {0}", ex.Message), collectedAt);
+                MarkAllUnavailable(result, string.Format("Erreur globale: {0}", ex.Message));
             }
             finally
             {
@@ -58,47 +56,47 @@ namespace PCDiagnosticPro.Services
             return result;
         }
 
-        private static HardwareSensorsResult CreateDefaultResult(DateTimeOffset collectedAt)
+        private static HardwareSensorsResult CreateDefaultResult()
         {
             var res = new HardwareSensorsResult();
-            res.CollectedAt = collectedAt;
+            res.CollectedAt = DateTimeOffset.Now;
             
             res.Gpu = new GpuMetrics();
-            res.Gpu.Name = Unavailable("GPU non collecte", "LibreHardwareMonitor", collectedAt);
-            res.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non collectee", "LibreHardwareMonitor", collectedAt);
-            res.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisee non collectee", "LibreHardwareMonitor", collectedAt);
-            res.Gpu.GpuLoadPercent = UnavailableDouble("Charge GPU non collectee", "LibreHardwareMonitor", collectedAt);
-            res.Gpu.GpuTempC = UnavailableDouble("Temperature GPU non collectee", "LibreHardwareMonitor", collectedAt);
+            res.Gpu.Name = Unavailable("GPU non collecte");
+            res.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non collectee");
+            res.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisee non collectee");
+            res.Gpu.GpuLoadPercent = UnavailableDouble("Charge GPU non collectee");
+            res.Gpu.GpuTempC = UnavailableDouble("Temperature GPU non collectee");
             
             res.Cpu = new CpuMetrics();
-            res.Cpu.CpuTempC = UnavailableDouble("Temperature CPU non collectee", "LibreHardwareMonitor", collectedAt);
+            res.Cpu.CpuTempC = UnavailableDouble("Temperature CPU non collectee");
             res.Cpu.CpuTempSource = "N/A";
-            res.Cpu.CpuLoadPercent = UnavailableDouble("Charge CPU: utiliser donnees PowerShell", "PowerShell", collectedAt);
+            res.Cpu.CpuLoadPercent = UnavailableDouble("Charge CPU: utiliser donnees PowerShell");
             
             res.Disks = new List<DiskMetrics>();
             
             return res;
         }
 
-        private static void MarkAllUnavailable(HardwareSensorsResult result, string reason, DateTimeOffset collectedAt)
+        private static void MarkAllUnavailable(HardwareSensorsResult result, string reason)
         {
-            result.Gpu.Name = Unavailable(reason, "LibreHardwareMonitor", collectedAt);
-            result.Gpu.VramTotalMB = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
-            result.Gpu.VramUsedMB = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
-            result.Gpu.GpuLoadPercent = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
-            result.Gpu.GpuTempC = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
-            result.Cpu.CpuTempC = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
+            result.Gpu.Name = Unavailable(reason);
+            result.Gpu.VramTotalMB = UnavailableDouble(reason);
+            result.Gpu.VramUsedMB = UnavailableDouble(reason);
+            result.Gpu.GpuLoadPercent = UnavailableDouble(reason);
+            result.Gpu.GpuTempC = UnavailableDouble(reason);
+            result.Cpu.CpuTempC = UnavailableDouble(reason);
             result.Cpu.CpuTempSource = "Erreur";
-            result.Cpu.CpuLoadPercent = UnavailableDouble(reason, "PowerShell", collectedAt);
+            result.Cpu.CpuLoadPercent = UnavailableDouble(reason);
             result.Disks.Clear();
             
             var diskMetric = new DiskMetrics();
-            diskMetric.Name = Unavailable(reason, "LibreHardwareMonitor", collectedAt);
-            diskMetric.TempC = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
+            diskMetric.Name = Unavailable(reason);
+            diskMetric.TempC = UnavailableDouble(reason);
             result.Disks.Add(diskMetric);
         }
 
-        private static void TryCollectGpuMetrics(Computer computer, HardwareSensorsResult result, DateTimeOffset collectedAt)
+        private static void TryCollectGpuMetrics(Computer computer, HardwareSensorsResult result)
         {
             try
             {
@@ -125,39 +123,39 @@ namespace PCDiagnosticPro.Services
 
                 var sensors = GetAllSensors(gpu).ToList();
 
-                result.Gpu.Name = Available(gpu.Name, "LibreHardwareMonitor", collectedAt);
+                result.Gpu.Name = Available(gpu.Name);
 
                 var vramTotal = FindSensorValue(sensors, "Memory Total", "VRAM Total", "GPU Memory Total");
                 if (vramTotal.HasValue)
-                    result.Gpu.VramTotalMB = Available(vramTotal.Value, "LibreHardwareMonitor", collectedAt);
+                    result.Gpu.VramTotalMB = Available(vramTotal.Value);
                 else
-                    result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale indisponible", "LibreHardwareMonitor", collectedAt);
+                    result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale indisponible");
 
                 var vramUsed = FindSensorValue(sensors, "Memory Used", "VRAM Used", "GPU Memory Used");
                 if (vramUsed.HasValue)
-                    result.Gpu.VramUsedMB = Available(vramUsed.Value, "LibreHardwareMonitor", collectedAt);
+                    result.Gpu.VramUsedMB = Available(vramUsed.Value);
                 else
-                    result.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisee indisponible", "LibreHardwareMonitor", collectedAt);
+                    result.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisee indisponible");
 
                 var gpuLoad = FindSensorValue(sensors, "GPU Core", "GPU", "Core");
                 if (gpuLoad.HasValue)
-                    result.Gpu.GpuLoadPercent = Available(gpuLoad.Value, "LibreHardwareMonitor", collectedAt);
+                    result.Gpu.GpuLoadPercent = Available(gpuLoad.Value);
                 else
-                    result.Gpu.GpuLoadPercent = UnavailableDouble("Charge GPU indisponible", "LibreHardwareMonitor", collectedAt);
+                    result.Gpu.GpuLoadPercent = UnavailableDouble("Charge GPU indisponible");
 
                 var gpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "GPU", "Core");
                 if (gpuTemp.HasValue)
-                    result.Gpu.GpuTempC = Available(gpuTemp.Value, "LibreHardwareMonitor", collectedAt);
+                    result.Gpu.GpuTempC = Available(gpuTemp.Value);
                 else
-                    result.Gpu.GpuTempC = UnavailableDouble("Temperature GPU indisponible", "LibreHardwareMonitor", collectedAt);
+                    result.Gpu.GpuTempC = UnavailableDouble("Temperature GPU indisponible");
             }
             catch (Exception ex)
             {
-                SetGpuUnavailable(result, string.Format("Erreur GPU: {0}", ex.Message), collectedAt);
+                SetGpuUnavailable(result, string.Format("Erreur GPU: {0}", ex.Message));
             }
         }
 
-        private static void TryCollectCpuMetrics(Computer computer, HardwareSensorsResult result, DateTimeOffset collectedAt)
+        private static void TryCollectCpuMetrics(Computer computer, HardwareSensorsResult result)
         {
             try
             {
@@ -173,7 +171,7 @@ namespace PCDiagnosticPro.Services
 
                 if (cpu == null)
                 {
-                    result.Cpu.CpuTempC = UnavailableDouble("CPU introuvable", "LibreHardwareMonitor", collectedAt);
+                    result.Cpu.CpuTempC = UnavailableDouble("CPU introuvable");
                     result.Cpu.CpuTempSource = "N/A";
                     return;
                 }
@@ -254,46 +252,61 @@ namespace PCDiagnosticPro.Services
                     }
                 }
                 
-                if (cpuTemp.HasValue && IsPlausibleCpuTemp(cpuTemp.Value))
+                // Validation anti-sentinelle (0°C ou hors plage 5-115°C = invalide)
+                bool lhmValid = cpuTemp.HasValue && cpuTemp.Value > 5.0 && cpuTemp.Value < 115.0;
+                
+                if (lhmValid)
                 {
-                    result.Cpu.CpuTempC = Available(cpuTemp.Value, "LibreHardwareMonitor", collectedAt);
+                    result.Cpu.CpuTempC = Available(cpuTemp.Value);
                     result.Cpu.CpuTempSource = tempSource;
-                    App.LogMessage($"[Sensors→CPU] Température collectée: {cpuTemp.Value:F1}°C (source: {tempSource})");
+                    App.LogMessage($"[Sensors→CPU] Température LHM valide: {cpuTemp.Value:F1}°C (source: {tempSource})");
                 }
                 else
                 {
-                    if (cpuTemp.HasValue && !IsPlausibleCpuTemp(cpuTemp.Value))
+                    // LHM a retourné sentinelle ou aucune valeur → tenter fallback WMI ThermalZone
+                    if (cpuTemp.HasValue)
                     {
-                        App.LogMessage($"[Sensors→CPU] Température LHM invalide ({cpuTemp.Value:F1}°C), fallback WMI.");
+                        App.LogMessage($"[Sensors→CPU] LHM sentinelle détectée: {cpuTemp.Value:F1}°C (source: {tempSource}) → fallback WMI");
                     }
-
-                    var wmiTemp = TryGetWmiCpuTemperature();
-                    if (wmiTemp.HasValue)
+                    else
                     {
-                        result.Cpu.CpuTempC = Available(wmiTemp.Value, "WMI ThermalZone", collectedAt);
-                        result.Cpu.CpuTempSource = "WMI ThermalZone";
-                        App.LogMessage($"[Sensors→CPU] Température WMI collectée: {wmiTemp.Value:F1}°C");
-                        return;
+                        var tempSensors = sensors.Where(s => s.SensorType == SensorType.Temperature).ToList();
+                        var sensorNames = string.Join(", ", tempSensors.Select(s => $"{s.Name}={s.Value}"));
+                        App.LogMessage($"[Sensors→CPU] AUCUNE température LHM. Capteurs dispo: [{sensorNames}] → fallback WMI");
                     }
-
-                    // Log tous les capteurs pour debug
-                    var tempSensors = sensors.Where(s => s.SensorType == SensorType.Temperature).ToList();
-                    var sensorNames = string.Join(", ", tempSensors.Select(s => $"{s.Name}={s.Value}"));
-                    App.LogMessage($"[Sensors→CPU] AUCUNE température trouvée. Capteurs dispo: [{sensorNames}]");
                     
-                    result.Cpu.CpuTempC = UnavailableDouble($"Aucun capteur température CPU compatible (trouvés: {tempSensors.Count})", "LibreHardwareMonitor", collectedAt);
-                    result.Cpu.CpuTempSource = "N/A";
+                    // === FALLBACK WMI ThermalZone ===
+                    var wmiFallback = WmiThermalZoneFallback.TryGetCpuTemp(minValidC: 5.0, maxValidC: 115.0);
+                    
+                    if (wmiFallback.TempC.HasValue)
+                    {
+                        result.Cpu.CpuTempC = Available(wmiFallback.TempC.Value);
+                        result.Cpu.CpuTempSource = wmiFallback.Source;
+                        App.LogMessage($"[Sensors→CPU] Fallback WMI réussi: {wmiFallback.TempC.Value:F1}°C (source: {wmiFallback.Source})");
+                    }
+                    else
+                    {
+                        // Aucune source valide
+                        string reason = cpuTemp.HasValue 
+                            ? $"capteur invalide: valeur sentinelle {cpuTemp.Value:F0}" 
+                            : $"aucun capteur compatible";
+                        reason += $"; fallback WMI: {wmiFallback.Reason ?? "unavailable"}";
+                        
+                        result.Cpu.CpuTempC = UnavailableDouble(reason);
+                        result.Cpu.CpuTempSource = tempSource ?? "N/A";
+                        App.LogMessage($"[Sensors→CPU] ÉCHEC total: {reason}");
+                    }
                 }
             }
             catch (Exception ex)
             {
-                result.Cpu.CpuTempC = UnavailableDouble(string.Format("Erreur CPU: {0}", ex.Message), "LibreHardwareMonitor", collectedAt);
+                result.Cpu.CpuTempC = UnavailableDouble(string.Format("Erreur CPU: {0}", ex.Message));
                 result.Cpu.CpuTempSource = "Erreur";
                 App.LogMessage($"[Sensors→CPU] ERREUR: {ex.Message}");
             }
         }
 
-        private static void TryCollectDiskMetrics(Computer computer, HardwareSensorsResult result, DateTimeOffset collectedAt)
+        private static void TryCollectDiskMetrics(Computer computer, HardwareSensorsResult result)
         {
             try
             {
@@ -311,8 +324,8 @@ namespace PCDiagnosticPro.Services
                 if (disks.Count == 0)
                 {
                     var diskMetric = new DiskMetrics();
-                    diskMetric.Name = Unavailable("Aucun disque detecte", "LibreHardwareMonitor", collectedAt);
-                    diskMetric.TempC = UnavailableDouble("Temperature disque indisponible", "LibreHardwareMonitor", collectedAt);
+                    diskMetric.Name = Unavailable("Aucun disque detecte");
+                    diskMetric.TempC = UnavailableDouble("Temperature disque indisponible");
                     result.Disks.Add(diskMetric);
                     return;
                 }
@@ -326,12 +339,12 @@ namespace PCDiagnosticPro.Services
                     var temp = FindSensorValueByType(sensors, SensorType.Temperature, "Temperature", "Temp");
 
                     var diskMetric = new DiskMetrics();
-                    diskMetric.Name = Available(disk.Name, "LibreHardwareMonitor", collectedAt);
+                    diskMetric.Name = Available(disk.Name);
                     
                     if (temp.HasValue)
-                        diskMetric.TempC = Available(temp.Value, "LibreHardwareMonitor", collectedAt);
+                        diskMetric.TempC = Available(temp.Value);
                     else
-                        diskMetric.TempC = UnavailableDouble("Temperature disque indisponible", "LibreHardwareMonitor", collectedAt);
+                        diskMetric.TempC = UnavailableDouble("Temperature disque indisponible");
                     
                     result.Disks.Add(diskMetric);
                 }
@@ -340,19 +353,19 @@ namespace PCDiagnosticPro.Services
             {
                 result.Disks.Clear();
                 var diskMetric = new DiskMetrics();
-                diskMetric.Name = Unavailable(string.Format("Erreur disques: {0}", ex.Message), "LibreHardwareMonitor", collectedAt);
-                diskMetric.TempC = UnavailableDouble(string.Format("Erreur disques: {0}", ex.Message), "LibreHardwareMonitor", collectedAt);
+                diskMetric.Name = Unavailable(string.Format("Erreur disques: {0}", ex.Message));
+                diskMetric.TempC = UnavailableDouble(string.Format("Erreur disques: {0}", ex.Message));
                 result.Disks.Add(diskMetric);
             }
         }
 
-        private static void SetGpuUnavailable(HardwareSensorsResult result, string reason, DateTimeOffset collectedAt)
+        private static void SetGpuUnavailable(HardwareSensorsResult result, string reason)
         {
-            result.Gpu.Name = Unavailable(reason, "LibreHardwareMonitor", collectedAt);
-            result.Gpu.VramTotalMB = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
-            result.Gpu.VramUsedMB = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
-            result.Gpu.GpuLoadPercent = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
-            result.Gpu.GpuTempC = UnavailableDouble(reason, "LibreHardwareMonitor", collectedAt);
+            result.Gpu.Name = Unavailable(reason);
+            result.Gpu.VramTotalMB = UnavailableDouble(reason);
+            result.Gpu.VramUsedMB = UnavailableDouble(reason);
+            result.Gpu.GpuLoadPercent = UnavailableDouble(reason);
+            result.Gpu.GpuTempC = UnavailableDouble(reason);
         }
 
         private static List<ISensor> GetAllSensors(IHardware hardware)
@@ -419,94 +432,36 @@ namespace PCDiagnosticPro.Services
             return null;
         }
 
-        private static MetricValue<string> Available(string value, string source, DateTimeOffset timestamp)
+        private static MetricValue<string> Available(string value)
         {
             var m = new MetricValue<string>();
             m.Available = true;
             m.Value = value;
-            m.Source = source;
-            m.Timestamp = timestamp;
             return m;
         }
 
-        private static MetricValue<double> Available(double value, string source, DateTimeOffset timestamp)
+        private static MetricValue<double> Available(double value)
         {
             var m = new MetricValue<double>();
             m.Available = true;
             m.Value = value;
-            m.Source = source;
-            m.Timestamp = timestamp;
             return m;
         }
 
-        private static MetricValue<string> Unavailable(string reason, string source, DateTimeOffset timestamp)
+        private static MetricValue<string> Unavailable(string reason)
         {
             var m = new MetricValue<string>();
             m.Available = false;
             m.Reason = reason;
-            m.Source = source;
-            m.Timestamp = timestamp;
             return m;
         }
 
-        private static MetricValue<double> UnavailableDouble(string reason, string source, DateTimeOffset timestamp)
+        private static MetricValue<double> UnavailableDouble(string reason)
         {
             var m = new MetricValue<double>();
             m.Available = false;
             m.Reason = reason;
-            m.Source = source;
-            m.Timestamp = timestamp;
             return m;
-        }
-
-        private static bool IsPlausibleCpuTemp(double value)
-        {
-            return value > 5 && value < 115;
-        }
-
-        private static double? TryGetWmiCpuTemperature()
-        {
-            try
-            {
-                using var searcher = new ManagementObjectSearcher(@"root\WMI", "SELECT CurrentTemperature, HighPrecisionTemperature FROM MSAcpi_ThermalZoneTemperature");
-                foreach (ManagementObject obj in searcher.Get())
-                {
-                    var currentTempRaw = obj["CurrentTemperature"];
-                    var highPrecisionRaw = obj["HighPrecisionTemperature"];
-
-                    var tempCandidates = new List<double>();
-                    if (currentTempRaw != null)
-                    {
-                        var current = Convert.ToDouble(currentTempRaw);
-                        tempCandidates.Add(ConvertKelvinTenthsToCelsius(current));
-                    }
-
-                    if (highPrecisionRaw != null)
-                    {
-                        var high = Convert.ToDouble(highPrecisionRaw);
-                        tempCandidates.Add(ConvertKelvinTenthsToCelsius(high));
-                    }
-
-                    foreach (var temp in tempCandidates)
-                    {
-                        if (IsPlausibleCpuTemp(temp))
-                        {
-                            return temp;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                App.LogMessage($"[Sensors→CPU] WMI fallback échoué: {ex.Message}");
-            }
-
-            return null;
-        }
-
-        private static double ConvertKelvinTenthsToCelsius(double value)
-        {
-            return (value / 10.0) - 273.15;
         }
     }
 }

@@ -340,17 +340,16 @@ namespace PCDiagnosticPro.Services
         private static void WriteMetric(StringBuilder sb, string label, MetricValue<double> metric, string unit, string source)
         {
             var padLabel = label.PadRight(18);
-            var metricSource = string.IsNullOrWhiteSpace(metric.Source) ? source : metric.Source;
             if (metric.Available)
             {
                 sb.AppendLine($"  │  {padLabel} : {metric.Value:F1}{unit}");
-                sb.AppendLine($"  │    Source           : {metricSource}");
+                sb.AppendLine($"  │    Source           : {source}");
                 sb.AppendLine($"  │    Confidence       : High");
             }
             else
             {
                 sb.AppendLine($"  │  {padLabel} : N/A");
-                sb.AppendLine($"  │    Source           : {metricSource}");
+                sb.AppendLine($"  │    Source           : {source}");
                 sb.AppendLine($"  │    Reason           : {metric.Reason ?? "Indisponible"}");
                 sb.AppendLine($"  │    Confidence       : Low");
             }
@@ -359,17 +358,16 @@ namespace PCDiagnosticPro.Services
         private static void WriteMetricString(StringBuilder sb, string label, MetricValue<string> metric, string source)
         {
             var padLabel = label.PadRight(18);
-            var metricSource = string.IsNullOrWhiteSpace(metric.Source) ? source : metric.Source;
             if (metric.Available)
             {
                 sb.AppendLine($"  │  {padLabel} : {metric.Value}");
-                sb.AppendLine($"  │    Source           : {metricSource}");
+                sb.AppendLine($"  │    Source           : {source}");
                 sb.AppendLine($"  │    Confidence       : High");
             }
             else
             {
                 sb.AppendLine($"  │  {padLabel} : N/A");
-                sb.AppendLine($"  │    Source           : {metricSource}");
+                sb.AppendLine($"  │    Source           : {source}");
                 sb.AppendLine($"  │    Reason           : {metric.Reason ?? "Indisponible"}");
             }
         }
@@ -671,6 +669,8 @@ namespace PCDiagnosticPro.Services
             sb.AppendLine("  AFFICHAGE MODE INDUSTRIE (séparé):");
             sb.AppendLine($"    Machine Health Score  : {healthReport.MachineHealthScore}/100 (70% du total)");
             sb.AppendLine($"    Data Reliability Score: {healthReport.DataReliabilityScore}/100 (20% du total)");
+            sb.AppendLine($"      ├─ Courbe progressive: 0err=100, 1=95, 2=90, 3=84, 4=78, 5=72, +=-4/err");
+            sb.AppendLine($"      └─ Note: Collecte partielle ≠ PC mauvais; DRS mesure la fiabilité du diagnostic");
             sb.AppendLine($"    Diagnostic Clarity    : {healthReport.DiagnosticClarityScore}/100 (10% du total)");
             sb.AppendLine($"    Source de vérité      : {healthReport.Divergence?.SourceOfTruth ?? "UDIS"}");
             sb.AppendLine($"    AutoFix autorisé      : {(healthReport.AutoFixAllowed ? "Oui" : "Non")}");
@@ -688,8 +688,6 @@ namespace PCDiagnosticPro.Services
                     sb.AppendLine($"    Network Speed         : {healthReport.UdisReport.DownloadMbps:F1} Mbps ({healthReport.UdisReport.NetworkSpeedTier})");
                     if (healthReport.UdisReport.LatencyMs.HasValue)
                         sb.AppendLine($"    Network Latency       : {healthReport.UdisReport.LatencyMs:F0} ms");
-                    if (!string.IsNullOrWhiteSpace(healthReport.UdisReport.NetworkRecommendation))
-                        sb.AppendLine($"    Network Advice        : {healthReport.UdisReport.NetworkRecommendation}");
                 }
                 else
                 {

@@ -2,51 +2,43 @@
   "scan_powershell": {
     "missingData": {
       "section": "Processes",
-      "timestamp": "2026-01-30T10:38:23.5806112-05:00",
+      "timestamp": "2026-01-30T14:03:17.4223153-05:00",
       "item": "ProcessList",
-      "reason": "Get-Process et CIM ont echoue"
+      "reason": "Get-Process, CIM et tasklist ont echoue"
     },
     "scoreV2": {
-      "score": 99,
+      "score": 100,
       "grade": "A",
       "breakdown": {
         "excludedLimitations": 0,
         "infoIssues": 0,
-        "warnings": 1,
+        "warnings": 0,
         "timeouts": 0,
         "critical": 0,
         "collectorErrors": 0
       },
-      "totalPenalty": 1,
+      "totalPenalty": 0,
       "baseScore": 100,
       "topPenalties": {}
     },
     "metadata": {
-      "durationSeconds": 49.98,
-      "runId": "38f26e58-48b4-42b4-9649-4cc9231c5c91",
+      "durationSeconds": 53.45,
+      "runId": "41e35e48-3de6-431a-a1ba-805fea3eb244",
       "monitorSeconds": 10,
       "redactLevel": "Full",
       "version": "7.0",
-      "partialFailure": true,
+      "partialFailure": false,
       "isAdmin": true,
-      "timestamp": "2026-01-30T10:38:50.4318782-05:00",
+      "timestamp": "2026-01-30T14:03:46.5899254-05:00",
       "quickScan": false
     },
     "findings": {},
-    "errors": [
-      {
-        "exceptionType": null,
-        "message": "Unknown error",
-        "code": "WMI_ERROR",
-        "section": null
-      },
-      {
-        "exceptionType": null,
-        "message": "Temperature SMART invalide: 917538",
-        "code": "TEMP_WARN",
-        "section": "Collect-SmartDetails"
-      }
-    ],
+    "errors": {
+      "exceptionType": null,
+      "message": "Unknown error",
+      "code": "WMI_ERROR",
+      "section": null
+    },
     "sections": {
       "EnvironmentVariables": {
         "summary": null,
@@ -173,9 +165,9 @@
               ]
             }
           ],
-          "totalConnections": 206,
+          "totalConnections": 207,
           "adapterCount": 8,
-          "listeningPorts": 38
+          "listeningPorts": 39
         }
       },
       "DynamicSignals": {
@@ -184,10 +176,10 @@
         "data": {
           "cpu": {
             "source": "WMI-Fallback",
-            "average": "0",
-            "min": "0",
+            "average": "4",
+            "min": "4",
             "sampleCount": 1,
-            "max": "0"
+            "max": "4"
           },
           "disk": {
             "queueLength": "0",
@@ -198,57 +190,57 @@
           "topCpu": [
             {
               "name": "dwm",
-              "cpuSeconds": 17128.921875
+              "cpuSeconds": 18130.359375
             },
             {
               "name": "System",
-              "cpuSeconds": 10529.96875
+              "cpuSeconds": 11202.453125
+            },
+            {
+              "name": "chrome",
+              "cpuSeconds": 10256.90625
             },
             {
               "name": "RazerAppEngine",
-              "cpuSeconds": 9424.28125
+              "cpuSeconds": 10081.59375
             },
             {
               "name": "chrome",
-              "cpuSeconds": 8978.5625
-            },
-            {
-              "name": "chrome",
-              "cpuSeconds": 6873.734375
+              "cpuSeconds": 7054.796875
             }
           ],
           "memory": {
             "pageFaultsPerSec": 0,
             "source": "WMI-Fallback",
-            "usedPercent": 27.44,
-            "availableMB": 71272.02,
+            "usedPercent": 30.91,
+            "availableMB": 67863.27,
             "sampleCount": 0
           },
           "samplesCollected": "10",
           "topMemory": [
             {
               "name": "Cursor",
-              "memoryMB": 1367.54
+              "memoryMB": 1648.77
+            },
+            {
+              "name": "chrome",
+              "memoryMB": 1153.53
             },
             {
               "name": "explorer",
-              "memoryMB": 1021.93
+              "memoryMB": 1045.6
             },
             {
               "name": "chrome",
-              "memoryMB": 881.31
+              "memoryMB": 928.92
             },
             {
               "name": "chrome",
-              "memoryMB": 840.62
-            },
-            {
-              "name": "chrome",
-              "memoryMB": 691.2
+              "memoryMB": 688.12
             }
           ],
           "network": {
-            "throughputMbps": "0.00",
+            "throughputMbps": "0.01",
             "errors": 0,
             "adapter": "Wi-Fi 4"
           },
@@ -267,10 +259,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "totalBytes": 1991707875,
+          "totalBytes": 2065095581,
           "locations": {
-            "Temp User": 1869694664,
-            "Temp Windows": 122013211
+            "Temp User": 1942879458,
+            "Temp Windows": 122216123
           }
         }
       },
@@ -278,7 +270,8 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "diskQueueLength": -1
+          "diskQueueLengthSource": "WMI_Fallback",
+          "diskQueueLength": "0"
         }
       },
       "Temperatures": {
@@ -462,7 +455,7 @@
         "status": "OK",
         "data": {
           "totalTasks": 292,
-          "readyTasks": 236
+          "readyTasks": 235
         }
       },
       "HealthChecks": {
@@ -508,7 +501,7 @@
           "logs": {
             "System": {
               "criticalCount": 0,
-              "errorCount": 41
+              "errorCount": 45
             },
             "Application": {
               "criticalCount": 0,
@@ -522,10 +515,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "freeGB": 70.01,
+          "freeGB": 67.92,
           "totalGB": 95.93,
           "moduleCount": 4,
-          "usedPercent": 27,
+          "usedPercent": 29.2,
           "modules": [
             {
               "speedMHz": 3200,
@@ -606,7 +599,7 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "runningServices": 134,
+          "runningServices": 137,
           "criticalServices": [
             {
               "status": "Running",
@@ -645,7 +638,7 @@
           "volumeCount": 5,
           "volumes": [
             {
-              "freeGB": 365.97,
+              "freeGB": 365.55,
               "totalGB": 952.65,
               "usedPercent": 61.6,
               "letter": "C:"
@@ -770,7 +763,7 @@
             "maxClockSpeed": 3701,
             "name": "AMD Ryzen 9 5900X 12-Core Processor            ",
             "cores": 12,
-            "currentLoad": 33
+            "currentLoad": 16
           },
           "cpuCount": 1
         }
@@ -816,13 +809,13 @@
           "diskCount": 1,
           "disks": {
             "reallocationEvents": 0,
-            "powerOnHours": 22908,
+            "powerOnHours": 22912,
             "uncorrectableSectors": 0,
             "instanceName": "SCSI\\Disk\u0026Ven_TOSHIBA\u0026Prod_DT01ACA200\\5\u0026221baba8\u00260\u0026020000_0",
             "reallocatedSectors": 0,
             "predictFailure": false,
             "pendingSectors": 0,
-            "temperature": null
+            "temperature": 37
           }
         }
       },
@@ -848,7 +841,7 @@
           "uptimeDays": 3,
           "biosSerial": "SERIAL-XXXX",
           "manufacturer": "Micro-Star International Co., Ltd.",
-          "uptimeHours": 12,
+          "uptimeHours": 16,
           "username": "USER-cd9bc0",
           "secureBoot": false,
           "osCaption": "Microsoft Windows 11 Famille",
@@ -1499,12 +1492,12 @@
     },
     "paths": {
       "outputDir": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports",
-      "txtPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_38f26e58-48b4-42b4-9649-4cc9231c5c91_20260130_103800.txt",
-      "jsonPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_38f26e58-48b4-42b4-9649-4cc9231c5c91_20260130_103800.json"
+      "txtPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_41e35e48-3de6-431a-a1ba-805fea3eb244_20260130_140253.txt",
+      "jsonPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_41e35e48-3de6-431a-a1ba-805fea3eb244_20260130_140253.json"
     }
   },
   "sensors_csharp": {
-    "collectedAt": "2026-01-30T10:42:27.2227846-05:00",
+    "collectedAt": "2026-01-30T14:09:16.7078606-05:00",
     "gpu": {
       "name": {
         "value": "NVIDIA GeForce RTX 3090",
@@ -1517,17 +1510,17 @@
         "reason": null
       },
       "vramUsedMB": {
-        "value": 11398.46484375,
+        "value": 11419.79296875,
         "available": true,
         "reason": null
       },
       "gpuLoadPercent": {
-        "value": 77,
+        "value": 82,
         "available": true,
         "reason": null
       },
       "gpuTempC": {
-        "value": 77,
+        "value": 82,
         "available": true,
         "reason": null
       }
@@ -1536,7 +1529,7 @@
       "cpuTempC": {
         "value": 0,
         "available": false,
-        "reason": "capteur invalide: valeur sentinelle 0"
+        "reason": "capteur invalide: valeur sentinelle 0; fallback WMI: thermal_zone_not_available"
       },
       "cpuTempSource": "Tctl (AMD)",
       "cpuLoadPercent": {
@@ -1565,7 +1558,7 @@
           "reason": null
         },
         "tempC": {
-          "value": 61,
+          "value": 65,
           "available": true,
           "reason": null
         }
@@ -1589,7 +1582,7 @@
           "reason": null
         },
         "tempC": {
-          "value": 53,
+          "value": 59,
           "available": true,
           "reason": null
         }
@@ -1607,5 +1600,211 @@
         }
       }
     ]
+  },
+  "diagnostic_signals": {
+    "whea": {
+      "name": "whea",
+      "value": {
+        "Last7dCount": 0,
+        "Last30dCount": 0,
+        "CorrectedCount": 0,
+        "FatalCount": 0,
+        "LastEvents": []
+      },
+      "available": true,
+      "source": "EventLog_System_WHEA-Logger",
+      "timestamp": "2026-01-30T19:09:17.7198369Z",
+      "quality": "ok",
+      "notes": "7d=0, 30d=0, fatal=0",
+      "durationMs": 207
+    },
+    "gpuRootCause": {
+      "name": "gpuRootCause",
+      "value": {
+        "TdrCount7d": 0,
+        "TdrCount30d": 0,
+        "PerfcapAvailable": false,
+        "PerfcapReason": null,
+        "ThrottlingSuspected": false,
+        "Evidence": [],
+        "LastEvents": []
+      },
+      "available": true,
+      "source": "EventLog_System_TDR",
+      "timestamp": "2026-01-30T19:09:17.7408074Z",
+      "quality": "ok",
+      "notes": "TDR: 7d=0, 30d=0",
+      "durationMs": 207
+    },
+    "cpuThrottle": {
+      "name": "cpuThrottle",
+      "value": {
+        "FirmwareThrottleEvents7d": 0,
+        "FirmwareThrottleEvents30d": 0,
+        "PerfPercentAvg": 117.2,
+        "FreqMhzAvg": 3701,
+        "ThrottleSuspected": false,
+        "Evidence": []
+      },
+      "available": true,
+      "source": "EventLog\u002BPerfCounter",
+      "timestamp": "2026-01-30T19:09:18.8812816Z",
+      "quality": "ok",
+      "notes": "throttle7d=0, perf=117,2%",
+      "durationMs": 1165
+    },
+    "networkQuality": {
+      "name": "networkQuality",
+      "value": {
+        "Targets": [
+          {
+            "Ip": "1.1.1.1",
+            "Sent": 10,
+            "Received": 10,
+            "Lost": 0,
+            "LossPercent": 0,
+            "RttMin": 4,
+            "RttMax": 8,
+            "RttAvg": 5.4,
+            "JitterMs": 1.02,
+            "Error": null
+          },
+          {
+            "Ip": "8.8.8.8",
+            "Sent": 10,
+            "Received": 10,
+            "Lost": 0,
+            "LossPercent": 0,
+            "RttMin": 3,
+            "RttMax": 25,
+            "RttAvg": 7,
+            "JitterMs": 6.07,
+            "Error": null
+          },
+          {
+            "Ip": "192.168.2.1",
+            "Sent": 10,
+            "Received": 10,
+            "Lost": 0,
+            "LossPercent": 0,
+            "RttMin": 2,
+            "RttMax": 6,
+            "RttAvg": 3.6,
+            "JitterMs": 1.28,
+            "Error": null
+          }
+        ],
+        "OverallLossPercent": 0,
+        "OverallJitterMs": 2.79,
+        "OverallRttAvg": 5.3,
+        "DnsMsP95": 10,
+        "TcpRetransPerSec": 0
+      },
+      "available": true,
+      "source": "ICMP_Ping\u002BDNS",
+      "timestamp": "2026-01-30T19:09:20.3409416Z",
+      "quality": "ok",
+      "notes": "loss=0%, jitter=2,79ms, rtt=5,3ms",
+      "durationMs": 2624
+    },
+    "memoryPressure": {
+      "name": "memoryPressure",
+      "value": {
+        "HardFaultsAvg": 20625.9,
+        "HardFaultsP95": 73553.5,
+        "HardFaultsMax": 81261.6,
+        "SustainedSeconds": 30,
+        "WindowSeconds": 30,
+        "SampleCount": 30
+      },
+      "available": true,
+      "source": "PerfCounter_Memory",
+      "timestamp": "2026-01-30T19:09:48.2445408Z",
+      "quality": "suspect",
+      "notes": "avg=20626/s, p95=73553/s, sustained=30s",
+      "durationMs": 30328
+    },
+    "driverStability": {
+      "name": "driverStability",
+      "value": {
+        "TdrCount30d": 0,
+        "KernelPower41Count30d": 0,
+        "BugcheckCount30d": 0,
+        "AppCrashGpuRelated": 0,
+        "LastEvents": []
+      },
+      "available": true,
+      "source": "EventLog_System\u002BApplication",
+      "timestamp": "2026-01-30T19:09:17.9572472Z",
+      "quality": "ok",
+      "notes": "TDR=0, KP41=0, BugCheck=0",
+      "durationMs": 39
+    },
+    "bootPerformance": {
+      "name": "bootPerformance",
+      "value": {
+        "LastBootMs": 2,
+        "AvgBootMs": 2,
+        "DegradationEvents30d": 7,
+        "BootCount30d": 10,
+        "LastEventTime": "2026-01-26T21:59:47.8547752-05:00",
+        "Notes": null,
+        "Details": [
+          {
+            "Type": "Degradation_101",
+            "Time": "2026-01-12T18:57:53.7339015-05:00",
+            "BootMs": null,
+            "Details": "Le d\u00E9marrage de cette application a \u00E9t\u00E9 plus long que l\u0027habitude, ce qui a entra\u00EEn\u00E9 une d\u00E9gradation ..."
+          },
+          {
+            "Type": "BootComplete",
+            "Time": "2026-01-12T18:57:53.7338961-05:00",
+            "BootMs": 2,
+            "Details": null
+          },
+          {
+            "Type": "Degradation_101",
+            "Time": "2026-01-12T18:51:02.0068004-05:00",
+            "BootMs": null,
+            "Details": "Le d\u00E9marrage de cette application a \u00E9t\u00E9 plus long que l\u0027habitude, ce qui a entra\u00EEn\u00E9 une d\u00E9gradation ..."
+          },
+          {
+            "Type": "BootComplete",
+            "Time": "2026-01-12T18:51:02.0067953-05:00",
+            "BootMs": 2,
+            "Details": null
+          },
+          {
+            "Type": "Degradation_101",
+            "Time": "2026-01-12T18:34:06.8976538-05:00",
+            "BootMs": null,
+            "Details": "Le d\u00E9marrage de cette application a \u00E9t\u00E9 plus long que l\u0027habitude, ce qui a entra\u00EEn\u00E9 une d\u00E9gradation ..."
+          }
+        ]
+      },
+      "available": true,
+      "source": "EventLog_Diagnostics-Performance",
+      "timestamp": "2026-01-30T19:09:17.9636062Z",
+      "quality": "suspect",
+      "notes": "lastBoot=2ms, avg=2ms, degradation=7",
+      "durationMs": 44
+    },
+    "powerLimits": {
+      "name": "powerLimits",
+      "value": {
+        "CpuPowerLimitSuspected": false,
+        "GpuPowerLimitSuspected": false,
+        "CpuPowerEvents": 0,
+        "ThermalEvents": 0,
+        "GpuThrottleEvents": 0,
+        "Evidence": []
+      },
+      "available": true,
+      "source": "EventLog_PowerThermal",
+      "timestamp": "2026-01-30T19:09:17.9549581Z",
+      "quality": "ok",
+      "notes": "cpuLimit=False, gpuLimit=False",
+      "durationMs": 35
+    }
   }
 }
