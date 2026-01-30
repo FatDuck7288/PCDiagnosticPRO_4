@@ -1,0 +1,133 @@
+AUDIT + FIX — Collecte & Fiabilité (Phase 1 → Phase 7)
+Référence: scan_result_combined.json + Rapport_Unifie_20260130_104233.txt
+Date: 2026-01-30 (données de référence)
+
+PHASE 1 — AUDIT FACTUEL (JSON + TXT)
+Tableau des manques/sentinelles/erreurs détectés
+
+| Donnée | Source attendue | Valeur actuelle (exemple) | Statut | Cause probable | Fix proposé (source + fallback) |
+|---|---|---|---|---|---|
+| Température CPU | C# LHM → WMI ThermalZone | C# cpuTempC=0, available=false, reason=capteur invalide; TXT: “capteur invalide: valeur sentinelle 0” | Sentinelle | Capteur LHM 0°C (Tctl Ryzen) | Valider plage >5 et <115; si invalide → fallback WMI ThermalZone; sinon unavailable reason=sentinel_out_of_range |
+| Températures disques | LHM (C#) + PS StorageReliability/SMART | C# 2/5 disques valides; PS tempC=null partout | Partiel | Capteurs absents/SMART non lu | PS: StorageReliabilityCounter → SMART → unavailable par disque avec reason; C#: valider 0..90 |
+| SMART incohérent | PS root\wmi | Erreur “Temperature SMART invalide: 917538” + SmartDetails temperature=null | Incohérent | Raw SMART corrompu (attribut 194) | Normaliser SMART: rejeter hors plage, reason smart_invalid; ne jamais sortir 917538 |
+| PerfCounters diskQueueLength | PS PerfCounters/WMI | diskQueueLength=-1 | Sentinelle | Counter non supporté | Source A: Win32_PerfFormattedData_PerfDisk_PhysicalDisk; Source B: Get-Counter; sinon null + reason perf_counter_not_supported |
+| ProcessList | PS Processes | missingData ProcessList (Get-Process/CIM) | Erreur/Manquant | Droits/instabilité CIM | Ajouter fallback tasklist /fo csv; timeout + source explicite |
+| Drivers / stabilité système | PS DevicesDrivers + EventLogs + ReliabilityHistory + Minidump | Drivers: problemDeviceCount=40 (statut “Unknown”); Stabilité: EventLogs + ReliabilityHistory eventCount=20 | Flou | Section pas explicitée | Clarifier: Stabilité = BSOD + crashes + EventLogs + Reliability; Pilotes = devices en erreur + catégories + exemples |
+
+PHASE 2 — STRATÉGIE MULTI-SOURCES (mise en œuvre)
+
+CPU Température
+1) Source A: LibreHardwareMonitor (C#) — capteur CPU Package/Tctl/Tdie/Core
+2) Source B: WMI ThermalZone (MSAcpi_ThermalZoneTemperature) si valeur plausible
+3) Si aucune source fiable → unavailable + reason=sentinel_out_of_range
+Règle anti sentinelle: ≤5°C ou ≥115°C invalide
+
+GPU Temp/Load/VRAM
+1) LHM (C#) prioritaire
+2) Si VRAM absente → unavailable propre (pas de NVAPI ajouté)
+
+Disques Température SMART
+1) StorageReliabilityCounter
+2) SMART root\wmi (VendorSpecific 194/190)
+3) Sinon unavailable par disque (reason explicite)
+Règle de plausibilité: temp disque hors 0..90 invalide
+
+Performance Counters
+1) Win32_PerfFormattedData_PerfDisk_PhysicalDisk
+2) PerformanceCounter API (C#)
+3) Sinon unavailable reason perf_counter_not_supported
+
+Process List
+1) Get-CimInstance Win32_Process
+2) tasklist /fo csv
+3) Get-Process
+Timeout + fallback automatique
+
+Réseau Vitesse et Latence
+1) Latence TCP (HEAD) avec timeout 8s
+2) Débit HTTP (fichier 1MB stable) timeout 8s
+Paliers:
+- <5 Mbps: navigation only (gaming déconseillé)
+- 5 à 20: streaming HD possible, gaming déconseillé si latence haute
+- 20 à 100: gaming possible
+- 100+: gaming compétitif/cloud possible si latence basse
+
+PHASE 3 — CLARIFICATION SECTIONS FLOUES
+
+Stabilité système (définition):
+- BSOD 30 jours (EventLogs/Minidump)
+- Crashs applicatifs 30 jours (ReliabilityHistory)
+- Erreurs critiques Event Logs 7 jours (System/Application)
+- Reliability Monitor si accessible (Win32_ReliabilityRecords)
+
+Pilotes (définition):
+- Nombre de périphériques en erreur
+- Top catégories (classe)
+- Exemples concrets (nom de device)
+
+PHASE 4 — DATA RELIABILITY SCORE (DRS)
+
+Courbe progressive (implémentée):
+0 erreurs → 100
+1 erreur → 95
+2 erreurs → 90
+3 erreurs → 84
+4 erreurs → 78
+5 erreurs → 72
+>5: dégradation douce (–4 par erreur)
+Pondération par criticité:
+- Sécurité (Defender/Firewall) = pénalité élevée
+- SMART/Storage = moyen
+- CPU temp = faible
+- Processus = faible
+
+PHASE 5 — UNIFICATION JSON/TXT
+
+JSON combiné:
+- Ajout findings normalisés (IssueType, Severity, Confidence, AutoFixPossible, RiskLevel)
+- Ajout normalized_metrics (value, available, source, reason, timestamp)
+- Note explicite si findings vide
+TXT unifié:
+- Section Collecte & Qualité déjà listée (errors, missingData, invalidValues)
+- Ajout recommandation réseau
+
+PHASE 6 — PATCHES CONCRETS (résumé)
+
+C#
+- CPU temp: validation sentinelle + fallback WMI ThermalZone
+- Disk temp: validation 0..90
+- PerfCounters: WMI → PerformanceCounter fallback
+- NetworkRealSpeedAnalyzer: timeout 8s + paliers + recommandations
+- DataReliabilityEngine: courbe progressive + pondération
+- JSON combiné enrichi (UDIS/findings/normalized_metrics)
+- UI: recommandations réseau affichées
+
+PowerShell (modifs ciblées)
+- ProcessList: ajout fallback tasklist
+- PerfCounters: diskQueueLength sans -1 + reason/source
+- Disk temps: reason + available + timestamp
+- SMART: reason explicite si temp invalide
+
+PHASE 7 — VALIDATION
+
+Avant / Après (attendu) — 10 champs clés
+1) CPU Temp: 0°C sentinelle → unavailable reason=sentinel_out_of_range + fallback WMI si plausible
+2) Disk temps: 2/5 → temps par disque avec reason si indispo
+3) SMART temp: 917538 → invalid reason smart_invalid
+4) diskQueueLength: -1 → null + perf_counter_not_supported ou valeur WMI
+5) ProcessList: missingData → tasklist fallback
+6) GPU Temp: OK → inchangé
+7) VRAM Total: OK → inchangé
+8) ReliabilityHistory: explicite (eventCount + appCrashes)
+9) EventLogs: BSOD + erreurs 7j dans stabilité
+10) JSON findings: {} → findings normalisés (même si vide, note explicite)
+
+Scénarios de fallback déclenchés (attendu)
+- CPU temp LHM invalide → WMI ThermalZone
+- Disk temps: StorageReliabilityCounter vide → SMART
+- diskQueueLength Get-Counter KO → WMI PerfFormattedData
+- ProcessList Get-Process/CIM KO → tasklist
+
+Validation réelle
+- Non exécutée dans cet environnement (pas de runtime Windows/PowerShell).
+- Après exécution sur cible Windows: générer nouveau JSON + TXT et comparer avec l’ancien sur les 10 champs ci-dessus.

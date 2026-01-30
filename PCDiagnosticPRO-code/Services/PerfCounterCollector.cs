@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Management;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -153,9 +154,18 @@ namespace PCDiagnosticPro.Services
         {
             try
             {
+                var wmiValue = TryGetDiskQueueFromWmi();
+                if (wmiValue.HasValue && wmiValue.Value >= 0 && wmiValue.Value < 1000)
+                {
+                    result.DiskQueueLength = Math.Round(wmiValue.Value, 1);
+                    result.DiskQueueAvailable = true;
+                    App.LogMessage($"[PerfCounters] Disk Queue (WMI): {wmiValue.Value:F1}");
+                    return;
+                }
+
                 using var counter = new PerformanceCounter("PhysicalDisk", "Current Disk Queue Length", "_Total", true);
                 var value = counter.NextValue();
-                
+
                 if (value >= 0 && value < 1000) // Queue > 1000 = aberrant
                 {
                     result.DiskQueueLength = Math.Round(value, 1);
@@ -176,6 +186,31 @@ namespace PCDiagnosticPro.Services
                 result.DiskQueueError = ex.Message;
                 App.LogMessage($"[PerfCounters] DiskQueue error: {ex.Message}");
             }
+        }
+
+        private static double? TryGetDiskQueueFromWmi()
+        {
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("SELECT Name, AvgDiskQueueLength FROM Win32_PerfFormattedData_PerfDisk_PhysicalDisk");
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    var name = obj["Name"]?.ToString() ?? "";
+                    if (!string.Equals(name, "_Total", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (double.TryParse(obj["AvgDiskQueueLength"]?.ToString(), out var value))
+                    {
+                        return value;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[PerfCounters] WMI DiskQueue error: {ex.Message}");
+            }
+
+            return null;
         }
 
         private static void CollectNetwork(PerfCounterResult result)

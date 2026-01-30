@@ -60,14 +60,14 @@ namespace PCDiagnosticPro.Services
     {
         #region Temperature Validation Ranges
 
-        /// <summary>Plages valides pour les températures CPU (°C)</summary>
-        public static readonly (double Min, double Max) CpuTempRange = (5.0, 120.0);
+        /// <summary>Plages valides pour les températures CPU (°C) : >5 et <115</summary>
+        public static readonly (double Min, double Max) CpuTempRange = (5.0, 115.0);
         
         /// <summary>Plages valides pour les températures GPU (°C)</summary>
         public static readonly (double Min, double Max) GpuTempRange = (10.0, 120.0);
         
         /// <summary>Plages valides pour les températures disque (°C)</summary>
-        public static readonly (double Min, double Max) DiskTempRange = (0.0, 80.0);
+        public static readonly (double Min, double Max) DiskTempRange = (0.0, 90.0);
         
         /// <summary>Valeurs sentinelles à rejeter</summary>
         public static readonly double[] SentinelValues = { -1, -999, 0, double.NaN, double.PositiveInfinity, double.NegativeInfinity };
@@ -93,29 +93,11 @@ namespace PCDiagnosticPro.Services
 
             var temp = metric.Value;
             
-            // Vérifier sentinelles
-            if (IsSentinelValue(temp))
+            if (IsSentinelValue(temp) || temp <= CpuTempRange.Min || temp >= CpuTempRange.Max)
             {
                 result.Validity = MetricValidity.Invalid;
-                result.Reason = $"Valeur sentinelle détectée: {temp}";
-                App.LogMessage($"[MetricValidation] CPU temp invalide: valeur sentinelle {temp}");
-                return result;
-            }
-            
-            // Vérifier plage
-            if (temp < CpuTempRange.Min)
-            {
-                result.Validity = MetricValidity.Invalid;
-                result.Reason = $"Température trop basse: {temp:F1}°C < {CpuTempRange.Min}°C";
-                App.LogMessage($"[MetricValidation] CPU temp invalide: {temp:F1}°C < {CpuTempRange.Min}°C");
-                return result;
-            }
-            
-            if (temp > CpuTempRange.Max)
-            {
-                result.Validity = MetricValidity.Invalid;
-                result.Reason = $"Température hors plage: {temp:F1}°C > {CpuTempRange.Max}°C";
-                App.LogMessage($"[MetricValidation] CPU temp invalide: {temp:F1}°C > {CpuTempRange.Max}°C");
+                result.Reason = "sentinel_out_of_range";
+                App.LogMessage($"[MetricValidation] CPU temp invalide: {temp:F1}°C (sentinel_out_of_range)");
                 return result;
             }
             

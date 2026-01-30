@@ -34,7 +34,7 @@ namespace PCDiagnosticPro.Tests
             var result = DataSanitizer.SanitizeCpuTemp(metric);
             Assert(!result.IsValid, "CPU temp 0 must be Invalid");
             Assert(result.DisplayValue.Contains("Non disponible"), "Display must contain 'Non disponible'");
-            Assert(result.InvalidReason != null && (result.InvalidReason.Contains("0") || result.InvalidReason.Contains("sentinelle")), "Reason must mention sentinel/0");
+            Assert(result.InvalidReason != null && (result.InvalidReason.Contains("sentinel_out_of_range") || result.InvalidReason.Contains("sentinelle")), "Reason must mention sentinel/out-of-range");
         }
 
         /// <summary>CPU temp &lt; 5 or &gt; 110 => Invalid</summary>

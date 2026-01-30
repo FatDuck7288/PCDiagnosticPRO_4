@@ -772,6 +772,62 @@ namespace PCDiagnosticPro.Services
                                 }
                             }
                             break;
+                        case HealthDomain.SystemStability:
+                            if (sectionName == "EventLogs" && data.ValueKind == JsonValueKind.Object)
+                            {
+                                if (data.TryGetProperty("logs", out var logs) && logs.ValueKind == JsonValueKind.Object)
+                                {
+                                    if (logs.TryGetProperty("System", out var systemLog) && systemLog.TryGetProperty("errorCount", out var sysErr))
+                                        evidence["Erreurs système (7j)"] = sysErr.ToString();
+                                    if (logs.TryGetProperty("Application", out var appLog) && appLog.TryGetProperty("errorCount", out var appErr))
+                                        evidence["Erreurs app (7j)"] = appErr.ToString();
+                                }
+                                if (data.TryGetProperty("bsodCount", out var bsod))
+                                    evidence["BSOD (30j)"] = bsod.ToString();
+                            }
+                            if (sectionName == "ReliabilityHistory" && data.ValueKind == JsonValueKind.Object)
+                            {
+                                if (data.TryGetProperty("eventCount", out var eventCount))
+                                    evidence["Fiabilité (events)"] = eventCount.ToString();
+                                if (data.TryGetProperty("appCrashes", out var appCrashes))
+                                    evidence["Crashes app (30j)"] = appCrashes.ToString();
+                            }
+                            if (sectionName == "MinidumpAnalysis" && data.ValueKind == JsonValueKind.Object)
+                            {
+                                if (data.TryGetProperty("minidumpCount", out var dumps))
+                                    evidence["Minidumps"] = dumps.ToString();
+                            }
+                            break;
+                        case HealthDomain.Drivers:
+                            if (sectionName == "DevicesDrivers" && data.ValueKind == JsonValueKind.Object)
+                            {
+                                if (data.TryGetProperty("problemDeviceCount", out var problemCount))
+                                    evidence["Périphériques en erreur"] = problemCount.ToString();
+                                if (data.TryGetProperty("problemDevices", out var problemDevices) && problemDevices.ValueKind == JsonValueKind.Array)
+                                {
+                                    var classCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                                    foreach (var device in problemDevices.EnumerateArray())
+                                    {
+                                        if (device.TryGetProperty("class", out var cls))
+                                        {
+                                            var className = cls.GetString() ?? "Unknown";
+                                            classCounts[className] = classCounts.TryGetValue(className, out var count) ? count + 1 : 1;
+                                        }
+                                    }
+
+                                    if (classCounts.Count > 0)
+                                    {
+                                        var topClasses = classCounts.OrderByDescending(kvp => kvp.Value).Take(3)
+                                            .Select(kvp => $"{kvp.Key} ({kvp.Value})");
+                                        evidence["Top catégories"] = string.Join(", ", topClasses);
+                                    }
+
+                                    var example = problemDevices.EnumerateArray().FirstOrDefault();
+                                    if (example.ValueKind == JsonValueKind.Object && example.TryGetProperty("name", out var exampleName))
+                                        evidence["Exemple"] = exampleName.GetString() ?? "";
+                                }
+                            }
+                            break;
                     }
                 }
                 catch (Exception ex)
@@ -826,6 +882,18 @@ namespace PCDiagnosticPro.Services
 
         private static string GenerateDetailedExplanation(HealthSection section)
         {
+            if (section.Domain == HealthDomain.SystemStability)
+            {
+                return "Stabilité système = BSOD, crashs applicatifs, erreurs Event Logs récentes et fiabilité Windows (30 jours). "
+                       + "Les métriques proviennent des sections EventLogs, ReliabilityHistory et MinidumpAnalysis du rapport PowerShell.";
+            }
+
+            if (section.Domain == HealthDomain.Drivers)
+            {
+                return "Pilotes = état des périphériques Windows (Device Manager). "
+                       + "Cette section résume le nombre de périphériques en erreur, les catégories concernées et quelques exemples issus de DevicesDrivers.";
+            }
+
             var explanation = $"Le {section.DisplayName.ToLower()} de votre ordinateur ";
             
             explanation += section.Severity switch

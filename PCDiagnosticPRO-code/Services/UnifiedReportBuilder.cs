@@ -340,16 +340,17 @@ namespace PCDiagnosticPro.Services
         private static void WriteMetric(StringBuilder sb, string label, MetricValue<double> metric, string unit, string source)
         {
             var padLabel = label.PadRight(18);
+            var metricSource = string.IsNullOrWhiteSpace(metric.Source) ? source : metric.Source;
             if (metric.Available)
             {
                 sb.AppendLine($"  │  {padLabel} : {metric.Value:F1}{unit}");
-                sb.AppendLine($"  │    Source           : {source}");
+                sb.AppendLine($"  │    Source           : {metricSource}");
                 sb.AppendLine($"  │    Confidence       : High");
             }
             else
             {
                 sb.AppendLine($"  │  {padLabel} : N/A");
-                sb.AppendLine($"  │    Source           : {source}");
+                sb.AppendLine($"  │    Source           : {metricSource}");
                 sb.AppendLine($"  │    Reason           : {metric.Reason ?? "Indisponible"}");
                 sb.AppendLine($"  │    Confidence       : Low");
             }
@@ -358,16 +359,17 @@ namespace PCDiagnosticPro.Services
         private static void WriteMetricString(StringBuilder sb, string label, MetricValue<string> metric, string source)
         {
             var padLabel = label.PadRight(18);
+            var metricSource = string.IsNullOrWhiteSpace(metric.Source) ? source : metric.Source;
             if (metric.Available)
             {
                 sb.AppendLine($"  │  {padLabel} : {metric.Value}");
-                sb.AppendLine($"  │    Source           : {source}");
+                sb.AppendLine($"  │    Source           : {metricSource}");
                 sb.AppendLine($"  │    Confidence       : High");
             }
             else
             {
                 sb.AppendLine($"  │  {padLabel} : N/A");
-                sb.AppendLine($"  │    Source           : {source}");
+                sb.AppendLine($"  │    Source           : {metricSource}");
                 sb.AppendLine($"  │    Reason           : {metric.Reason ?? "Indisponible"}");
             }
         }
@@ -686,6 +688,8 @@ namespace PCDiagnosticPro.Services
                     sb.AppendLine($"    Network Speed         : {healthReport.UdisReport.DownloadMbps:F1} Mbps ({healthReport.UdisReport.NetworkSpeedTier})");
                     if (healthReport.UdisReport.LatencyMs.HasValue)
                         sb.AppendLine($"    Network Latency       : {healthReport.UdisReport.LatencyMs:F0} ms");
+                    if (!string.IsNullOrWhiteSpace(healthReport.UdisReport.NetworkRecommendation))
+                        sb.AppendLine($"    Network Advice        : {healthReport.UdisReport.NetworkRecommendation}");
                 }
                 else
                 {
