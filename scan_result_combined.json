@@ -2,7 +2,7 @@
   "scan_powershell": {
     "missingData": {
       "section": "Processes",
-      "timestamp": "2026-01-29T18:59:12.8521096-05:00",
+      "timestamp": "2026-01-30T10:38:23.5806112-05:00",
       "item": "ProcessList",
       "reason": "Get-Process et CIM ont echoue"
     },
@@ -22,14 +22,14 @@
       "topPenalties": {}
     },
     "metadata": {
-      "durationSeconds": 66.96,
-      "runId": "9fed6141-7328-4e15-b7f9-c86875fb892a",
+      "durationSeconds": 49.98,
+      "runId": "38f26e58-48b4-42b4-9649-4cc9231c5c91",
       "monitorSeconds": 10,
       "redactLevel": "Full",
       "version": "7.0",
       "partialFailure": true,
       "isAdmin": true,
-      "timestamp": "2026-01-29T18:59:44.8996076-05:00",
+      "timestamp": "2026-01-30T10:38:50.4318782-05:00",
       "quickScan": false
     },
     "findings": {},
@@ -42,7 +42,7 @@
       },
       {
         "exceptionType": null,
-        "message": "Temperature SMART invalide: 917535",
+        "message": "Temperature SMART invalide: 917538",
         "code": "TEMP_WARN",
         "section": "Collect-SmartDetails"
       }
@@ -173,9 +173,9 @@
               ]
             }
           ],
-          "totalConnections": 163,
+          "totalConnections": 206,
           "adapterCount": 8,
-          "listeningPorts": 35
+          "listeningPorts": 38
         }
       },
       "DynamicSignals": {
@@ -184,10 +184,10 @@
         "data": {
           "cpu": {
             "source": "WMI-Fallback",
-            "average": "2",
-            "min": "2",
+            "average": "0",
+            "min": "0",
             "sampleCount": 1,
-            "max": "2"
+            "max": "0"
           },
           "disk": {
             "queueLength": "0",
@@ -198,57 +198,57 @@
           "topCpu": [
             {
               "name": "dwm",
-              "cpuSeconds": 14475.953125
-            },
-            {
-              "name": "RazerAppEngine",
-              "cpuSeconds": 8551.4375
+              "cpuSeconds": 17128.921875
             },
             {
               "name": "System",
-              "cpuSeconds": 8501.21875
+              "cpuSeconds": 10529.96875
+            },
+            {
+              "name": "RazerAppEngine",
+              "cpuSeconds": 9424.28125
             },
             {
               "name": "chrome",
-              "cpuSeconds": 7211.78125
+              "cpuSeconds": 8978.5625
             },
             {
               "name": "chrome",
-              "cpuSeconds": 6353.859375
+              "cpuSeconds": 6873.734375
             }
           ],
           "memory": {
             "pageFaultsPerSec": 0,
             "source": "WMI-Fallback",
-            "usedPercent": 25.13,
-            "availableMB": 73545.79,
+            "usedPercent": 27.44,
+            "availableMB": 71272.02,
             "sampleCount": 0
           },
           "samplesCollected": "10",
           "topMemory": [
             {
-              "name": "explorer",
-              "memoryMB": 1014.95
-            },
-            {
-              "name": "chrome",
-              "memoryMB": 902.02
-            },
-            {
-              "name": "chrome",
-              "memoryMB": 866.36
-            },
-            {
               "name": "Cursor",
-              "memoryMB": 855.16
+              "memoryMB": 1367.54
+            },
+            {
+              "name": "explorer",
+              "memoryMB": 1021.93
             },
             {
               "name": "chrome",
-              "memoryMB": 667.17
+              "memoryMB": 881.31
+            },
+            {
+              "name": "chrome",
+              "memoryMB": 840.62
+            },
+            {
+              "name": "chrome",
+              "memoryMB": 691.2
             }
           ],
           "network": {
-            "throughputMbps": "0.05",
+            "throughputMbps": "0.00",
             "errors": 0,
             "adapter": "Wi-Fi 4"
           },
@@ -259,7 +259,7 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "appCrashes": 1,
+          "appCrashes": 0,
           "eventCount": 20
         }
       },
@@ -267,10 +267,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "totalBytes": 1764440814,
+          "totalBytes": 1991707875,
           "locations": {
-            "Temp User": 1644338198,
-            "Temp Windows": 120102616
+            "Temp User": 1869694664,
+            "Temp Windows": 122013211
           }
         }
       },
@@ -385,7 +385,7 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "cbsPending": false
+          "cbsPending": true
         }
       },
       "AdvancedAnalysis": {
@@ -452,7 +452,7 @@
             "G": -1,
             "E": 2,
             "D": 0,
-            "C": 7,
+            "C": 8,
             "H": -1
           }
         }
@@ -462,22 +462,25 @@
         "status": "OK",
         "data": {
           "totalTasks": 292,
-          "readyTasks": 235
+          "readyTasks": 236
         }
       },
       "HealthChecks": {
         "summary": null,
         "status": "OK",
         "data": {
-          "rebootReasons": {},
-          "rebootRequired": false
+          "rebootReasons": [
+            "Windows Update",
+            "Composants CBS"
+          ],
+          "rebootRequired": true
         }
       },
       "RestorePoints": {
         "summary": null,
         "status": "OK",
         "data": {
-          "restorePointCount": 2
+          "restorePointCount": 3
         }
       },
       "OS": {
@@ -505,7 +508,7 @@
           "logs": {
             "System": {
               "criticalCount": 0,
-              "errorCount": 30
+              "errorCount": 41
             },
             "Application": {
               "criticalCount": 0,
@@ -519,10 +522,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "freeGB": 72.4,
+          "freeGB": 70.01,
           "totalGB": 95.93,
           "moduleCount": 4,
-          "usedPercent": 24.5,
+          "usedPercent": 27,
           "modules": [
             {
               "speedMHz": 3200,
@@ -642,13 +645,13 @@
           "volumeCount": 5,
           "volumes": [
             {
-              "freeGB": 372.27,
+              "freeGB": 365.97,
               "totalGB": 952.65,
-              "usedPercent": 60.9,
+              "usedPercent": 61.6,
               "letter": "C:"
             },
             {
-              "freeGB": 1095.26,
+              "freeGB": 1095.09,
               "totalGB": 1863.02,
               "usedPercent": 41.2,
               "letter": "D:"
@@ -767,7 +770,7 @@
             "maxClockSpeed": 3701,
             "name": "AMD Ryzen 9 5900X 12-Core Processor            ",
             "cores": 12,
-            "currentLoad": 5
+            "currentLoad": 33
           },
           "cpuCount": 1
         }
@@ -813,7 +816,7 @@
           "diskCount": 1,
           "disks": {
             "reallocationEvents": 0,
-            "powerOnHours": 22893,
+            "powerOnHours": 22908,
             "uncorrectableSectors": 0,
             "instanceName": "SCSI\\Disk\u0026Ven_TOSHIBA\u0026Prod_DT01ACA200\\5\u0026221baba8\u00260\u0026020000_0",
             "reallocatedSectors": 0,
@@ -842,10 +845,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "uptimeDays": 2,
+          "uptimeDays": 3,
           "biosSerial": "SERIAL-XXXX",
           "manufacturer": "Micro-Star International Co., Ltd.",
-          "uptimeHours": 21,
+          "uptimeHours": 12,
           "username": "USER-cd9bc0",
           "secureBoot": false,
           "osCaption": "Microsoft Windows 11 Famille",
@@ -1255,7 +1258,7 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "problemDeviceCount": 42,
+          "problemDeviceCount": 40,
           "problemDevices": [
             {
               "status": "Unknown",
@@ -1306,16 +1309,6 @@
               "status": "Unknown",
               "name": "P\u00E9riph\u00E9rique fournisseur HID",
               "class": "HIDClass"
-            },
-            {
-              "status": "Unknown",
-              "name": "Clich\u00E9 instantan\u00E9 de volume g\u00E9n\u00E9rique",
-              "class": "VolumeSnapshot"
-            },
-            {
-              "status": "Unknown",
-              "name": "Clich\u00E9 instantan\u00E9 de volume g\u00E9n\u00E9rique",
-              "class": "VolumeSnapshot"
             },
             {
               "status": "Unknown",
@@ -1506,12 +1499,12 @@
     },
     "paths": {
       "outputDir": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports",
-      "txtPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_9fed6141-7328-4e15-b7f9-c86875fb892a_20260129_185837.txt",
-      "jsonPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_9fed6141-7328-4e15-b7f9-c86875fb892a_20260129_185837.json"
+      "txtPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_38f26e58-48b4-42b4-9649-4cc9231c5c91_20260130_103800.txt",
+      "jsonPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_38f26e58-48b4-42b4-9649-4cc9231c5c91_20260130_103800.json"
     }
   },
   "sensors_csharp": {
-    "collectedAt": "2026-01-29T19:03:12.0649534-05:00",
+    "collectedAt": "2026-01-30T10:42:27.2227846-05:00",
     "gpu": {
       "name": {
         "value": "NVIDIA GeForce RTX 3090",
@@ -1524,17 +1517,17 @@
         "reason": null
       },
       "vramUsedMB": {
-        "value": 10750,
+        "value": 11398.46484375,
         "available": true,
         "reason": null
       },
       "gpuLoadPercent": {
-        "value": 73,
+        "value": 77,
         "available": true,
         "reason": null
       },
       "gpuTempC": {
-        "value": 73,
+        "value": 77,
         "available": true,
         "reason": null
       }
@@ -1542,8 +1535,8 @@
     "cpu": {
       "cpuTempC": {
         "value": 0,
-        "available": true,
-        "reason": null
+        "available": false,
+        "reason": "capteur invalide: valeur sentinelle 0"
       },
       "cpuTempSource": "Tctl (AMD)",
       "cpuLoadPercent": {
@@ -1572,7 +1565,7 @@
           "reason": null
         },
         "tempC": {
-          "value": 55,
+          "value": 61,
           "available": true,
           "reason": null
         }
@@ -1596,7 +1589,7 @@
           "reason": null
         },
         "tempC": {
-          "value": 49,
+          "value": 53,
           "available": true,
           "reason": null
         }

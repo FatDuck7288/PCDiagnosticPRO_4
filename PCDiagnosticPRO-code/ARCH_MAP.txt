@@ -1,0 +1,107 @@
+================================================================================
+ARCH_MAP.txt — Cartographie pipeline Score / Collecte / TXT (GOD TIER)
+================================================================================
+Généré pour correctifs : contradictions JSON↔TXT, score final PS+C#, AutoFix LLM.
+Script PowerShell : IMMUTABLE (Total_PS_PC_Scan_v7.0.ps1).
+================================================================================
+
+A) LECTURE JSON COMBINÉ
+------------------------
+- Fichier    : ViewModels/MainViewModel.cs
+- Méthode    : LoadJsonResultAsync()
+- Lignes    : 1506-1604
+- Détail     : Lit _resultJsonPath via File.ReadAllTextAsync (ligne 1515).
+               Le JSON peut être le JSON PowerShell seul OU le combiné selon
+               l’ordre d’exécution (WriteCombinedResultAsync écrit scan_result_combined.json).
+               HealthReportBuilder.Build(jsonContent, _lastSensorsResult) reçoit le contenu (ligne 1526).
+
+B) OÙ ScoreV2 PS EST EXTRAIT
+----------------------------
+- Fichier    : Services/HealthReportBuilder.cs
+- Méthode    : ExtractScoreV2(JsonElement root)
+- Lignes    : 424-462 (approx)
+- Détail     : Appelé dans Build() ligne 115. Lit root["scoreV2"] : score, grade,
+               breakdown (critical, collectorErrors, timeouts…), topPenalties.
+               report.ScoreV2 = ExtractScoreV2(root); report.GlobalScore = report.ScoreV2.Score (116-117).
+
+C) OÙ GradeEngine CALCULE LE SCORE (ex. 84/100)
+-----------------------------------------------
+- Fichier    : Services/GradeEngine.cs
+- Méthode    : ComputeGrade(HealthReport report)
+- Lignes    : 50-102
+- Détail     : Calcule RawScore pondéré par domaines, ApplyCriticalPenalties(),
+               DetermineGrade(result.FinalScore). Log ligne 90 : Raw=… Final=… Grade=….
+
+D) OÙ ScoreV2 EST ÉCRASÉ PAR GradeEngine
+----------------------------------------
+- Fichier    : Services/HealthReportBuilder.cs
+- Méthode    : Build(string jsonContent, HardwareSensorsResult? sensors)
+- Lignes    : 139-143
+- Détail     : GradeEngine.ApplyGrades(report) écrase report.GlobalScore, report.Grade,
+               report.GlobalSeverity, report.GlobalMessage et les scores par section
+               (GradeEngine.cs 107-128). Divergence est ensuite remplie avec GradeEngine comme source (145-155).
+
+E) OÙ FinalScoreCalculator EXISTE ET POURQUOI IL N’EST PAS APPLIQUÉ
+--------------------------------------------------------------------
+- Fichier    : Services/FinalScoreCalculator.cs
+- Classe     : FinalScoreCalculator (static)
+- Méthodes   : Calculate(...), ApplyToReport(...)
+- Détail     : Le module existe mais n’est jamais appelé dans le pipeline.
+               HealthReportBuilder.Build() s’arrête à GradeEngine.ApplyGrades()
+               et n’appelle pas FinalScoreCalculator.Calculate() ni ApplyToReport().
+               À corriger : appeler FinalScoreCalculator après GradeEngine, avec
+               CollectorDiagnosticsService.Analyze() pour obtenir les diagnostics.
+
+F) OÙ LE TXT UNIFIÉ EST GÉNÉRÉ + "STATUT COLLECTE"
+---------------------------------------------------
+- Fichier    : Services/UnifiedReportBuilder.cs
+- Méthode    : BuildUnifiedReportAsync(combinedJsonPath, originalTxtPath, unifiedTxtPath, healthReport)
+- Lignes    : 28-118 (orchestration), section STATUT COLLECTE ~476-483
+- Détail     : Génération TXT : lecture du JSON combiné (ligne 44), construction
+               des sections. STATUT COLLECTE écrit avec diagnostics.CollectionStatus
+               (OK/PARTIAL/FAILED). Appelé depuis MainViewModel.GenerateUnifiedTxtReportAsync (1862-1865).
+
+G) OÙ LES CAPTEURS C# "available=true" SONT DÉFINIS
+---------------------------------------------------
+- Fichier    : Services/HardwareSensorsCollector.cs
+- Méthode    : CollectInternal() / TryCollectCpuMetrics, TryCollectGpuMetrics, etc.
+- Détail     : Les MetricValue<double>.Available et .Value sont définis dans le collector
+               (ex. result.Cpu.CpuTempC = Available(cpuTemp.Value) ou UnavailableDouble(reason)).
+               Aucune couche de normalisation n’est appliquée avant sérialisation : une valeur 0
+               peut rester Available=true si le capteur renvoie 0. La normalisation doit
+               être appliquée après collecte (DataSanitizer/DataNormalizer) avant scoring et JSON combiné.
+
+H) ÉCRITURE DU JSON COMBINÉ (sensors_csharp)
+--------------------------------------------
+- Fichier    : ViewModels/MainViewModel.cs
+- Méthode    : WriteCombinedResultAsync(string outputDir, HardwareSensorsResult sensorsResult)
+- Lignes    : 1795-1825
+- Détail     : Lit le JSON PS, crée CombinedScanResult { ScanPowershell, SensorsCsharp },
+               sérialise avec HardwareSensorsResult.JsonOptions, écrit scan_result_combined.json.
+               Les capteurs sont écrits tels quels ; il faut appliquer DataNormalizer/DataSanitizer
+               sur sensorsResult avant sérialisation pour que available/reason soient cohérents TXT↔JSON.
+
+I) EXTRACTION missingData / topPenalties
+-----------------------------------------
+- Fichier    : Services/HealthReportBuilder.cs
+- Méthode    : ExtractMissingData(JsonElement root)
+- Lignes    : 517-531
+- Détail     : ExtractMissingData ne gère que ValueKind.Array. Si le PS renvoie un objet
+               { "ProcessList": "disabled" }, il est ignoré. topPenalties est lu dans
+               ExtractScoreV2 (451-461) uniquement en array ; un {} vide peut poser problème.
+               CollectorDiagnosticsService contient déjà ExtractMissingDataFlexible et
+               ExtractTopPenaltiesFlexible ; il faut les utiliser dans HealthReportBuilder
+               ou faire pointer report.MissingData vers la liste normalisée.
+
+J) MODÈLE HealthReport — CHAMPS UTILES
+--------------------------------------
+- Fichier    : Models/HealthReport.cs
+- Champs    : GlobalScore, Grade, GlobalMessage, ScoreV2, Errors, MissingData,
+              Metadata.PartialFailure, ConfidenceModel, Divergence.
+- Détail     : HealthSection.CollectionStatus existe (ligne 167). Il manque au niveau
+               rapport : CollectionStatus (OK/PARTIAL/FAILED) et CollectorErrorsLogical
+               pour refléter errors[] sans dépendre de ScoreV2.Breakdown.CollectorErrors.
+
+================================================================================
+FIN ARCH_MAP.txt
+================================================================================

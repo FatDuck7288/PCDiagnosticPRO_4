@@ -74,15 +74,39 @@ namespace PCDiagnosticPro.Models
         /// <summary>Données manquantes (capteurs indisponibles, etc.)</summary>
         public List<string> MissingData { get; set; } = new();
         
+        /// <summary>Nombre d'erreurs collecteur dérivé de errors[] (sans toucher PS). Si errors non vide ou partialFailure => ≥1.</summary>
+        public int CollectorErrorsLogical { get; set; }
+        
+        /// <summary>Statut global de collecte : OK / PARTIAL / FAILED. Détermine badge UI et cap score.</summary>
+        public string CollectionStatus { get; set; } = "OK";
+        
         /// <summary>Date de génération du rapport</summary>
         public DateTime GeneratedAt { get; set; } = DateTime.Now;
         
         /// <summary>Modèle de confiance (coverage + cohérence)</summary>
         public ConfidenceModel ConfidenceModel { get; set; } = new();
         
-        /// <summary>Divergence entre score PS et score GradeEngine</summary>
+        /// <summary>Divergence entre score PS et score GradeEngine (legacy)</summary>
         public ScoreDivergence Divergence { get; set; } = new();
-        
+
+        /// <summary>UDIS — Machine Health Score 0-100 (70% du total)</summary>
+        public int MachineHealthScore { get; set; }
+
+        /// <summary>UDIS — Data Reliability Score 0-100 (20% du total)</summary>
+        public int DataReliabilityScore { get; set; }
+
+        /// <summary>UDIS — Diagnostic Clarity Score 0-100 (10% du total)</summary>
+        public int DiagnosticClarityScore { get; set; }
+
+        /// <summary>Findings normalisés pour LLM AutoFix</summary>
+        public List<DiagnosticFinding> UdisFindings { get; set; } = new();
+
+        /// <summary>AutoFix autorisé (Safety Gate)</summary>
+        public bool AutoFixAllowed { get; set; }
+
+        /// <summary>Rapport UDIS complet (optionnel)</summary>
+        public UdisReport? UdisReport { get; set; }
+
         /// <summary>Calcule la sévérité depuis un score</summary>
         public static HealthSeverity ScoreToSeverity(int score)
         {

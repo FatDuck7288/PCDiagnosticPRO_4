@@ -96,19 +96,8 @@ namespace PCDiagnosticPro.Services
         /// </summary>
         private static int CalculateCollectorErrorsLogical(CollectorDiagnosticsResult result)
         {
-            int count = 0;
-            
-            // Compter les erreurs PS
-            count += result.Errors.Count;
-            
-            // Compter les erreurs critiques (WMI_ERROR, TEMP_WARN, etc.)
-            count += result.Errors.Count(e => 
-                e.Code.Contains("WMI", StringComparison.OrdinalIgnoreCase) ||
-                e.Code.Contains("ERROR", StringComparison.OrdinalIgnoreCase));
-            
-            // Compter les métriques invalidées par sanitization
-            count += result.InvalidatedMetrics.Count;
-            
+            // P0.1: collectorErrorsLogical = (errors?.Count ?? 0) + métriques invalidées (sans double comptage)
+            int count = result.Errors.Count + result.InvalidatedMetrics.Count;
             return count;
         }
 

@@ -45,6 +45,9 @@ namespace PCDiagnosticPro.ViewModels
         
         // Résultat capteurs hardware pour injection dans HealthReport
         private HardwareSensorsResult? _lastSensorsResult;
+        
+        // Résultat compteurs de performance pour enrichir les métriques
+        private PerfCounterCollector.PerfCounterResult? _lastPerfCounterResult;
 
         // Chemins relatifs
         private readonly string _baseDir = AppContext.BaseDirectory;
@@ -151,7 +154,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ArchiveMenuText"] = "Archiver",
                 ["DeleteMenuText"] = "Supprimer",
                 ["ScoreLegendTitle"] = "Légende / Calcul du score",
-                ["ScoreRulesTitle"] = "Règles de score (GradeEngine)",
+                ["ScoreRulesTitle"] = "Règles de score (UDIS)",
                 ["ScoreGradesTitle"] = "Grades",
                 ["ScoreRuleInitial"] = "• Score = moyenne pondérée des 8 domaines",
                 ["ScoreRuleCritical"] = "• Domaines : OS, CPU, GPU, RAM, Stockage, Réseau, Stabilité, Pilotes",
@@ -251,7 +254,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ArchiveMenuText"] = "Archive",
                 ["DeleteMenuText"] = "Delete",
                 ["ScoreLegendTitle"] = "Legend / Score calculation",
-                ["ScoreRulesTitle"] = "Score rules (GradeEngine)",
+                ["ScoreRulesTitle"] = "Score rules (UDIS)",
                 ["ScoreGradesTitle"] = "Grades",
                 ["ScoreRuleInitial"] = "• Score = weighted average of 8 domains",
                 ["ScoreRuleCritical"] = "• Domains: OS, CPU, GPU, RAM, Storage, Network, Stability, Drivers",
@@ -351,7 +354,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ArchiveMenuText"] = "Archivar",
                 ["DeleteMenuText"] = "Eliminar",
                 ["ScoreLegendTitle"] = "Leyenda / Cálculo del puntaje",
-                ["ScoreRulesTitle"] = "Reglas de puntaje (GradeEngine)",
+                ["ScoreRulesTitle"] = "Reglas de puntaje (UDIS)",
                 ["ScoreGradesTitle"] = "Calificaciones",
                 ["ScoreRuleInitial"] = "• Puntaje = promedio ponderado de 8 dominios",
                 ["ScoreRuleCritical"] = "• Dominios: SO, CPU, GPU, RAM, Almacenamiento, Red, Estabilidad, Controladores",
@@ -566,6 +569,29 @@ namespace PCDiagnosticPro.ViewModels
                     OnPropertyChanged(nameof(ConfidenceLevel));
                     OnPropertyChanged(nameof(ConfidenceDisplay));
                     OnPropertyChanged(nameof(ConfidenceColor));
+                    OnPropertyChanged(nameof(CollectionStatusBadgeText));
+                    OnPropertyChanged(nameof(IsCollectionPartialOrFailed));
+                    OnPropertyChanged(nameof(CollectorErrorsLogicalDisplay));
+                    OnPropertyChanged(nameof(MachineHealthScore));
+                    OnPropertyChanged(nameof(DataReliabilityScore));
+                    OnPropertyChanged(nameof(DiagnosticClarityScore));
+                    OnPropertyChanged(nameof(MachineHealthDisplay));
+                    OnPropertyChanged(nameof(DataReliabilityDisplay));
+                    OnPropertyChanged(nameof(AutoFixAllowed));
+                    // UDIS nouvelles sections
+                    OnPropertyChanged(nameof(ThermalScore));
+                    OnPropertyChanged(nameof(ThermalStatus));
+                    OnPropertyChanged(nameof(BootHealthScore));
+                    OnPropertyChanged(nameof(BootHealthTier));
+                    OnPropertyChanged(nameof(StorageIoHealthScore));
+                    OnPropertyChanged(nameof(StorageIoStatus));
+                    OnPropertyChanged(nameof(SystemStabilityIndex));
+                    OnPropertyChanged(nameof(CpuPerformanceTier));
+                    OnPropertyChanged(nameof(NetworkDownloadMbps));
+                    OnPropertyChanged(nameof(NetworkLatencyMs));
+                    OnPropertyChanged(nameof(NetworkSpeedTier));
+                    OnPropertyChanged(nameof(NetworkRecommendation));
+                    UpdateUdisSectionsSummary();
                     UpdateHealthSections();
                 }
             }
@@ -575,6 +601,11 @@ namespace PCDiagnosticPro.ViewModels
         public int GlobalHealthScore => HealthReport?.GlobalScore ?? 0;
         public string GlobalHealthGrade => HealthReport?.Grade ?? "N/A";
         public string GlobalHealthMessage => HealthReport?.GlobalMessage ?? "Aucune analyse disponible";
+        
+        /// <summary>P0.3 / P3: Badge "Partiel / Limité" si collecte FAILED ou PARTIAL ou collectorErrorsLogical > 0</summary>
+        public bool IsCollectionPartialOrFailed => HealthReport?.CollectionStatus == "PARTIAL" || HealthReport?.CollectionStatus == "FAILED" || (HealthReport?.CollectorErrorsLogical ?? 0) > 0;
+        public string CollectionStatusBadgeText => !IsCollectionPartialOrFailed ? "" : (HealthReport?.CollectionStatus == "FAILED" ? "Collecte échouée" : "Collecte partielle / limitée");
+        public string CollectorErrorsLogicalDisplay => (HealthReport?.CollectorErrorsLogical ?? 0) > 0 ? $"Erreurs collecteur: {HealthReport!.CollectorErrorsLogical}" : "";
         public string GlobalHealthColor => HealthReport != null 
             ? Models.HealthReport.SeverityToColor(HealthReport.GlobalSeverity) 
             : "#9E9E9E";
@@ -588,6 +619,40 @@ namespace PCDiagnosticPro.ViewModels
         public string ConfidenceDisplay => $"{ConfidenceScore}/100 ({ConfidenceLevel})";
         public string ConfidenceColor => ConfidenceScore >= 80 ? "#4CAF50" : 
                                           ConfidenceScore >= 60 ? "#FFC107" : "#F44336";
+
+        // === UDIS — AFFICHAGE MODE INDUSTRIE (séparé) ===
+        public int MachineHealthScore => HealthReport?.MachineHealthScore ?? 0;
+        public int DataReliabilityScore => HealthReport?.DataReliabilityScore ?? 0;
+        public int DiagnosticClarityScore => HealthReport?.DiagnosticClarityScore ?? 0;
+        public string MachineHealthDisplay => $"{MachineHealthScore}/100";
+        public string DataReliabilityDisplay => $"{DataReliabilityScore}/100";
+        public bool AutoFixAllowed => HealthReport?.AutoFixAllowed ?? false;
+
+        // === UDIS — NOUVELLES SECTIONS ===
+        public int ThermalScore => HealthReport?.UdisReport?.ThermalScore ?? 100;
+        public string ThermalStatus => HealthReport?.UdisReport?.ThermalStatus ?? "N/A";
+        public int BootHealthScore => HealthReport?.UdisReport?.BootHealthScore ?? 100;
+        public string BootHealthTier => HealthReport?.UdisReport?.BootHealthTier ?? "N/A";
+        public int StorageIoHealthScore => HealthReport?.UdisReport?.StorageIoHealthScore ?? 100;
+        public string StorageIoStatus => HealthReport?.UdisReport?.StorageIoStatus ?? "N/A";
+        public int SystemStabilityIndex => HealthReport?.UdisReport?.SystemStabilityIndex ?? 100;
+        public string CpuPerformanceTier => HealthReport?.UdisReport?.CpuPerformanceTier ?? "N/A";
+
+        // === UDIS — NETWORK SPEED TEST ===
+        public double? NetworkDownloadMbps => HealthReport?.UdisReport?.DownloadMbps;
+        public double? NetworkLatencyMs => HealthReport?.UdisReport?.LatencyMs;
+        public string NetworkSpeedTier => HealthReport?.UdisReport?.NetworkSpeedTier ?? "Non mesuré";
+        public string NetworkRecommendation => HealthReport?.UdisReport?.NetworkRecommendation ?? "";
+
+        private bool _isSpeedTestRunning;
+        public bool IsSpeedTestRunning
+        {
+            get => _isSpeedTestRunning;
+            set => SetProperty(ref _isSpeedTestRunning, value);
+        }
+
+        // === UDIS — SECTIONS SUMMARY POUR UI ===
+        public ObservableCollection<UdisSectionSummary> UdisSectionsSummary { get; } = new();
 
         private ObservableCollection<HealthSection> _healthSections = new();
         public ObservableCollection<HealthSection> HealthSections
@@ -617,6 +682,53 @@ namespace PCDiagnosticPro.ViewModels
                 }
             });
         }
+
+        private void UpdateUdisSectionsSummary()
+        {
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                UdisSectionsSummary.Clear();
+                if (HealthReport?.UdisReport?.SectionsSummary != null)
+                {
+                    foreach (var summary in HealthReport.UdisReport.SectionsSummary)
+                    {
+                        UdisSectionsSummary.Add(summary);
+                    }
+                }
+            });
+        }
+
+        /// <summary>
+        /// Lancer le SpeedTest réseau (async, non bloquant).
+        /// </summary>
+        private ICommand? _runSpeedTestCommand;
+        public ICommand RunSpeedTestCommand => _runSpeedTestCommand ??= new RelayCommand(async _ =>
+        {
+            if (IsSpeedTestRunning) return;
+            IsSpeedTestRunning = true;
+            try
+            {
+                if (HealthReport?.UdisReport != null)
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    var updatedUdis = await UnifiedDiagnosticScoreEngine.AddNetworkSpeedTestAsync(HealthReport.UdisReport, cts.Token);
+                    // Notifier la UI
+                    OnPropertyChanged(nameof(NetworkDownloadMbps));
+                    OnPropertyChanged(nameof(NetworkLatencyMs));
+                    OnPropertyChanged(nameof(NetworkSpeedTier));
+                    OnPropertyChanged(nameof(NetworkRecommendation));
+                    App.LogMessage($"[SpeedTest] Terminé: Download={updatedUdis.DownloadMbps:F1} Mbps, Tier={updatedUdis.NetworkSpeedTier}");
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[SpeedTest] Erreur: {ex.Message}");
+            }
+            finally
+            {
+                IsSpeedTestRunning = false;
+            }
+        });
 
         // ========== FIN HEALTH REPORT ==========
 
@@ -1225,7 +1337,21 @@ namespace PCDiagnosticPro.ViewModels
                     App.LogMessage($"Erreur collecte capteurs: {ex.Message}");
                 }
 
-                UpdateProgress(90, "Hardware sensors collected");
+                UpdateProgress(88, "Hardware sensors collected");
+
+                // === PHASE 2B: Collecte PerfCounters robustes ===
+                try
+                {
+                    _lastPerfCounterResult = await PerfCounterCollector.CollectAsync(_scanCts.Token);
+                    App.LogMessage($"[PerfCounters] CPU={_lastPerfCounterResult.CpuPercent:F1}%, Mem={_lastPerfCounterResult.MemoryAvailableMB:F0}MB, DiskTime={_lastPerfCounterResult.DiskTimePercent:F1}%");
+                }
+                catch (Exception ex)
+                {
+                    _lastPerfCounterResult = null;
+                    App.LogMessage($"[PerfCounters] Erreur: {ex.Message}");
+                }
+                UpdateProgress(90, "Performance counters collected");
+
                 _resultJsonPath = await ResolveResultJsonPathAsync(outputDir, _scanStartTime, _scanCts.Token);
                 await WriteCombinedResultAsync(outputDir, sensorsResult);
                 UpdateProgress(95, "JSON resolved");
@@ -1528,9 +1654,10 @@ namespace PCDiagnosticPro.ViewModels
                     HealthReport = healthReport;
                     App.LogMessage($"[HealthReport] Construit: Score={healthReport.GlobalScore}, Grade={healthReport.Grade}, " +
                         $"Sections={healthReport.Sections.Count}, Confiance={healthReport.ConfidenceModel.ConfidenceLevel}");
+                    App.LogMessage($"CollectionStatus={healthReport.CollectionStatus}; errors={healthReport.Errors?.Count ?? 0}; collectorErrorsLogical={healthReport.CollectorErrorsLogical}; missingDataCount={healthReport.MissingData?.Count ?? 0}");
+                    App.LogMessage($"ScoreV2_PS={healthReport.ScoreV2?.Score ?? 0}; ScoreCSharp={healthReport.Divergence?.GradeEngineScore ?? 0}; FinalScore={healthReport.GlobalScore}; FinalGrade={healthReport.Grade}; ConfidenceScore={healthReport.ConfidenceModel?.ConfidenceScore ?? 0}");
                     
-                    // SYNCHRONISER LE SCORE UNIFIÉ
-                    // GradeEngine est la source de vérité (intègre capteurs + PS)
+                    // SYNCHRONISER LE SCORE UNIFIÉ (FinalScore = source de vérité)
                     // On synchronise Summary.Score pour que TOUTE l'UI affiche le même score
                     var unifiedScore = healthReport.GlobalScore;
                     var unifiedGrade = healthReport.Grade;
@@ -1802,6 +1929,15 @@ namespace PCDiagnosticPro.ViewModels
 
             try
             {
+                // P2.1 Normaliser sentinelles AVANT écriture JSON combiné (alignement TXT↔JSON)
+                var sanitizeActions = DataSanitizer.SanitizeSensors(sensorsResult);
+                if (sanitizeActions.Count > 0)
+                {
+                    App.LogMessage($"[SANITIZE] Avant écriture JSON combiné: {sanitizeActions.Count} métrique(s) invalidée(s)");
+                    foreach (var a in sanitizeActions)
+                        App.LogMessage($"  SANITIZE: {a}");
+                }
+
                 var jsonContent = await File.ReadAllTextAsync(_resultJsonPath, Encoding.UTF8);
                 using var doc = JsonDocument.Parse(jsonContent);
 
@@ -1816,7 +1952,6 @@ namespace PCDiagnosticPro.ViewModels
                 await File.WriteAllTextAsync(combinedPath, combinedJson, Encoding.UTF8);
                 App.LogMessage($"Rapport combiné généré: {combinedPath}");
                 
-                // Stocker le chemin pour la génération TXT unifiée
                 _combinedJsonPath = combinedPath;
             }
             catch (Exception ex)

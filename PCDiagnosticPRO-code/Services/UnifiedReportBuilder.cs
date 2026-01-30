@@ -24,7 +24,7 @@ namespace PCDiagnosticPro.Services
         /// <param name="combinedJsonPath">Chemin vers scan_result_combined.json</param>
         /// <param name="originalTxtPath">Chemin vers le TXT PowerShell original (optionnel pour fallback)</param>
         /// <param name="outputPath">Chemin de sortie du TXT unifié</param>
-        /// <param name="healthReport">HealthReport avec scores GradeEngine</param>
+        /// <param name="healthReport">HealthReport avec scores UDIS</param>
         public static async Task<bool> BuildUnifiedReportAsync(
             string combinedJsonPath,
             string? originalTxtPath,
@@ -472,18 +472,26 @@ namespace PCDiagnosticPro.Services
             
             // === AFFICHAGE ===
             
-            // Statut global
-            var statusIcon = diagnostics.CollectionStatus switch
+            // Statut global : priorité au HealthReport (collectorErrorsLogical, CollectionStatus) pour cohérence JSON↔TXT
+            string statusLabel = diagnostics.CollectionStatus;
+            if (healthReport != null)
+            {
+                if (healthReport.CollectionStatus == "FAILED") statusLabel = "ÉCHOUÉE";
+                else if (healthReport.CollectionStatus == "PARTIAL") statusLabel = "PARTIELLE";
+                else if (healthReport.CollectionStatus == "OK") statusLabel = "COMPLÈTE";
+                sb.AppendLine($"  Erreurs collecteur (logique): {healthReport.CollectorErrorsLogical}");
+            }
+            var statusIcon = statusLabel switch
             {
                 "COMPLÈTE" => "✅",
                 "PARTIELLE" => "⚠️",
                 "ÉCHOUÉE" => "❌",
                 _ => "❓"
             };
-            sb.AppendLine($"  STATUT COLLECTE: {statusIcon} {diagnostics.CollectionStatus}");
+            sb.AppendLine($"  STATUT COLLECTE: {statusIcon} {statusLabel}");
             sb.AppendLine();
             
-            // Erreurs collecteur
+            // Erreurs collecteur (WMI_ERROR, TEMP_WARN, etc.)
             if (diagnostics.Errors.Count > 0)
             {
                 sb.AppendLine("  ┌─ ERREURS COLLECTEUR ──────────────────────────────────────────────────────┐");
@@ -648,23 +656,51 @@ namespace PCDiagnosticPro.Services
             if (healthReport == null) return;
 
             sb.AppendLine(SEPARATOR);
-            sb.AppendLine("  [SCORE ENGINE — ANALYSE GRADEENGINE]");
+            sb.AppendLine("  [SCORE ENGINE — UDIS]");
             sb.AppendLine(SEPARATOR);
             sb.AppendLine();
 
-            sb.AppendLine($"  SCORE GLOBAL: {healthReport.GlobalScore}/100");
+            sb.AppendLine("  UDIS — UNIFIED DIAGNOSTIC INTELLIGENCE SCORING");
+            sb.AppendLine($"  Score global (UDIS): {healthReport.GlobalScore}/100");
             sb.AppendLine($"  GRADE: {healthReport.Grade}");
             sb.AppendLine($"  SÉVÉRITÉ: {healthReport.GlobalSeverity}");
+            sb.AppendLine($"  Verdict: {healthReport.GlobalMessage}");
+            sb.AppendLine();
+            sb.AppendLine("  AFFICHAGE MODE INDUSTRIE (séparé):");
+            sb.AppendLine($"    Machine Health Score  : {healthReport.MachineHealthScore}/100 (70% du total)");
+            sb.AppendLine($"    Data Reliability Score: {healthReport.DataReliabilityScore}/100 (20% du total)");
+            sb.AppendLine($"    Diagnostic Clarity    : {healthReport.DiagnosticClarityScore}/100 (10% du total)");
+            sb.AppendLine($"    Source de vérité      : {healthReport.Divergence?.SourceOfTruth ?? "UDIS"}");
+            sb.AppendLine($"    AutoFix autorisé      : {(healthReport.AutoFixAllowed ? "Oui" : "Non")}");
+            if (healthReport.UdisReport != null)
+            {
+                sb.AppendLine($"    Profil CPU            : {healthReport.UdisReport.CpuPerformanceTier}");
+                sb.AppendLine($"    SystemStabilityIndex  : {healthReport.UdisReport.SystemStabilityIndex}/100");
+                sb.AppendLine();
+                sb.AppendLine("  MÉTRIQUES ADDITIONNELLES:");
+                sb.AppendLine($"    Thermal Score         : {healthReport.UdisReport.ThermalScore}/100 ({healthReport.UdisReport.ThermalStatus})");
+                sb.AppendLine($"    Boot Health Score     : {healthReport.UdisReport.BootHealthScore}/100 ({healthReport.UdisReport.BootHealthTier})");
+                sb.AppendLine($"    Storage IO Health     : {healthReport.UdisReport.StorageIoHealthScore}/100 ({healthReport.UdisReport.StorageIoStatus})");
+                if (healthReport.UdisReport.DownloadMbps.HasValue)
+                {
+                    sb.AppendLine($"    Network Speed         : {healthReport.UdisReport.DownloadMbps:F1} Mbps ({healthReport.UdisReport.NetworkSpeedTier})");
+                    if (healthReport.UdisReport.LatencyMs.HasValue)
+                        sb.AppendLine($"    Network Latency       : {healthReport.UdisReport.LatencyMs:F0} ms");
+                }
+                else
+                {
+                    sb.AppendLine($"    Network Speed         : Non mesuré");
+                }
+            }
             sb.AppendLine();
 
-            // Divergence PS vs GradeEngine
+            // Référence PS (lecture seule) vs UDIS
             if (healthReport.Divergence != null && healthReport.Divergence.Delta > 0)
             {
-                sb.AppendLine("  DIVERGENCE SCORE:");
-                sb.AppendLine($"    PowerShell Score  : {healthReport.Divergence.PowerShellScore}");
-                sb.AppendLine($"    GradeEngine Score : {healthReport.Divergence.GradeEngineScore}");
+                sb.AppendLine("  RÉFÉRENCE (lecture JSON):");
+                sb.AppendLine($"    Score PS (legacy) : {healthReport.Divergence.PowerShellScore}");
+                sb.AppendLine($"    Score UDIS        : {healthReport.Divergence.GradeEngineScore}");
                 sb.AppendLine($"    Delta             : {healthReport.Divergence.Delta}");
-                sb.AppendLine($"    Source de vérité  : {healthReport.Divergence.SourceOfTruth}");
                 sb.AppendLine();
             }
 
@@ -716,7 +752,7 @@ namespace PCDiagnosticPro.Services
             sb.AppendLine("  Ce rapport combine:");
             sb.AppendLine("    ✓ Données système PowerShell (structure, config, events)");
             sb.AppendLine("    ✓ Données capteurs hardware C# (températures, charges, VRAM)");
-            sb.AppendLine("    ✓ Analyse GradeEngine (scoring, recommandations)");
+            sb.AppendLine("    ✓ UDIS — Unified Diagnostic Intelligence Scoring");
             sb.AppendLine();
             
             if (sensors != null)

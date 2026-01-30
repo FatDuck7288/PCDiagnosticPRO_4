@@ -35,8 +35,10 @@ D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-detail
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\runtimes\win\lib\net7.0\System.IO.Ports.dll
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\runtimes\win\lib\net7.0\System.Management.dll
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.csproj.AssemblyReference.cache
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.baml
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Styles\FuturisticStyles.baml
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\App.baml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.g.cs
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\MainWindow.g.cs
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\App.g.cs
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_Content.g.cs
@@ -55,5 +57,3 @@ D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-detail
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.pdb
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.genruntimeconfig.cache
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\ref\PCDiagnosticPro.dll
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.baml
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.g.cs

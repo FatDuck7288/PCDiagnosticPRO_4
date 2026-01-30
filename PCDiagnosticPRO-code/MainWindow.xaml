@@ -791,6 +791,15 @@
                                         <StackPanel>
                                             <TextBlock Text="🩺 Santé de votre PC" FontWeight="Bold" FontSize="18"
                                                        Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            <!-- P0.3 / P3: Badge Partiel/Limité si collecte FAILED ou PARTIAL -->
+                                            <Border Background="#FFF3E0" CornerRadius="4" Padding="8,4" Margin="0,4,0,0"
+                                                    Visibility="{Binding IsCollectionPartialOrFailed, Converter={StaticResource BoolToVisibility}}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="⚠️" FontSize="12" Margin="0,0,4,0"/>
+                                                    <TextBlock Text="{Binding CollectionStatusBadgeText}" FontSize="11" FontWeight="SemiBold" Foreground="#E65100"/>
+                                                    <TextBlock Text="{Binding CollectorErrorsLogicalDisplay}" FontSize="10" Foreground="#BF360C" Margin="8,0,0,0"/>
+                                                </StackPanel>
+                                            </Border>
                                             <TextBlock Text="{Binding GlobalHealthMessage}" FontSize="12" TextWrapping="Wrap"
                                                        Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                                         </StackPanel>
@@ -823,6 +832,96 @@
                                             </Border>
                                         </StackPanel>
                                     </Grid>
+                                    <!-- UDIS — Mode industrie : Machine Health / Data Reliability séparés -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <TextBlock Text="Santé machine: " FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Text="{Binding MachineHealthDisplay}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="   |   Fiabilité données: " FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" Margin="8,0,0,0"/>
+                                        <TextBlock Text="{Binding DataReliabilityDisplay}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="   |   AutoFix: " FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" Margin="8,0,0,0"/>
+                                        <TextBlock FontSize="10" Foreground="#4CAF50">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="Autorisé"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding AutoFixAllowed}" Value="False">
+                                                            <Setter Property="Text" Value="Bloqué"/>
+                                                            <Setter Property="Foreground" Value="#F44336"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    
+                                    <!-- UDIS — Métriques additionnelles (Thermal, Boot, IO, Network) -->
+                                    <Border Background="{StaticResource BackgroundMediumBrush}" CornerRadius="6" Padding="12,8" Margin="0,10,0,6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Thermal -->
+                                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                                <TextBlock Text="🌡️ Thermique" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="{Binding ThermalScore, StringFormat={}{0}/100}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                <TextBlock Text="{Binding ThermalStatus}" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                            <!-- Boot Time -->
+                                            <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                                <TextBlock Text="⏱️ Démarrage" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="{Binding BootHealthScore, StringFormat={}{0}/100}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                <TextBlock Text="{Binding BootHealthTier}" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                            <!-- Storage IO -->
+                                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                                <TextBlock Text="💾 IO Disque" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="{Binding StorageIoHealthScore, StringFormat={}{0}/100}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                <TextBlock Text="{Binding StorageIoStatus}" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                            <!-- Stability -->
+                                            <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                                                <TextBlock Text="🛡️ Stabilité" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="{Binding SystemStabilityIndex, StringFormat={}{0}/100}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                <TextBlock Text="{Binding CpuPerformanceTier}" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                    
+                                    <!-- Network Speed Test -->
+                                    <Border Background="{StaticResource BackgroundMediumBrush}" CornerRadius="6" Padding="12,8" Margin="0,0,0,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="🌐 Réseau" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding NetworkSpeedTier}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Text=" | " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding NetworkDownloadMbps, StringFormat='{}{0:F1} Mbps'}" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Text=" | Latence: " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding NetworkLatencyMs, StringFormat='{}{0:F0} ms'}" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Content="🔄 SpeedTest" Command="{Binding RunSpeedTestCommand}" 
+                                                    IsEnabled="{Binding IsSpeedTestRunning, Converter={StaticResource InverseBool}}"
+                                                    Background="{StaticResource AccentBlueBrush}" Foreground="White" Padding="8,4"
+                                                    FontSize="10" VerticalAlignment="Center" Cursor="Hand">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FuturisticButton}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSpeedTestRunning}" Value="True">
+                                                                <Setter Property="Content" Value="⏳ Test..."/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
                                     
                                     <!-- Liste des 8 domaines - CLIQUABLES avec expansion -->
                                     <ItemsControl ItemsSource="{Binding HealthSections}">

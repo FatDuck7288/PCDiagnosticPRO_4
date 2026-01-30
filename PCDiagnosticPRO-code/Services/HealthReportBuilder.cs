@@ -97,7 +97,8 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
-        /// Construit un HealthReport depuis le JSON brut du PowerShell AVEC données capteurs hardware
+        /// Construit un HealthReport depuis le JSON brut du PowerShell AVEC données capteurs hardware.
+        /// P0/P1: collectorErrorsLogical, missingData/topPenalties flexibles, FinalScoreCalculator, DataSanitizer.
         /// </summary>
         public static HealthReport Build(string jsonContent, HardwareSensorsResult? sensors)
         {
@@ -117,57 +118,60 @@ namespace PCDiagnosticPro.Services
                 report.Grade = report.ScoreV2.Grade;
                 report.GlobalSeverity = HealthReport.ScoreToSeverity(report.GlobalScore);
                 
-                // 3. Extraire erreurs
-                report.Errors = ExtractErrors(root);
+                // 3. DIAGNOSTICS COLLECTE (P0.1, P1.2): Analyse root + sanitize sensors, missingData/topPenalties flexibles
+                var diagnostics = CollectorDiagnosticsService.Analyze(root, sensors);
+                report.Errors = diagnostics.Errors;
+                report.MissingData = diagnostics.MissingDataNormalized;
+                report.ScoreV2.TopPenalties = diagnostics.TopPenaltiesNormalized;
+                report.CollectorErrorsLogical = diagnostics.CollectorErrorsLogical;
+                if (report.Metadata.PartialFailure || diagnostics.CollectionStatus == "FAILED")
+                    report.CollectorErrorsLogical = Math.Max(report.CollectorErrorsLogical, 1);
+                report.CollectionStatus = diagnostics.CollectionStatus;
                 
-                // 4. Extraire missingData
-                report.MissingData = ExtractMissingData(root);
+                App.LogMessage($"COLLECTOR_ERRORS_LOGICAL={report.CollectorErrorsLogical} (from errors[]={report.Errors.Count})");
                 
-                // 5. Construire les sections par domaine
+                // 4. Construire les sections par domaine (ScoreV2 lu uniquement pour structure, pas source de vérité)
                 report.Sections = BuildHealthSections(root, report.ScoreV2);
                 
-                // 6. INJECTER LES DONNÉES CAPTEURS HARDWARE dans EvidenceData
-                // C'est ici que les températures/charges réelles sont connectées au scoring
+                // 5. INJECTER LES DONNÉES CAPTEURS HARDWARE (déjà sanitized par Analyze)
                 if (sensors != null)
-                {
                     InjectHardwareSensors(report, sensors);
+                
+                // 6. Modèle de confiance (pour DRS et affichage)
+                report.ConfidenceModel = BuildConfidenceModel(report, sensors);
+                report.ConfidenceModel.ConfidenceScore = CollectorDiagnosticsService.ApplyConfidenceGating(report.ConfidenceModel.ConfidenceScore, diagnostics);
+                
+                // 7. UDIS — Unified Diagnostic Intelligence Scoring (remplace GradeEngine + ScoreV2)
+                var udis = UnifiedDiagnosticScoreEngine.Compute(report, root, sensors, diagnostics);
+                report.GlobalScore = udis.UdisScore;
+                report.Grade = udis.Grade;
+                report.GlobalMessage = udis.Message;
+                report.GlobalSeverity = HealthReport.ScoreToSeverity(udis.UdisScore);
+                report.MachineHealthScore = udis.MachineHealthScore;
+                report.DataReliabilityScore = udis.DataReliabilityScore;
+                report.DiagnosticClarityScore = udis.DiagnosticClarityScore;
+                report.UdisFindings = udis.Findings;
+                report.AutoFixAllowed = udis.AutoFixAllowed;
+                report.UdisReport = udis;
+                report.Divergence.PowerShellScore = report.ScoreV2.Score;
+                report.Divergence.PowerShellGrade = report.ScoreV2.Grade;
+                report.Divergence.GradeEngineScore = udis.UdisScore;
+                report.Divergence.GradeEngineGrade = udis.Grade;
+                report.Divergence.SourceOfTruth = "UDIS (Unified Diagnostic Intelligence Scoring)";
+                
+                // 8. Verdict si collecte FAILED/PARTIAL
+                if (report.CollectionStatus == "FAILED" || report.CollectionStatus == "PARTIAL")
+                {
+                    report.GlobalMessage = report.CollectionStatus == "FAILED"
+                        ? "Collecte échouée : interprétation prudente"
+                        : "Collecte partielle : interprétation prudente";
                 }
                 
-                // 7. Sauvegarder le score PS original avant GradeEngine
-                var psScore = report.ScoreV2.Score;
-                var psGrade = report.ScoreV2.Grade;
-                
-                // 8. APPLIQUER LE GRADE ENGINE APPLICATION (remplace le score PS)
-                // Le GradeEngine est la SOURCE DE VÉRITÉ pour les grades UI
-                // Il peut maintenant utiliser les données capteurs via EvidenceData
-                GradeEngine.ApplyGrades(report);
-                
-                // 9. Documenter la divergence PS vs GradeEngine
-                report.Divergence = new ScoreDivergence
-                {
-                    PowerShellScore = psScore,
-                    PowerShellGrade = psGrade,
-                    GradeEngineScore = report.GlobalScore,
-                    GradeEngineGrade = report.Grade,
-                    SourceOfTruth = "GradeEngine",
-                    Explanation = report.GlobalScore != psScore 
-                        ? $"Score recalculé avec capteurs hardware (PS:{psScore} → UI:{report.GlobalScore})"
-                        : "Scores cohérents entre PS et GradeEngine"
-                };
-                
-                if (!report.Divergence.IsCoherent)
-                {
-                    App.LogMessage($"[Divergence] Score PS={psScore} vs GradeEngine={report.GlobalScore} (delta={report.Divergence.Delta})");
-                }
-                
-                // 10. Générer les recommandations
+                // 9. Recommandations
                 report.Recommendations = GenerateRecommendations(report);
                 
-                // 9. Calculer le modèle de confiance
-                report.ConfidenceModel = BuildConfidenceModel(report, sensors);
-                
-                App.LogMessage($"[HealthReportBuilder] Rapport construit: Score={report.GlobalScore}, Grade={report.Grade}, " +
-                    $"Sections={report.Sections.Count}, SensorsCoverage={report.ConfidenceModel.SensorsCoverage:P0}");
+                App.LogMessage($"[HealthReportBuilder] UDIS={report.GlobalScore}, MHS={report.MachineHealthScore}, DRS={report.DataReliabilityScore}, " +
+                    $"CollectorErrorsLogical={report.CollectorErrorsLogical}, CollectionStatus={report.CollectionStatus}");
             }
             catch (Exception ex)
             {
@@ -175,6 +179,8 @@ namespace PCDiagnosticPro.Services
                 report.GlobalScore = 0;
                 report.GlobalSeverity = HealthSeverity.Unknown;
                 report.GlobalMessage = "Impossible d'analyser les résultats du scan.";
+                report.CollectionStatus = "FAILED";
+                report.CollectorErrorsLogical = 1;
                 report.Errors.Add(new ScanErrorInfo 
                 { 
                     Code = "PARSE_ERROR", 
@@ -348,12 +354,13 @@ namespace PCDiagnosticPro.Services
                 model.Warnings.Add($"Couverture sections PS faible ({model.SectionsCoverage:P0})");
             }
             
-            // Erreurs de collecteurs (WMI, SMART, etc.)
-            if (report.ScoreV2.Breakdown.CollectorErrors > 0)
+            // Erreurs de collecteurs : priorité à collectorErrorsLogical (errors[]) pour cohérence JSON↔TXT
+            var collectorErrors = report.CollectorErrorsLogical > 0 ? report.CollectorErrorsLogical : report.ScoreV2.Breakdown.CollectorErrors;
+            if (collectorErrors > 0)
             {
-                var penalty = Math.Min(report.ScoreV2.Breakdown.CollectorErrors * 3, 15);
+                var penalty = Math.Min(collectorErrors * 3, 15);
                 model.ConfidenceScore -= penalty;
-                model.Warnings.Add($"Erreurs collecteurs: {report.ScoreV2.Breakdown.CollectorErrors} (pénalité -{penalty})");
+                model.Warnings.Add($"Erreurs collecteur: {collectorErrors} (pénalité -{penalty})");
             }
             
             // Timeouts = données potentiellement incomplètes
