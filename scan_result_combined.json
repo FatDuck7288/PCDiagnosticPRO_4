@@ -2,7 +2,7 @@
   "scan_powershell": {
     "missingData": {
       "section": "Processes",
-      "timestamp": "2026-01-29T17:55:28.7651959-05:00",
+      "timestamp": "2026-01-29T18:59:12.8521096-05:00",
       "item": "ProcessList",
       "reason": "Get-Process et CIM ont echoue"
     },
@@ -22,14 +22,14 @@
       "topPenalties": {}
     },
     "metadata": {
-      "durationSeconds": 52.94,
-      "runId": "04ed8f2b-4ae4-4be2-b8dd-d8eefaa5ca3e",
+      "durationSeconds": 66.96,
+      "runId": "9fed6141-7328-4e15-b7f9-c86875fb892a",
       "monitorSeconds": 10,
       "redactLevel": "Full",
       "version": "7.0",
       "partialFailure": true,
       "isAdmin": true,
-      "timestamp": "2026-01-29T17:55:56.7809987-05:00",
+      "timestamp": "2026-01-29T18:59:44.8996076-05:00",
       "quickScan": false
     },
     "findings": {},
@@ -42,7 +42,7 @@
       },
       {
         "exceptionType": null,
-        "message": "Temperature SMART invalide: 917541",
+        "message": "Temperature SMART invalide: 917535",
         "code": "TEMP_WARN",
         "section": "Collect-SmartDetails"
       }
@@ -173,9 +173,9 @@
               ]
             }
           ],
-          "totalConnections": 282,
+          "totalConnections": 163,
           "adapterCount": 8,
-          "listeningPorts": 36
+          "listeningPorts": 35
         }
       },
       "DynamicSignals": {
@@ -184,10 +184,10 @@
         "data": {
           "cpu": {
             "source": "WMI-Fallback",
-            "average": "4",
-            "min": "4",
+            "average": "2",
+            "min": "2",
             "sampleCount": 1,
-            "max": "4"
+            "max": "2"
           },
           "disk": {
             "queueLength": "0",
@@ -198,57 +198,57 @@
           "topCpu": [
             {
               "name": "dwm",
-              "cpuSeconds": 14201.5625
+              "cpuSeconds": 14475.953125
             },
             {
               "name": "RazerAppEngine",
-              "cpuSeconds": 8325.140625
+              "cpuSeconds": 8551.4375
             },
             {
               "name": "System",
-              "cpuSeconds": 8300.890625
+              "cpuSeconds": 8501.21875
             },
             {
               "name": "chrome",
-              "cpuSeconds": 6753.59375
+              "cpuSeconds": 7211.78125
             },
             {
               "name": "chrome",
-              "cpuSeconds": 6077.25
+              "cpuSeconds": 6353.859375
             }
           ],
           "memory": {
             "pageFaultsPerSec": 0,
             "source": "WMI-Fallback",
-            "usedPercent": 25.75,
-            "availableMB": 72939.41,
+            "usedPercent": 25.13,
+            "availableMB": 73545.79,
             "sampleCount": 0
           },
           "samplesCollected": "10",
           "topMemory": [
             {
               "name": "explorer",
-              "memoryMB": 1055.5
+              "memoryMB": 1014.95
             },
             {
               "name": "chrome",
-              "memoryMB": 898.64
+              "memoryMB": 902.02
             },
             {
               "name": "chrome",
-              "memoryMB": 884.91
+              "memoryMB": 866.36
             },
             {
               "name": "Cursor",
-              "memoryMB": 883.27
+              "memoryMB": 855.16
             },
             {
               "name": "chrome",
-              "memoryMB": 653.64
+              "memoryMB": 667.17
             }
           ],
           "network": {
-            "throughputMbps": "0.02",
+            "throughputMbps": "0.05",
             "errors": 0,
             "adapter": "Wi-Fi 4"
           },
@@ -267,10 +267,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "totalBytes": 1651582178,
+          "totalBytes": 1764440814,
           "locations": {
-            "Temp User": 1531673334,
-            "Temp Windows": 119908844
+            "Temp User": 1644338198,
+            "Temp Windows": 120102616
           }
         }
       },
@@ -462,7 +462,7 @@
         "status": "OK",
         "data": {
           "totalTasks": 292,
-          "readyTasks": 234
+          "readyTasks": 235
         }
       },
       "HealthChecks": {
@@ -505,7 +505,7 @@
           "logs": {
             "System": {
               "criticalCount": 0,
-              "errorCount": 28
+              "errorCount": 30
             },
             "Application": {
               "criticalCount": 0,
@@ -519,10 +519,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "freeGB": 71.75,
+          "freeGB": 72.4,
           "totalGB": 95.93,
           "moduleCount": 4,
-          "usedPercent": 25.2,
+          "usedPercent": 24.5,
           "modules": [
             {
               "speedMHz": 3200,
@@ -603,10 +603,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "runningServices": 133,
+          "runningServices": 134,
           "criticalServices": [
             {
-              "status": "Stopped",
+              "status": "Running",
               "name": "wuauserv",
               "displayName": "Windows\u00A0Update"
             },
@@ -642,19 +642,19 @@
           "volumeCount": 5,
           "volumes": [
             {
-              "freeGB": 372.35,
+              "freeGB": 372.27,
               "totalGB": 952.65,
               "usedPercent": 60.9,
               "letter": "C:"
             },
             {
-              "freeGB": 1095.07,
+              "freeGB": 1095.26,
               "totalGB": 1863.02,
               "usedPercent": 41.2,
               "letter": "D:"
             },
             {
-              "freeGB": 1518.62,
+              "freeGB": 1518.89,
               "totalGB": 1862.17,
               "usedPercent": 18.4,
               "letter": "E:"
@@ -767,7 +767,7 @@
             "maxClockSpeed": 3701,
             "name": "AMD Ryzen 9 5900X 12-Core Processor            ",
             "cores": 12,
-            "currentLoad": 19
+            "currentLoad": 5
           },
           "cpuCount": 1
         }
@@ -813,7 +813,7 @@
           "diskCount": 1,
           "disks": {
             "reallocationEvents": 0,
-            "powerOnHours": 22892,
+            "powerOnHours": 22893,
             "uncorrectableSectors": 0,
             "instanceName": "SCSI\\Disk\u0026Ven_TOSHIBA\u0026Prod_DT01ACA200\\5\u0026221baba8\u00260\u0026020000_0",
             "reallocatedSectors": 0,
@@ -845,7 +845,7 @@
           "uptimeDays": 2,
           "biosSerial": "SERIAL-XXXX",
           "manufacturer": "Micro-Star International Co., Ltd.",
-          "uptimeHours": 19,
+          "uptimeHours": 21,
           "username": "USER-cd9bc0",
           "secureBoot": false,
           "osCaption": "Microsoft Windows 11 Famille",
@@ -1506,12 +1506,12 @@
     },
     "paths": {
       "outputDir": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports",
-      "txtPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_04ed8f2b-4ae4-4be2-b8dd-d8eefaa5ca3e_20260129_175503.txt",
-      "jsonPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_04ed8f2b-4ae4-4be2-b8dd-d8eefaa5ca3e_20260129_175503.json"
+      "txtPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_9fed6141-7328-4e15-b7f9-c86875fb892a_20260129_185837.txt",
+      "jsonPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_9fed6141-7328-4e15-b7f9-c86875fb892a_20260129_185837.json"
     }
   },
   "sensors_csharp": {
-    "collectedAt": "2026-01-29T17:59:44.4610827-05:00",
+    "collectedAt": "2026-01-29T19:03:12.0649534-05:00",
     "gpu": {
       "name": {
         "value": "NVIDIA GeForce RTX 3090",
@@ -1524,17 +1524,17 @@
         "reason": null
       },
       "vramUsedMB": {
-        "value": 10968.65234375,
+        "value": 10750,
         "available": true,
         "reason": null
       },
       "gpuLoadPercent": {
-        "value": 80,
+        "value": 73,
         "available": true,
         "reason": null
       },
       "gpuTempC": {
-        "value": 80,
+        "value": 73,
         "available": true,
         "reason": null
       }
@@ -1572,7 +1572,7 @@
           "reason": null
         },
         "tempC": {
-          "value": 64,
+          "value": 55,
           "available": true,
           "reason": null
         }
@@ -1596,7 +1596,7 @@
           "reason": null
         },
         "tempC": {
-          "value": 57,
+          "value": 49,
           "available": true,
           "reason": null
         }

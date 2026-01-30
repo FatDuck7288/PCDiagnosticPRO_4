@@ -2,13 +2,13 @@
                     PC DIAGNOSTIC PRO — RAPPORT UNIFIÉ
 ════════════════════════════════════════════════════════════════════════════════
 
-  Date de génération : 2026-01-29 17:59:45
+  Date de génération : 2026-01-29 19:03:13
   Machine            : DESKTOP-LAKVT49
   Utilisateur        : rams_
   OS                 : Microsoft Windows NT 10.0.26200.0
   Mode Admin         : OUI
 
-  ⚠️ SCORE GLOBAL : 80/100 (Grade B+)
+  ⚠️ SCORE GLOBAL : 84/100 (Grade B+)
      Verdict : Bien - Quelques optimisations mineures possibles
 
 ════════════════════════════════════════════════════════════════════════════════
@@ -40,7 +40,7 @@
   [HARDWARE SENSORS — DONNÉES TEMPS RÉEL C#]
 ════════════════════════════════════════════════════════════════════════════════
 
-  Collecté à : 2026-01-29 17:59:44
+  Collecté à : 2026-01-29 19:03:12
 
   ┌─ CPU ─────────────────────────────────────────────────────────────────────┐
   │  Temperature        : Non disponible (capteur invalide)
@@ -53,19 +53,19 @@
   │  Nom                : NVIDIA GeForce RTX 3090
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
-  │  Temperature        : 80,0°C
+  │  Temperature        : 73,0°C
   │    Source           : HardwareSensorsCollector
   │    Validity         : ✓ Valid
-  │  Charge GPU         : 80,0%
+  │  Charge GPU         : 73,0%
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
   │  VRAM Total         : 24576,0MB
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
-  │  VRAM Utilisée      : 10968,7MB
+  │  VRAM Utilisée      : 10750,0MB
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
-  │  VRAM Usage %       : 44,6%
+  │  VRAM Usage %       : 43,7%
   │    Source           : Derived (VramUsed/VramTotal)
   │    Validity         : ✓ Valid
   └─────────────────────────────────────────────────────────────────────────────┘
@@ -75,14 +75,14 @@
   │    Source           : HardwareSensorsCollector
   │    Reason           : Temperature disque indisponible
   │    Confidence       : Low
-  │    Micron_2210_MTFDHBA1T0QFD : 64,0°C
+  │    Micron_2210_MTFDHBA1T0QFD : 55,0°C
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
   │    Micron CT2000X9PROSSD9 : N/A
   │    Source           : HardwareSensorsCollector
   │    Reason           : Temperature disque indisponible
   │    Confidence       : Low
-  │    Samsung SSD 990 PRO with Heatsink 2TB : 57,0°C
+  │    Samsung SSD 990 PRO with Heatsink 2TB : 49,0°C
   │    Source           : HardwareSensorsCollector
   │    Confidence       : High
   │    TOSHIBA DT01ACA200 : N/A
@@ -90,17 +90,17 @@
   │    Reason           : Temperature disque indisponible
   │    Confidence       : Low
   │  ──────────────────────────────────────────────────────────────────────
-  │  TEMP MAX DISQUES   : 64°C
+  │  TEMP MAX DISQUES   : 55°C
   │    Source           : Derived (Max of 2 disks)
   │    Validity         : ✓ Valid
-  │    ⚠️ ATTENTION    : Température élevée (>60°C)
+  │    ℹ️ INFO         : Température à surveiller (>50°C)
   └─────────────────────────────────────────────────────────────────────────────┘
 
 ════════════════════════════════════════════════════════════════════════════════
   [POWERSHELL SCAN — DONNÉES SYSTÈME]
 ════════════════════════════════════════════════════════════════════════════════
 
-  Source: Scan_04ed8f2b-4ae4-4be2-b8dd-d8eefaa5ca3e_20260129_175503.txt
+  Source: Scan_9fed6141-7328-4e15-b7f9-c86875fb892a_20260129_185837.txt
 ────────────────────────────────────────────────────────────────────────────────
 
 ####################################################################################################
@@ -110,9 +110,9 @@ Ce rapport contient des DONNEES BRUTES uniquement.
 L'analyse et l'interpretation sont effectuees par l'IA externe.
 METADATA
 --------------------------------------------------
-Run ID               : 04ed8f2b-4ae4-4be2-b8dd-d8eefaa5ca3e
+Run ID               : 9fed6141-7328-4e15-b7f9-c86875fb892a
 Version              : 7.0
-Date                 : 2026-01-29 17:55:03
+Date                 : 2026-01-29 18:58:38
 Machine              : PC-52391b
 Admin                : True
 Redaction            : Full
@@ -134,7 +134,7 @@ Build                    : 26200
 UPTIME
 --------------------------------------------------
 Dernier Boot             : 2026-01-26 21:57
-Uptime                   : 2j 19h
+Uptime                   : 2j 21h
 FABRICANT
 --------------------------------------------------
 Fabricant                : Micro-Star International Co., Ltd.
@@ -166,15 +166,15 @@ PROCESSEUR(S)
 CPU: AMD Ryzen 9 5900X 12-Core Processor            
   Cores/Threads          : 12 / 24
   Frequence Max          : 3701 MHz
-  Charge Actuelle        : 19%
+  Charge Actuelle        : 5%
 ====================================================================================================
 [4. MEMOIRE]
 ====================================================================================================
 MEMOIRE PHYSIQUE (RAM)
 --------------------------------------------------
 Memoire Totale           : 95.93 GB
-Memoire Libre            : 71.75 GB
-Utilisation              : 25.2%
+Memoire Libre            : 72.4 GB
+Utilisation              : 24.5%
 MODULES
 --------------------------------------------------
 [DIMM 0] 32 GB DDR4 @ 3200 MHz
@@ -200,9 +200,9 @@ Disque: TOSHIBA DT01ACA200
   Type: HDD | Taille: 1863.01 GB | Status: OK
 VOLUMES
 --------------------------------------------------
-C: 952.65 GB | Libre: 372.35 GB (60.9% utilise)
-D: 1863.02 GB | Libre: 1095.07 GB (41.2% utilise)
-E: 1862.17 GB | Libre: 1518.62 GB (18.4% utilise)
+C: 952.65 GB | Libre: 372.27 GB (60.9% utilise)
+D: 1863.02 GB | Libre: 1095.26 GB (41.2% utilise)
+E: 1862.17 GB | Libre: 1518.89 GB (18.4% utilise)
 G: 1862.98 GB | Libre: 1443.98 GB (22.5% utilise)
 H: 1862.88 GB | Libre: 701.18 GB (62.4% utilise)
 SMART
@@ -241,7 +241,7 @@ Interface: RZ616 Wi-Fi 6E 160MHz
   IP: 192.168.x.x, fe80::xxxx | Gateway: 192.168.x.x | MAC: 48:45:E6:XX:XX:XX
 CONNEXIONS
 --------------------------------------------------
-Total connexions: 282 | Ports en ecoute: 36
+Total connexions: 163 | Ports en ecoute: 35
 ====================================================================================================
 [8. SECURITE]
 ====================================================================================================
@@ -266,12 +266,12 @@ UAC: Active
 ====================================================================================================
 SERVICES CRITIQUES
 --------------------------------------------------
-[STOP] Windows Update
+[OK] Windows Update
 [OK] Service antivirus Microsoft Defender
 [OK] Pare-feu Windows Defender
 [OK] Journal d’événements Windows
 [OK] Services de chiffrement
-Total: 310 | Running: 133
+Total: 310 | Running: 134
 ====================================================================================================
 [10. DEMARRAGE]
 ====================================================================================================
@@ -302,7 +302,7 @@ REDEMARRAGE REQUIS
 JOURNAUX D'EVENEMENTS
 --------------------------------------------------
 === System ===
-Critiques: 0 | Erreurs: 28 (7 jours)
+Critiques: 0 | Erreurs: 30 (7 jours)
 === Application ===
 Critiques: 0 | Erreurs: 50 (7 jours)
 BSOD (30 jours)
@@ -381,7 +381,7 @@ Total: 87 applications
 ====================================================================================================
 TACHES PLANIFIEES
 --------------------------------------------------
-Total: 292 | Actives: 234
+Total: 292 | Actives: 235
 ====================================================================================================
 [18. PROCESSUS]
 ====================================================================================================
@@ -427,9 +427,9 @@ Points disponibles: 2
 ====================================================================================================
 FICHIERS TEMPORAIRES
 --------------------------------------------------
-Temp User : 1,43 GB
-Temp Windows : 114,35 MB
-TOTAL: 1,54 GB
+Temp User : 1,53 GB
+Temp Windows : 114,54 MB
+TOTAL: 1,64 GB
 ====================================================================================================
 [25. VARIABLES ENVIRONNEMENT]
 ====================================================================================================
@@ -536,7 +536,7 @@ SMART DETAILLE
 Disque: 5&221baba8&0&020000_0
   Prediction defaillance : Non
   Reallocated Sectors    : 0
-  Power-On Hours         : 22892 h
+  Power-On Hours         : 22893 h
   Temperature            : N/A (invalid reading)
   Reallocation Events    : 0
   Pending Sectors        : 0
@@ -547,12 +547,12 @@ Disque: 5&221baba8&0&020000_0
 SIGNES DYNAMIQUES (DONNEES BRUTES)
 ==================================================
 [CONFIG] Duree: 10s | Echantillons: 10
-CPU: moyenne 4% | max 4% | min 4% [WMI-Fallback]
-Memoire: 25.75% utilisee | 72939.41 MB libres [WMI-Fallback]
+CPU: moyenne 2% | max 2% | min 2% [WMI-Fallback]
+Memoire: 25.13% utilisee | 73545.79 MB libres [WMI-Fallback]
 Disque: utilisation 0% | file 0 [WMI-Fallback]
 Top CPU: dwm
-Top RAM: explorer (1055.5 MB)
-Reseau: 0.02 Mbps | erreurs: 0
+Top RAM: explorer (1014.95 MB)
+Reseau: 0.05 Mbps | erreurs: 0
 ====================================================================================================
 [37. ANALYSE AVANCEE]
 ====================================================================================================
@@ -590,7 +590,7 @@ Total erreurs: 2
 [WMI_ERROR] Unknown
   No message
 [TEMP_WARN] Collect-SmartDetails
-  Temperature SMART invalide: 917541
+  Temperature SMART invalide: 917535
 ====================================================================================================
 [RESUME FINAL]
 ====================================================================================================
@@ -599,8 +599,8 @@ RESUME DE COLLECTE
 METADATA
 --------------------------------------------------
 Version              : 7.0
-Run ID               : 04ed8f2b-4ae4-4be2-b8dd-d8eefaa5ca3e
-Date                 : 2026-01-29 17:55:56
+Run ID               : 9fed6141-7328-4e15-b7f9-c86875fb892a
+Date                 : 2026-01-29 18:59:44
 Admin                : True
 Redaction            : Full
 QuickScan            : False
@@ -649,9 +649,9 @@ ERREURS
 --------------------------------------------------
 Erreurs de collecte: 2
 ####################################################################################################
-Duree collecte       : 52.9 secondes
-Genere le            : 2026-01-29 17:55:56
-Hash (SHA256): 68C23AD64C99BAF151001314CC8DAFFC9AC05D79D598FEA4F57D7448C914B8E5
+Duree collecte       : 67 secondes
+Genere le            : 2026-01-29 18:59:44
+Hash (SHA256): 9AB4E10EBB0DE4F4228CEA403830B82FFBF28FC60F74E81012383E339D889336
 
 ════════════════════════════════════════════════════════════════════════════════
   [COLLECTE : ERREURS ET LIMITATIONS]
@@ -661,7 +661,7 @@ Hash (SHA256): 68C23AD64C99BAF151001314CC8DAFFC9AC05D79D598FEA4F57D7448C914B8E5
 
   ┌─ ERREURS COLLECTEUR ──────────────────────────────────────────────────────┐
   │  ❌ [WMI_ERROR] : Unknown error
-  │  ❌ [TEMP_WARN] Collect-SmartDetails: Temperature SMART invalide: 917541
+  │  ❌ [TEMP_WARN] Collect-SmartDetails: Temperature SMART invalide: 917535
   └─────────────────────────────────────────────────────────────────────────────┘
 
   ┌─ MÉTRIQUES INVALIDES (valeurs hors plage/sentinelles) ────────────────────┐
@@ -673,14 +673,14 @@ Hash (SHA256): 68C23AD64C99BAF151001314CC8DAFFC9AC05D79D598FEA4F57D7448C914B8E5
   [SCORE ENGINE — ANALYSE GRADEENGINE]
 ════════════════════════════════════════════════════════════════════════════════
 
-  SCORE GLOBAL: 80/100
+  SCORE GLOBAL: 84/100
   GRADE: B+
   SÉVÉRITÉ: Healthy
 
   DIVERGENCE SCORE:
     PowerShell Score  : 99
-    GradeEngine Score : 80
-    Delta             : 19
+    GradeEngine Score : 84
+    Delta             : 15
     Source de vérité  : GradeEngine
 
   SCORES PAR DOMAINE:
@@ -691,7 +691,7 @@ Hash (SHA256): 68C23AD64C99BAF151001314CC8DAFFC9AC05D79D598FEA4F57D7448C914B8E5
   │ ⚡ Processeur           │ 100/100 │ Excellent                          │
   │ 🎮 Carte graphique     │ 100/100 │ Excellent                          │
   │ 🧠 Mémoire vive        │ 100/100 │ Excellent                          │
-  │ 💾 Stockage            │ 50/100 │ À surveiller                       │
+  │ 💾 Stockage            │ 70/100 │ Bon état                           │
   │ 🌐 Réseau              │ 100/100 │ Excellent                          │
   │ 🛡️ Stabilité système  │ 100/100 │ Excellent                          │
   │ 🔧 Pilotes             │ 100/100 │ Excellent                          │
@@ -709,6 +709,6 @@ Hash (SHA256): 68C23AD64C99BAF151001314CC8DAFFC9AC05D79D598FEA4F57D7448C914B8E5
   DATA COVERAGE: 13/16 capteurs disponibles (81%)
 
   ═══════════════════════════════════════════════════════════════════════════════
-  Généré le 2026-01-29 à 17:59:45
+  Généré le 2026-01-29 à 19:03:13
   PC Diagnostic PRO — Rapport Unifié v1.0
   ═══════════════════════════════════════════════════════════════════════════════
