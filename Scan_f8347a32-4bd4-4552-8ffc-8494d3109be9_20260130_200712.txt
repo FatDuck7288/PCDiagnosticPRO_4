@@ -1,123 +1,22 @@
-﻿════════════════════════════════════════════════════════════════════════════════
-                    PC DIAGNOSTIC PRO — RAPPORT UNIFIÉ
-════════════════════════════════════════════════════════════════════════════════
-
-  Date de génération : 2026-01-30 14:09:49
-  Machine            : DESKTOP-LAKVT49
-  Utilisateur        : rams_
-  OS                 : Microsoft Windows NT 10.0.26200.0
-  Mode Admin         : OUI
-
-  ✅ SCORE GLOBAL : 99/100 (Grade A+)
-     Verdict : Collecte partielle : interprétation prudente
-
-════════════════════════════════════════════════════════════════════════════════
-
-  [METADATA & DATA COVERAGE]
-────────────────────────────────────────────────────────────────────────────────
-
-  SOURCES DE DONNÉES:
-    ├─ PowerShell Script    : Total_PS_PC_Scan_v7.0.ps1 (IMMUTABLE)
-    └─ Hardware Collector   : LibreHardwareMonitor (C#)
-
-  SENSORS COVERAGE: 12/16 (75%)
-    ├─ CPU Temperature  : ✗
-    ├─ GPU Temperature  : ✓
-    ├─ GPU Load         : ✓
-    ├─ VRAM Usage       : ✓
-    └─ Disk Temps       : 2/5
-
-  CONFIDENCE MODEL:
-    ├─ Score Confiance  : 84/100 (Élevée)
-    ├─ Sections PS      : 100 %
-    └─ Capteurs HW      : 75 %
-
-  AVERTISSEMENTS:
-    ⚠️ Température CPU indisponible (capteur invalide: valeur sentinelle 0; fallback WMI: thermal_zone_not_available)
-    ⚠️ Données PS manquantes: 4 éléments
-
-════════════════════════════════════════════════════════════════════════════════
-  [HARDWARE SENSORS — DONNÉES TEMPS RÉEL C#]
-════════════════════════════════════════════════════════════════════════════════
-
-  Collecté à : 2026-01-30 14:09:16
-
-  ┌─ CPU ─────────────────────────────────────────────────────────────────────┐
-  │  Temperature        : N/A
-  │    Source           : Tctl (AMD)
-  │    Validity         : ○ Missing
-  │    Raison           : capteur invalide: valeur sentinelle 0; fallback WMI: thermal_zone_not_available
-  └─────────────────────────────────────────────────────────────────────────────┘
-
-  ┌─ GPU ─────────────────────────────────────────────────────────────────────┐
-  │  Nom                : NVIDIA GeForce RTX 3090
-  │    Source           : HardwareSensorsCollector
-  │    Confidence       : High
-  │  Temperature        : 82,0°C
-  │    Source           : HardwareSensorsCollector
-  │    Validity         : ✓ Valid
-  │  Charge GPU         : 82,0%
-  │    Source           : HardwareSensorsCollector
-  │    Confidence       : High
-  │  VRAM Total         : 24576,0MB
-  │    Source           : HardwareSensorsCollector
-  │    Confidence       : High
-  │  VRAM Utilisée      : 11419,8MB
-  │    Source           : HardwareSensorsCollector
-  │    Confidence       : High
-  │  VRAM Usage %       : 46,5%
-  │    Source           : Derived (VramUsed/VramTotal)
-  │    Validity         : ✓ Valid
-  └─────────────────────────────────────────────────────────────────────────────┘
-
-  ┌─ STORAGE TEMPERATURES ────────────────────────────────────────────────────┐
-  │    WD My Passport 2627 : N/A
-  │    Source           : HardwareSensorsCollector
-  │    Reason           : Temperature disque indisponible
-  │    Confidence       : Low
-  │    Micron_2210_MTFDHBA1T0QFD : 65,0°C
-  │    Source           : HardwareSensorsCollector
-  │    Confidence       : High
-  │    Micron CT2000X9PROSSD9 : N/A
-  │    Source           : HardwareSensorsCollector
-  │    Reason           : Temperature disque indisponible
-  │    Confidence       : Low
-  │    Samsung SSD 990 PRO with Heatsink 2TB : 59,0°C
-  │    Source           : HardwareSensorsCollector
-  │    Confidence       : High
-  │    TOSHIBA DT01ACA200 : N/A
-  │    Source           : HardwareSensorsCollector
-  │    Reason           : Temperature disque indisponible
-  │    Confidence       : Low
-  │  ──────────────────────────────────────────────────────────────────────
-  │  TEMP MAX DISQUES   : 65°C
-  │    Source           : Derived (Max of 2 disks)
-  │    Validity         : ✓ Valid
-  │    ⚠️ ATTENTION    : Température élevée (>60°C)
-  └─────────────────────────────────────────────────────────────────────────────┘
-
-════════════════════════════════════════════════════════════════════════════════
-  [POWERSHELL SCAN — DONNÉES SYSTÈME]
-════════════════════════════════════════════════════════════════════════════════
-
-  Source: Scan_41e35e48-3de6-431a-a1ba-805fea3eb244_20260130_140253.txt
-────────────────────────────────────────────────────────────────────────────────
-
-####################################################################################################
+﻿####################################################################################################
 #
 ####################################################################################################
+
 Ce rapport contient des DONNEES BRUTES uniquement.
 L'analyse et l'interpretation sont effectuees par l'IA externe.
+
 METADATA
 --------------------------------------------------
-Run ID               : 41e35e48-3de6-431a-a1ba-805fea3eb244
+Run ID               : f8347a32-4bd4-4552-8ffc-8494d3109be9
 Version              : 7.0
-Date                 : 2026-01-30 14:02:53
+Date                 : 2026-01-30 20:07:12
 Machine              : PC-52391b
 Admin                : True
 Redaction            : Full
 MonitorSeconds       : 10
 ExternalNetTests     : False
+
+
 ====================================================================================================
 [1. IDENTITE MACHINE]
 ====================================================================================================
@@ -126,27 +25,33 @@ IDENTIFICATION DU SYSTEME
 Nom Machine              : PC-52391b
 Utilisateur              : USER-cd9bc0
 Domaine                  : DESKTOP-LAKVT49
+
 VERSION WINDOWS
 --------------------------------------------------
 Edition                  : Microsoft Windows 11 Famille
 Version                  : 10.0.26200
 Build                    : 26200
+
 UPTIME
 --------------------------------------------------
 Dernier Boot             : 2026-01-26 21:57
-Uptime                   : 3j 16h
+Uptime                   : 3j 22h
+
 FABRICANT
 --------------------------------------------------
 Fabricant                : Micro-Star International Co., Ltd.
 Modele                   : MS-7C95
+
 BIOS
 --------------------------------------------------
 Serial                   : SERIAL-XXXX
 Version                  : 2.O1
 Secure Boot              : INACTIF
+
 TPM
 --------------------------------------------------
 TPM Version              : 2.0, 0, 1.38
+
 ====================================================================================================
 [2. SYSTEME EXPLOITATION]
 ====================================================================================================
@@ -155,9 +60,11 @@ INFORMATIONS WINDOWS
 Nom OS                   : Microsoft Windows 11 Famille
 Architecture             : 64 bits
 Display Version          : 25H2
+
 LICENCE
 --------------------------------------------------
 Licence                  : Active (KEY-XXXX)
+
 ====================================================================================================
 [3. PROCESSEUR]
 ====================================================================================================
@@ -166,21 +73,24 @@ PROCESSEUR(S)
 CPU: AMD Ryzen 9 5900X 12-Core Processor            
   Cores/Threads          : 12 / 24
   Frequence Max          : 3701 MHz
-  Charge Actuelle        : 16%
+  Charge Actuelle        : 13%
+
 ====================================================================================================
 [4. MEMOIRE]
 ====================================================================================================
 MEMOIRE PHYSIQUE (RAM)
 --------------------------------------------------
 Memoire Totale           : 95.93 GB
-Memoire Libre            : 67.92 GB
-Utilisation              : 29.2%
+Memoire Libre            : 66.05 GB
+Utilisation              : 31.1%
+
 MODULES
 --------------------------------------------------
 [DIMM 0] 32 GB DDR4 @ 3200 MHz
 [DIMM 1] 16 GB DDR4 @ 3200 MHz
 [DIMM 0] 32 GB DDR4 @ 3200 MHz
 [DIMM 1] 16 GB DDR4 @ 3200 MHz
+
 ====================================================================================================
 [5. STOCKAGE]
 ====================================================================================================
@@ -188,8 +98,6 @@ DISQUES PHYSIQUES
 --------------------------------------------------
 Disque: VendorCo ProductCode USB Device
   Type: HDD | Taille: 29.29 GB | Status: OK
-Disque: WD My Passport 2627 USB Device
-  Type: HDD | Taille: 1862.98 GB | Status: OK
 Disque: Micron_2210_MTFDHBA1T0QFD
   Type: HDD | Taille: 953.86 GB | Status: OK
 Disque: Micron CT2000X9PROSSD9 SCSI Disk Device
@@ -198,16 +106,18 @@ Disque: Samsung SSD 990 PRO with Heatsink 2TB
   Type: SSD | Taille: 1863.01 GB | Status: OK
 Disque: TOSHIBA DT01ACA200
   Type: HDD | Taille: 1863.01 GB | Status: OK
+
 VOLUMES
 --------------------------------------------------
-C: 952.65 GB | Libre: 365.55 GB (61.6% utilise)
-D: 1863.02 GB | Libre: 1095.09 GB (41.2% utilise)
-E: 1862.17 GB | Libre: 1518.89 GB (18.4% utilise)
-G: 1862.98 GB | Libre: 1443.98 GB (22.5% utilise)
+C: 952.65 GB | Libre: 364.95 GB (61.7% utilise)
+D: 1863.02 GB | Libre: 1095.08 GB (41.2% utilise)
+E: 1862.17 GB | Libre: 1492.68 GB (19.8% utilise)
 H: 1862.88 GB | Libre: 701.18 GB (62.4% utilise)
+
 SMART
 --------------------------------------------------
 [OK]
+
 ====================================================================================================
 [6. CARTE GRAPHIQUE]
 ====================================================================================================
@@ -218,6 +128,7 @@ GPU: NVIDIA GeForce RTX 3090
   Driver: 32.0.15.9174
   Resolution: 3840x2160
   VRAM: Non disponible (limitation WMI - collecte externalisee)
+
 ====================================================================================================
 [7. RESEAU]
 ====================================================================================================
@@ -239,9 +150,11 @@ Interface: VMware Virtual Ethernet Adapter for VMnet5
   IP: 10.x.x.x, fe80::xxxx | Gateway:  | MAC: 00:50:56:XX:XX:XX
 Interface: RZ616 Wi-Fi 6E 160MHz
   IP: 192.168.x.x, fe80::xxxx | Gateway: 192.168.x.x | MAC: 48:45:E6:XX:XX:XX
+
 CONNEXIONS
 --------------------------------------------------
-Total connexions: 207 | Ports en ecoute: 39
+Total connexions: 188 | Ports en ecoute: 36
+
 ====================================================================================================
 [8. SECURITE]
 ====================================================================================================
@@ -250,17 +163,21 @@ WINDOWS DEFENDER
 Real-time Protection     : True
 Antivirus Enabled        : True
 Signature Age (jours)    : 0
+
 ANTIVIRUS (Security Center)
 --------------------------------------------------
 Produit: Windows Defender
+
 PARE-FEU
 --------------------------------------------------
 Domain : ACTIVE
 Private : ACTIVE
 Public : ACTIVE
+
 UAC
 --------------------------------------------------
 UAC: Active
+
 ====================================================================================================
 [9. SERVICES]
 ====================================================================================================
@@ -271,7 +188,9 @@ SERVICES CRITIQUES
 [OK] Pare-feu Windows Defender
 [OK] Journal d’événements Windows
 [OK] Services de chiffrement
-Total: 310 | Running: 137
+
+Total: 310 | Running: 133
+
 ====================================================================================================
 [10. DEMARRAGE]
 ====================================================================================================
@@ -287,33 +206,42 @@ PROGRAMMES AU DEMARRAGE
 [User] MicrosoftEdgeAutoLaunch_D801085E5D62121DE9A9830D0353FFAD
 [User] Teams
 [User] ut
+
 Total: 10 elements
+
 ====================================================================================================
 [11. HEALTH CHECKS]
 ====================================================================================================
 VERIFICATION SANTE SYSTEME
 ==================================================
+
 REDEMARRAGE REQUIS
 --------------------------------------------------
 [ATTENTION] Redemarrage requis: Windows Update, Composants CBS
+
 ====================================================================================================
 [12. JOURNAUX EVENEMENTS]
 ====================================================================================================
 JOURNAUX D'EVENEMENTS
 --------------------------------------------------
+
 === System ===
-Critiques: 0 | Erreurs: 45 (7 jours)
+Critiques: 0 | Erreurs: 50 (7 jours)
+
 === Application ===
 Critiques: 0 | Erreurs: 50 (7 jours)
+
 BSOD (30 jours)
 --------------------------------------------------
 BSOD detectes: 0
+
 ====================================================================================================
 [13. WINDOWS UPDATE]
 ====================================================================================================
 WINDOWS UPDATE
 --------------------------------------------------
-Mises a jour en attente  : 2
+Mises a jour en attente  : 1
+
 ====================================================================================================
 [14. AUDIO]
 ====================================================================================================
@@ -323,12 +251,14 @@ Device: Realtek High Definition Audio - OK
 Device: Périphérique audio USB - OK
 Device: NVIDIA Virtual Audio Device (Wave Extensible) (WDM) - OK
 Device: NVIDIA High Definition Audio - OK
+
 ====================================================================================================
 [15. PERIPHERIQUES]
 ====================================================================================================
 PERIPHERIQUES AVEC PROBLEMES
 --------------------------------------------------
 [Unknown] Volume
+[Unknown] Dispositif de stockage de masse USB
 [Unknown] Périphérique d’entrée USB
 [Unknown] Périphérique clavier PIH
 [Unknown] Generic Monitor (LG FHD)
@@ -342,6 +272,7 @@ PERIPHERIQUES AVEC PROBLEMES
 [Unknown] Cliché instantané de volume générique
 [Unknown] Cliché instantané de volume générique
 [Unknown] Cliché instantané de volume générique
+[Unknown] My Passport
 [Unknown] DiscSoft Virtual SCSI CdRom Device
 [Unknown] Home Hub 3000
 [Unknown] Cliché instantané de volume générique
@@ -352,12 +283,14 @@ PERIPHERIQUES AVEC PROBLEMES
 [Unknown] Dispositif de stockage de masse USB
 [Unknown] Périphérique fournisseur HID
 [Unknown] Generic Monitor (LG TV SSCR2)
-[Error] WD SES Device USB Device
+[Unknown] Volume
+[Unknown] WD SES Device USB Device
 [Unknown] Périphérique USB composite
 [Unknown] Périphérique de contrôle consommateur conforme aux Périphériques d'interface utilisateur (HID)
 [Unknown] Souris HID
 [Unknown] Jeux
 [Unknown] Contrôleur de jeu HID
+[Unknown] WD My Passport 2627 USB Device
 [Unknown] Périphérique fournisseur HID
 [Unknown] Périphérique fournisseur HID
 [Unknown] Volume
@@ -368,30 +301,35 @@ PERIPHERIQUES AVEC PROBLEMES
 [Error] Périphérique USB inconnu (échec de réinitialisation de port)
 [Error] Périphérique USB inconnu (échec de réinitialisation de port)
 [Unknown] Contrôleur XBOX 360 pour Windows
+
 ====================================================================================================
 [16. APPLICATIONS]
 ====================================================================================================
 APPLICATIONS INSTALLEES
 --------------------------------------------------
 Total: 87 applications
+
 ====================================================================================================
 [17. TACHES PLANIFIEES]
 ====================================================================================================
 TACHES PLANIFIEES
 --------------------------------------------------
-Total: 292 | Actives: 235
+Total: 292 | Actives: 234
+
 ====================================================================================================
 [18. PROCESSUS]
 ====================================================================================================
 TOP 15 PROCESSUS (RAM)
 --------------------------------------------------
 [INFO] Collecte processus non disponible
+
 ====================================================================================================
 [19. BATTERIE]
 ====================================================================================================
 BATTERIE
 --------------------------------------------------
 [INFO] Pas de batterie
+
 ====================================================================================================
 [20. IMPRIMANTES]
 ====================================================================================================
@@ -401,6 +339,7 @@ OneNote (Desktop)
 Microsoft XPS Document Writer 
 Microsoft Print to PDF [DEFAUT]
 Fax 
+
 ====================================================================================================
 [21. PROFILS UTILISATEURS]
 ====================================================================================================
@@ -408,26 +347,30 @@ PROFILS UTILISATEURS
 --------------------------------------------------
 %USERPROFILE%
 %USERPROFILE%
+
 ====================================================================================================
 [22. VIRTUALISATION]
 ====================================================================================================
 VIRTUALISATION
 --------------------------------------------------
 Est une VM: Non
+
 ====================================================================================================
 [23. POINTS RESTAURATION]
 ====================================================================================================
 POINTS DE RESTAURATION
 --------------------------------------------------
 Points disponibles: 3
+
 ====================================================================================================
 [24. FICHIERS TEMPORAIRES]
 ====================================================================================================
 FICHIERS TEMPORAIRES
 --------------------------------------------------
 Temp User : 1,81 GB
-Temp Windows : 116,55 MB
+Temp Windows : 116,84 MB
 TOTAL: 1,92 GB
+
 ====================================================================================================
 [25. VARIABLES ENVIRONNEMENT]
 ====================================================================================================
@@ -453,41 +396,47 @@ PROCESSOR_LEVEL = ENV-b7a568
 PROCESSOR_REVISION = ENV-4f5131
 PSModulePath = ENV-12e839
 PT8HOME = ENV-a4bfd3
+
 ====================================================================================================
 [26. CERTIFICATS]
 ====================================================================================================
 CERTIFICATS
 --------------------------------------------------
 [OK] CERT-48977e
+
 ====================================================================================================
 [27. REGISTRE]
 ====================================================================================================
 CLES REGISTRE
 --------------------------------------------------
 [INFO] Cles critiques verifiees dans autres collecteurs
+
 ====================================================================================================
 [28. TEMPERATURES]
 ====================================================================================================
 TEMPERATURES HARDWARE
 --------------------------------------------------
+
 CPU: Non disponible (limitation WMI - collecte externalisee)
 GPU: Non disponible (limitation WMI - collecte externalisee)
-Disques: 6
+Disques: 5
   - VendorCo ProductCode USB Device : N/A [SMART]
-  - WD My Passport 2627 USB Device : N/A [SMART]
   - Micron_2210_MTFDHBA1T0QFD : N/A [SMART]
   - Micron CT2000X9PROSSD9 SCSI Disk Device : N/A [SMART]
   - Samsung SSD 990 PRO with Heatsink 2TB : N/A [SMART]
   - TOSHIBA DT01ACA200 : N/A [SMART]
+
 ====================================================================================================
 [29. INTEGRITE SYSTEME]
 ====================================================================================================
 INTEGRITE SYSTEME
 --------------------------------------------------
 [ATTENTION] Composants CBS en attente
+
 Commandes de verification:
   sfc /scannow
   DISM /Online /Cleanup-Image /ScanHealth
+
 ====================================================================================================
 [30. ALIMENTATION]
 ====================================================================================================
@@ -495,12 +444,14 @@ PARAMETRES D'ALIMENTATION
 --------------------------------------------------
 Plan Actif: Performances élevées
 Demarrage rapide: ACTIVE
+
 ====================================================================================================
 [31. ANALYSE MINIDUMPS]
 ====================================================================================================
 ANALYSE MINIDUMPS
 --------------------------------------------------
 [OK] Aucun minidump
+
 ====================================================================================================
 [32. HISTORIQUE FIABILITE]
 ====================================================================================================
@@ -508,25 +459,30 @@ HISTORIQUE DE FIABILITE
 --------------------------------------------------
 Evenements fiabilite (30j): 20
 Crashes applications: 0
+
 ====================================================================================================
 [33. COMPTEURS PERFORMANCE]
 ====================================================================================================
 COMPTEURS DE PERFORMANCE
 --------------------------------------------------
 Disk Queue Length        : 0 [WMI]
+
 ====================================================================================================
 [34. LATENCE RESEAU]
 ====================================================================================================
 LATENCE RESEAU
 --------------------------------------------------
+
 PING TEST
 --------------------------------------------------
 8.8.8.8 : [DESACTIVE]
 1.1.1.1 : [DESACTIVE]
+
 DNS RESOLUTION
 --------------------------------------------------
 google.com : [DESACTIVE]
 microsoft.com : [DESACTIVE]
+
 ====================================================================================================
 [35. SMART DETAILLE]
 ====================================================================================================
@@ -535,38 +491,45 @@ SMART DETAILLE
 Disque: 5&221baba8&0&020000_0
   Prediction defaillance : Non
   Reallocated Sectors    : 0
-  Power-On Hours         : 22912 h
-  Temperature            : 37 C
+  Power-On Hours         : 22918 h
+  Temperature            : 35 C
   Reallocation Events    : 0
   Pending Sectors        : 0
   Uncorrectable Sectors  : 0
+
+
 ====================================================================================================
 [36. SIGNES DYNAMIQUES]
 ====================================================================================================
 SIGNES DYNAMIQUES (DONNEES BRUTES)
 ==================================================
+
 [CONFIG] Duree: 10s | Echantillons: 10
-CPU: moyenne 4% | max 4% | min 4% [WMI-Fallback]
-Memoire: 30.91% utilisee | 67863.27 MB libres [WMI-Fallback]
+
+CPU: moyenne 8% | max 8% | min 8% [WMI-Fallback]
+Memoire: 31.5% utilisee | 67289.96 MB libres [WMI-Fallback]
 Disque: utilisation 0% | file 0 [WMI-Fallback]
 Top CPU: dwm
-Top RAM: Cursor (1648.77 MB)
-Reseau: 0.01 Mbps | erreurs: 0
+Top RAM: Cursor (3003.22 MB)
+Reseau: 0.21 Mbps | erreurs: 0
+
 ====================================================================================================
 [37. ANALYSE AVANCEE]
 ====================================================================================================
 ANALYSE AVANCEE (DONNEES BRUTES)
 ==================================================
+
 FRAGMENTATION DISQUE
 --------------------------------------------------
 C: 8%
-G: [Non disponible]
 H: [Non disponible]
 E: 2%
 D: 0%
+
 BENCHMARKS SYSTEME
 --------------------------------------------------
 CPU Score: 9.5 | Memory: 9.5 | Disk: 8.6 | Graphics: 9.1
+
 DETECTION MALWARE
 --------------------------------------------------
 [MENACE] PUA:Win32/PCClean - Severite: 1
@@ -580,28 +543,34 @@ DETECTION MALWARE
 [MENACE] PUADlManager:Win32/OfferCore - Severite: 1
 [MENACE] PUABundler:Win32/IOBitBundler - Severite: 1
 [MENACE] VulnerableDriver:WinNT/Winring0 - Severite: 5
+
 ====================================================================================================
 [38. ERREURS DE COLLECTE]
 ====================================================================================================
 ERREURS DE COLLECTE
 ==================================================
 Total erreurs: 1
+
 [WMI_ERROR] Unknown
   No message
+
+
 ====================================================================================================
 [RESUME FINAL]
 ====================================================================================================
 RESUME DE COLLECTE
 ==================================================
+
 METADATA
 --------------------------------------------------
 Version              : 7.0
-Run ID               : 41e35e48-3de6-431a-a1ba-805fea3eb244
-Date                 : 2026-01-30 14:03:46
+Run ID               : f8347a32-4bd4-4552-8ffc-8494d3109be9
+Date                 : 2026-01-30 20:08:21
 Admin                : True
 Redaction            : Full
 QuickScan            : False
 MonitorSeconds       : 10
+
 SECTIONS COLLECTEES
 --------------------------------------------------
 Sections: 37
@@ -642,87 +611,13 @@ Sections: 37
   - SmartDetails
   - DynamicSignals
   - AdvancedAnalysis
+
 ERREURS
 --------------------------------------------------
 Erreurs de collecte: 1
+
 ####################################################################################################
-Duree collecte       : 53.4 secondes
-Genere le            : 2026-01-30 14:03:46
-Hash (SHA256): 845CE0AC3F45DAE61B68BEB1DA052EC24945A71FF2165E88529D736BDA4AE0DA
+Duree collecte       : 69.9 secondes
+Genere le            : 2026-01-30 20:08:21
 
-════════════════════════════════════════════════════════════════════════════════
-  [COLLECTE : ERREURS ET LIMITATIONS]
-════════════════════════════════════════════════════════════════════════════════
-
-  Erreurs collecteur (logique): 0
-  STATUT COLLECTE: ⚠️ PARTIELLE
-
-  ┌─ DONNÉES MANQUANTES ──────────────────────────────────────────────────────┐
-  │  ○ section: Processes
-  │  ○ timestamp: 2026-01-30T14:03:17.4223153-05:00
-  │  ○ item: ProcessList
-  │  ○ reason: Get-Process, CIM et tasklist ont echoue
-  │  ○ CPU Temperature: capteur invalide: valeur sentinelle 0; fallback WMI: thermal_zone_not_available
-  └─────────────────────────────────────────────────────────────────────────────┘
-
-════════════════════════════════════════════════════════════════════════════════
-  [SCORE ENGINE — UDIS]
-════════════════════════════════════════════════════════════════════════════════
-
-  UDIS — UNIFIED DIAGNOSTIC INTELLIGENCE SCORING
-  Score global (UDIS): 99/100
-  GRADE: A+
-  SÉVÉRITÉ: Healthy
-  Verdict: Collecte partielle : interprétation prudente
-
-  AFFICHAGE MODE INDUSTRIE (séparé):
-    Machine Health Score  : 100/100 (70% du total)
-    Data Reliability Score: 96/100 (20% du total)
-      ├─ Courbe progressive: 0err=100, 1=95, 2=90, 3=84, 4=78, 5=72, +=-4/err
-      └─ Note: Collecte partielle ≠ PC mauvais; DRS mesure la fiabilité du diagnostic
-    Diagnostic Clarity    : 100/100 (10% du total)
-    Source de vérité      : UDIS (Unified Diagnostic Intelligence Scoring)
-    AutoFix autorisé      : Oui
-    Profil CPU            : Office only
-    SystemStabilityIndex  : 100/100
-
-  MÉTRIQUES ADDITIONNELLES:
-    Thermal Score         : 80/100 (À surveiller)
-    Boot Health Score     : 100/100 (Non mesuré)
-    Storage IO Health     : 100/100 (OK)
-    Network Speed         : Non mesuré
-
-  RÉFÉRENCE (lecture JSON):
-    Score PS (legacy) : 100
-    Score UDIS        : 99
-    Delta             : 1
-
-  SCORES PAR DOMAINE:
-  ┌────────────────────────┬───────┬────────────────────────────────────┐
-  │ Domaine                │ Score │ Status                             │
-  ├────────────────────────┼───────┼────────────────────────────────────┤
-  │ 🖥️ Système d'exploitation │ 100/100 │ Excellent état                     │
-  │ ⚡ Processeur           │ 100/100 │ Excellent état                     │
-  │ 🎮 Carte graphique     │ 100/100 │ Excellent état                     │
-  │ 🧠 Mémoire vive        │ 100/100 │ Excellent état                     │
-  │ 💾 Stockage            │ 100/100 │ Excellent état                     │
-  │ 🌐 Réseau              │ 100/100 │ Excellent état                     │
-  │ 🛡️ Stabilité système  │ 100/100 │ Excellent état                     │
-  │ 🔧 Pilotes             │ 100/100 │ Excellent état                     │
-  └────────────────────────┴───────┴────────────────────────────────────┘
-
-════════════════════════════════════════════════════════════════════════════════
-
-  RAPPORT UNIFIÉ GÉNÉRÉ PAR PC DIAGNOSTIC PRO
-
-  Ce rapport combine:
-    ✓ Données système PowerShell (structure, config, events)
-    ✓ Données capteurs hardware C# (températures, charges, VRAM)
-    ✓ UDIS — Unified Diagnostic Intelligence Scoring
-
-  DATA COVERAGE: 12/16 capteurs disponibles (75%)
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  Généré le 2026-01-30 à 14:09:49
-  PC Diagnostic PRO — Rapport Unifié v1.0
-  ═══════════════════════════════════════════════════════════════════════════════
+Hash (SHA256): C77059B3BFE63640E2A617A513DA3F6AC7CB7CABD2E8A15354EBCEC4640F5732

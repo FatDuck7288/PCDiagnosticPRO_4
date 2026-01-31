@@ -1034,61 +1034,8 @@
                             </Border>
                             <!-- ========== FIN TABLEAU DE SANTÉ ========== -->
 
-                            <TextBlock Text="{Binding ResultsDetailsHeader}" FontWeight="Bold" FontSize="16"
-                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,10"/>
-
-                            <ItemsControl ItemsSource="{Binding ResultSections}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Expander Header="{Binding Title}" Margin="0,0,0,10" IsExpanded="True">
-                                            <StackPanel>
-                                                <DataGrid ItemsSource="{Binding Fields}"
-                                                          AutoGenerateColumns="False" IsReadOnly="True"
-                                                          CanUserAddRows="False" CanUserDeleteRows="False"
-                                                          GridLinesVisibility="None" HeadersVisibility="Column"
-                                                          ColumnWidth="*" HorizontalScrollBarVisibility="Disabled"
-                                                          MaxHeight="260"
-                                                          SelectionMode="Extended" SelectionUnit="CellOrRowHeader"
-                                                          ClipboardCopyMode="IncludeHeader">
-                                                    <DataGrid.Columns>
-                                                        <DataGridTextColumn Header="Clé" Binding="{Binding Key}" Width="2*"/>
-                                                        <DataGridTextColumn Header="Valeur" Binding="{Binding Value, TargetNullValue=Non disponible}" Width="3*">
-                                                            <DataGridTextColumn.ElementStyle>
-                                                                <Style TargetType="TextBlock">
-                                                                    <Setter Property="TextWrapping" Value="Wrap"/>
-                                                                </Style>
-                                                            </DataGridTextColumn.ElementStyle>
-                                                        </DataGridTextColumn>
-                                                    </DataGrid.Columns>
-                                                </DataGrid>
-
-                                                <ItemsControl ItemsSource="{Binding Tables}">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <StackPanel Margin="0,10,0,0">
-                                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
-                                                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6"/>
-                                                                <DataGrid ItemsSource="{Binding View}"
-                                                                          AutoGenerateColumns="True" IsReadOnly="True"
-                                                                          CanUserAddRows="False" CanUserDeleteRows="False"
-                                                                          GridLinesVisibility="None" HeadersVisibility="Column"
-                                                                          ColumnWidth="*" HorizontalScrollBarVisibility="Disabled"
-                                                                          MaxHeight="260"
-                                                                          SelectionMode="Extended" SelectionUnit="CellOrRowHeader"
-                                                                          ClipboardCopyMode="IncludeHeader"/>
-                                                            </StackPanel>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </StackPanel>
-                                        </Expander>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <TextBlock Text="{Binding ResultsNoDataMessage}"
-                                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,10,0,0"
-                                       Visibility="{Binding HasResultSections, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}"/>
+                            <!-- SECTIONS TECHNIQUES SUPPRIMÉES (missing Data, score V2, metadata, findings, errors, sections, paths)
+                                 Ces données restent collectées dans le JSON mais ne sont plus affichées dans l'UI -->
 
                             <Border Style="{StaticResource PanelBorder}" Margin="0,20,0,0">
                                 <StackPanel>
@@ -1120,15 +1067,15 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- BOUTON RAPPORT.TXT CENTRÉ EN BAS -->
+                    <!-- BOUTON RAPPORT INTÉGRALE CENTRÉ EN BAS -->
                     <Border Grid.Row="2" Padding="0,15,0,10">
-                        <Button Content="📄 Rapport.txt" 
+                        <Button Content="📄 Rapport intégrale" 
                                 Style="{StaticResource FuturisticButton}"
                                 Command="{Binding OpenReportTxtCommand}"
                                 HorizontalAlignment="Center"
                                 Padding="20,10"
                                 FontSize="14"
-                                ToolTip="Ouvre le rapport texte dans Bloc-notes"/>
+                                ToolTip="Ouvre le rapport unifié complet dans Bloc-notes"/>
                     </Border>
                 </Grid>
 
@@ -1342,7 +1289,7 @@
                                     Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}"/>
                         </StackPanel>
                     </Border>
-
+                    
                     <Button Content="{Binding SaveSettingsButtonText}" 
                             Style="{StaticResource FuturisticButton}"
                             Command="{Binding SaveSettingsCommand}"

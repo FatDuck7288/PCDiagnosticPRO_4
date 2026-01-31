@@ -17,18 +17,29 @@ namespace PCDiagnosticPro.DiagnosticsSignals
         
         public SignalsOrchestrator()
         {
+            // 11 signal collectors as per PHASE 4 requirements + Internet speed test
             _collectors = new List<ISignalCollector>
             {
-                new WheaCollector(),
-                new GpuRootCauseCollector(),
-                new CpuThrottleCollector(),
-                new NetworkQualityCollector(),
-                new MemoryPressureCollector(),
-                new DriverStabilityCollector(),
-                new BootPerformanceCollector(),
-                new PowerLimitsCollector(),
-                // IoLatencyCollector and DpcIsrCollector require ETW - optional
+                new WheaCollector(),              // 4.1 WHEA hardware events
+                new GpuRootCauseCollector(),      // 4.2 GPU TDR + PerfCap
+                new IoLatencyCollector(),         // 4.3 IO Latency percentiles
+                new CpuThrottleCollector(),       // 4.4 CPU Throttle flags
+                new DpcIsrCollector(),            // 4.5 DPC/ISR latency (requires ETW)
+                new MemoryPressureCollector(),    // 4.6 Memory pressure - Hard faults
+                new PowerLimitsCollector(),       // 4.7 Power limits
+                new DriverStabilityCollector(),   // 4.8 Driver stability
+                new BootPerformanceCollector(),   // 4.9 Boot performance
+                new NetworkQualityCollector(),    // 4.10 Network quality (LOCAL ONLY)
+                new InternetSpeedTestCollector(), // FIX 7: Optional Internet speed test
             };
+        }
+        
+        /// <summary>
+        /// Enable/disable external network tests (for Internet speed test)
+        /// </summary>
+        public void SetAllowExternalNetworkTests(bool allow)
+        {
+            InternetSpeedTestCollector.AllowExternalNetworkTests = allow;
         }
         
         /// <summary>

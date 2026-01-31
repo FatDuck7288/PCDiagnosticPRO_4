@@ -19,6 +19,7 @@ using System.Windows.Media;
 using System.Windows.Data;
 using PCDiagnosticPro.Models;
 using PCDiagnosticPro.Services;
+using PCDiagnosticPro.Services.NetworkDiagnostics;
 
 namespace PCDiagnosticPro.ViewModels
 {
@@ -51,6 +52,12 @@ namespace PCDiagnosticPro.ViewModels
         
         // Résultat des signaux diagnostiques avancés (10 mesures GOD TIER)
         private DiagnosticsSignals.DiagnosticSignalsResult? _lastDiagnosticSignals;
+        
+        // Résultat du fallback process telemetry (C#)
+        private ProcessTelemetryResult? _lastProcessTelemetry;
+        
+        // Résultat des diagnostics réseau complets
+        private NetworkDiagnosticsResult? _lastNetworkDiagnostics;
 
         // Chemins relatifs
         private readonly string _baseDir = AppContext.BaseDirectory;
@@ -92,7 +99,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ConfigsScannedLabel"] = "Configurations scannées",
                 ["CurrentSectionLabel"] = "Section courante",
                 ["LiveFeedLabel"] = "Flux en direct",
-                ["ReportButtonText"] = "Rapport",
+                ["ReportButtonText"] = "Rapport intégrale",
                 ["ExportButtonText"] = "Exporter",
                 ["ScanButtonText"] = "ANALYSER",
                 ["ScanButtonTextScanning"] = "Analyse… {0}%",
@@ -111,7 +118,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ResultsBreakdownError"] = "Erreurs",
                 ["ResultsBreakdownCritical"] = "Critiques",
                 ["ResultsScanDateFormat"] = "Scan du {0}",
-                ["ResultsDetailsHeader"] = "Détail des éléments analysés",
+                ["ResultsDetailsHeader"] = "Résultats détaillés",
                 ["ResultsBackButton"] = "← Retour",
                 ["ResultsNoDataMessage"] = "Aucune donnée de rapport disponible.",
                 ["ResultsCategoryHeader"] = "Catégorie",
@@ -653,6 +660,21 @@ namespace PCDiagnosticPro.ViewModels
             get => _isSpeedTestRunning;
             set => SetProperty(ref _isSpeedTestRunning, value);
         }
+        
+        // FIX 7: Allow external network tests (Internet speed test opt-in)
+        private bool _allowExternalNetworkTests = false;
+        public bool AllowExternalNetworkTests
+        {
+            get => _allowExternalNetworkTests;
+            set
+            {
+                if (SetProperty(ref _allowExternalNetworkTests, value))
+                {
+                    // Persist setting
+                    SaveSettingsAsync().ConfigureAwait(false);
+                }
+            }
+        }
 
         // === UDIS — SECTIONS SUMMARY POUR UI ===
         public ObservableCollection<UdisSectionSummary> UdisSectionsSummary { get; } = new();
@@ -1186,6 +1208,10 @@ namespace PCDiagnosticPro.ViewModels
                 ScanState = "Scanning";
                 App.LogMessage($"=== DÉMARRAGE SCAN ===");
                 App.LogMessage($"IsScanning={IsScanning}, ScanState={ScanState}");
+                
+                // P0.2: Clear WMI errors from previous scan
+                WmiQueryRunner.ClearErrors();
+                
                 UpdateProgress(0, "Scan reset", allowDecrease: true);
                 ProgressCount = 0;
                 CurrentStep = GetString("InitStep");
@@ -1355,11 +1381,13 @@ namespace PCDiagnosticPro.ViewModels
                 }
                 UpdateProgress(90, "Performance counters collected");
 
-                // === PHASE 2C: Collecte des signaux diagnostiques avancés (10 mesures GOD TIER) ===
+                // === PHASE 2C: Collecte des signaux diagnostiques avancés (11 mesures GOD TIER + Internet speed test) ===
                 try
                 {
                     UpdateProgress(91, "Collecting diagnostic signals...");
                     var signalsOrchestrator = new DiagnosticsSignals.SignalsOrchestrator();
+                    // FIX 7: Enable internet speed test only if user opted in
+                    signalsOrchestrator.SetAllowExternalNetworkTests(_allowExternalNetworkTests);
                     _lastDiagnosticSignals = await signalsOrchestrator.CollectAllAsync(_scanCts.Token);
                     App.LogMessage($"[DiagnosticSignals] Collected: {_lastDiagnosticSignals.SuccessCount} success, {_lastDiagnosticSignals.FailCount} fail, {_lastDiagnosticSignals.TotalDurationMs}ms");
                 }
@@ -1370,9 +1398,38 @@ namespace PCDiagnosticPro.ViewModels
                 }
                 UpdateProgress(93, "Diagnostic signals collected");
 
+                // === PHASE 2D: Process Telemetry C# Fallback (si PS a échoué) ===
+                try
+                {
+                    UpdateProgress(94, "Collecting process telemetry...");
+                    var processCollector = new ProcessTelemetryCollector();
+                    _lastProcessTelemetry = await processCollector.CollectAsync(_scanCts.Token);
+                    App.LogMessage($"[ProcessTelemetry] Collected: {_lastProcessTelemetry.TotalProcessCount} processes, available={_lastProcessTelemetry.Available}");
+                }
+                catch (Exception ex)
+                {
+                    _lastProcessTelemetry = null;
+                    App.LogMessage($"[ProcessTelemetry] Erreur: {ex.Message}");
+                }
+
+                // === PHASE 2E: Network Diagnostics Complets (internet autorisé) ===
+                try
+                {
+                    UpdateProgress(95, "Running network diagnostics...");
+                    var networkCollector = new NetworkDiagnosticsCollector();
+                    _lastNetworkDiagnostics = await networkCollector.CollectAsync(_scanCts.Token);
+                    App.LogMessage($"[NetworkDiagnostics] Completed: latency={_lastNetworkDiagnostics.OverallLatencyMsP50}ms, loss={_lastNetworkDiagnostics.OverallLossPercent}%");
+                }
+                catch (Exception ex)
+                {
+                    _lastNetworkDiagnostics = null;
+                    App.LogMessage($"[NetworkDiagnostics] Erreur: {ex.Message}");
+                }
+                UpdateProgress(96, "Network diagnostics completed");
+
                 _resultJsonPath = await ResolveResultJsonPathAsync(outputDir, _scanStartTime, _scanCts.Token);
                 await WriteCombinedResultAsync(outputDir, sensorsResult);
-                UpdateProgress(95, "JSON resolved");
+                UpdateProgress(97, "JSON resolved");
 
                 // Lire le JSON
                 if (!string.IsNullOrWhiteSpace(_resultJsonPath) && File.Exists(_resultJsonPath))
@@ -1959,17 +2016,42 @@ namespace PCDiagnosticPro.ViewModels
                 var jsonContent = await File.ReadAllTextAsync(_resultJsonPath, Encoding.UTF8);
                 using var doc = JsonDocument.Parse(jsonContent);
 
+                // PHASE 1+6: Build DiagnosticSnapshot with schemaVersion 2.0.0
+                var snapshotBuilder = new DiagnosticSnapshotBuilder()
+                    .AddCpuMetrics(sensorsResult)
+                    .AddGpuMetrics(sensorsResult)
+                    .AddStorageMetrics(sensorsResult)
+                    .AddDiagnosticSignals(_lastDiagnosticSignals?.Signals);
+                
+                var diagnosticSnapshot = snapshotBuilder.Build();
+
+                // P0.2: Collect WMI errors for detailed diagnostics
+                var wmiErrors = WmiQueryRunner.GetErrors();
+                CollectorDiagnostics? collectorDiagnostics = null;
+                if (wmiErrors.Count > 0)
+                {
+                    collectorDiagnostics = new CollectorDiagnostics { WmiErrors = wmiErrors };
+                    App.LogMessage($"[WmiErrors] {wmiErrors.Count} erreurs WMI capturées pour le rapport");
+                }
+
                 var combined = new CombinedScanResult
                 {
                     ScanPowershell = doc.RootElement.Clone(),
                     SensorsCsharp = sensorsResult,
-                    DiagnosticSignals = _lastDiagnosticSignals?.Signals
+                    DiagnosticSnapshot = diagnosticSnapshot,
+                    DiagnosticSignals = _lastDiagnosticSignals?.Signals,
+                    ProcessTelemetry = _lastProcessTelemetry,
+                    NetworkDiagnostics = _lastNetworkDiagnostics,
+                    CollectorDiagnostics = collectorDiagnostics
                 };
+                
+                // === EXTRACTION DES NŒUDS EXPLICITES (missingData, metadata, findings, errors, sections, paths) ===
+                ExtractExplicitNodes(doc.RootElement, combined, outputDir);
 
                 var combinedPath = Path.Combine(outputDir, "scan_result_combined.json");
                 var combinedJson = JsonSerializer.Serialize(combined, HardwareSensorsResult.JsonOptions);
                 await File.WriteAllTextAsync(combinedPath, combinedJson, Encoding.UTF8);
-                App.LogMessage($"Rapport combiné généré: {combinedPath}");
+                App.LogMessage($"Rapport combiné généré: {combinedPath} (schemaVersion={diagnosticSnapshot.SchemaVersion})");
                 
                 _combinedJsonPath = combinedPath;
             }
@@ -1981,6 +2063,93 @@ namespace PCDiagnosticPro.ViewModels
         
         // Chemin du JSON combiné pour TXT unifié
         private string _combinedJsonPath = string.Empty;
+        
+        /// <summary>
+        /// Extrait les nœuds explicites du JSON PS vers le CombinedScanResult
+        /// pour garantir que missingData, metadata, findings, errors, sections, paths
+        /// sont TOUJOURS présents dans scan_result_combined.json
+        /// </summary>
+        private void ExtractExplicitNodes(JsonElement psRoot, CombinedScanResult combined, string outputDir)
+        {
+            try
+            {
+                // 1. Extract missingData
+                if (psRoot.TryGetProperty("missingData", out var missingDataEl) && 
+                    missingDataEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in missingDataEl.EnumerateArray())
+                    {
+                        if (item.ValueKind == JsonValueKind.String)
+                            combined.MissingData.Add(item.GetString() ?? "");
+                    }
+                }
+                
+                // 2. Extract metadata
+                if (psRoot.TryGetProperty("metadata", out var metaEl))
+                {
+                    combined.Metadata.Version = metaEl.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "";
+                    combined.Metadata.RunId = metaEl.TryGetProperty("runId", out var r) ? r.GetString() ?? "" : "";
+                    combined.Metadata.Timestamp = metaEl.TryGetProperty("timestamp", out var t) ? t.GetString() ?? "" : "";
+                    combined.Metadata.IsAdmin = metaEl.TryGetProperty("isAdmin", out var a) && a.GetBoolean();
+                    combined.Metadata.PartialFailure = metaEl.TryGetProperty("partialFailure", out var pf) && pf.GetBoolean();
+                    combined.Metadata.DurationSeconds = metaEl.TryGetProperty("durationSeconds", out var d) ? d.GetDouble() : 0;
+                }
+                
+                // 3. Extract findings
+                if (psRoot.TryGetProperty("findings", out var findingsEl) && 
+                    findingsEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var f in findingsEl.EnumerateArray())
+                    {
+                        combined.Findings.Add(new FindingExtract
+                        {
+                            Type = f.TryGetProperty("type", out var ft) ? ft.GetString() ?? "" : "",
+                            Severity = f.TryGetProperty("severity", out var fs) ? fs.GetString() ?? "" : "",
+                            Message = f.TryGetProperty("message", out var fm) ? fm.GetString() ?? "" :
+                                     f.TryGetProperty("msg", out var fmsg) ? fmsg.GetString() ?? "" : "",
+                            Source = f.TryGetProperty("source", out var src) ? src.GetString() ?? "" : ""
+                        });
+                    }
+                }
+                
+                // 4. Extract errors
+                if (psRoot.TryGetProperty("errors", out var errorsEl) && 
+                    errorsEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var e in errorsEl.EnumerateArray())
+                    {
+                        combined.Errors.Add(new ErrorExtract
+                        {
+                            Code = e.TryGetProperty("code", out var ec) ? ec.GetString() ?? "" : "",
+                            Message = e.TryGetProperty("message", out var em) ? em.GetString() ?? "" :
+                                     e.TryGetProperty("msg", out var emsg) ? emsg.GetString() ?? "" : "",
+                            Section = e.TryGetProperty("section", out var es) ? es.GetString() ?? "" : ""
+                        });
+                    }
+                }
+                
+                // 5. Extract sections (liste des clés présentes)
+                if (psRoot.TryGetProperty("sections", out var sectionsEl) && 
+                    sectionsEl.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in sectionsEl.EnumerateObject())
+                    {
+                        combined.Sections.Add(prop.Name);
+                    }
+                }
+                
+                // 6. Set paths
+                combined.Paths.JsonOutput = _resultJsonPath;
+                combined.Paths.CombinedJson = Path.Combine(outputDir, "scan_result_combined.json");
+                combined.Paths.UnifiedTxt = Path.Combine(outputDir, $"Rapport_Unifie_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+                
+                App.LogMessage($"[ExtractNodes] missingData={combined.MissingData.Count}, findings={combined.Findings.Count}, errors={combined.Errors.Count}, sections={combined.Sections.Count}");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ExtractNodes] Erreur extraction: {ex.Message}");
+            }
+        }
 
         /// <summary>
         /// Génère le rapport TXT UNIFIÉ = PowerShell + Hardware Sensors + Score + Metadata.
@@ -2383,7 +2552,8 @@ namespace PCDiagnosticPro.ViewModels
                 var config = new
                 {
                     ReportDirectory = ReportDirectory,
-                    Language = CurrentLanguage
+                    Language = CurrentLanguage,
+                    AllowExternalNetworkTests = AllowExternalNetworkTests // FIX 7
                 };
 
                 var jsonContent = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
@@ -2398,6 +2568,31 @@ namespace PCDiagnosticPro.ViewModels
                 App.LogMessage($"Erreur sauvegarde paramètres: {ex.Message}");
                 StatusMessage = $"{GetString("StatusSettingsSaveError")}: {ex.Message}";
             }
+        }
+        
+        // FIX 7: Async version for property setters
+        private Task SaveSettingsAsync()
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    var config = new
+                    {
+                        ReportDirectory = ReportDirectory,
+                        Language = CurrentLanguage,
+                        AllowExternalNetworkTests = AllowExternalNetworkTests
+                    };
+
+                    var jsonContent = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(_configPath, jsonContent, Encoding.UTF8);
+                    App.LogMessage("Paramètres sauvegardés (async)");
+                }
+                catch (Exception ex)
+                {
+                    App.LogMessage($"Erreur sauvegarde paramètres (async): {ex.Message}");
+                }
+            });
         }
 
         private void LoadSettings()
@@ -2425,6 +2620,12 @@ namespace PCDiagnosticPro.ViewModels
                     {
                         CurrentLanguage = languageEl.GetString() ?? "fr";
                     }
+                    
+                    // FIX 7: Load AllowExternalNetworkTests setting
+                    if (root.TryGetProperty("AllowExternalNetworkTests", out var extNetEl))
+                    {
+                        _allowExternalNetworkTests = extNetEl.GetBoolean();
+                    }
                 }
                 else
                 {
@@ -2433,6 +2634,7 @@ namespace PCDiagnosticPro.ViewModels
                 }
 
                 OnPropertyChanged(nameof(ReportDirectory));
+                OnPropertyChanged(nameof(AllowExternalNetworkTests));
             }
             catch (Exception ex)
             {

@@ -11,87 +11,242 @@ using System.Threading.Tasks;
 namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
 {
     /// <summary>
-    /// Collects network quality metrics: packet loss, jitter, RTT, DNS latency.
+    /// P1-2: NetworkQualityCollector - OFFLINE STRICT (LOCAL ONLY)
+    /// NO external IPs (no 8.8.8.8, no 1.1.1.1, no speedtest WAN)
+    /// Measures: link speed, latency, jitter, loss to gateway/DNS local/localhost
+    /// Includes recommendation grid based on local link quality
     /// </summary>
     public class NetworkQualityCollector : ISignalCollector
     {
         public string Name => "networkQuality";
-        public TimeSpan DefaultTimeout => TimeSpan.FromSeconds(30);
+        public TimeSpan DefaultTimeout => TimeSpan.FromSeconds(45);
         public int Priority => 5;
 
-        private static readonly string[] PingTargets = { "1.1.1.1", "8.8.8.8" };
-        private const int PingCount = 10;
+        private const int PingCount = 30;
         private const int PingTimeoutMs = 1000;
+
+        // RFC1918 private IP ranges
+        private static readonly string[] PrivateRanges = { "10.", "172.16.", "172.17.", "172.18.", "172.19.",
+            "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.",
+            "172.28.", "172.29.", "172.30.", "172.31.", "192.168." };
 
         public async Task<SignalResult> CollectAsync(CancellationToken ct)
         {
             try
             {
-                var result = new NetworkQualityResult();
-                var targetResults = new List<PingTargetResult>();
+                var result = new NetworkQualityResultOffline();
+                var targetResults = new List<PingTargetResultOffline>();
 
-                // Get gateway
-                string? gateway = GetDefaultGateway();
-                var allTargets = gateway != null 
-                    ? PingTargets.Append(gateway).ToArray() 
-                    : PingTargets;
+                // 1. Get adapter info (link speed, type)
+                var adapterInfo = GetPrimaryAdapterInfo();
+                result.AdapterName = adapterInfo.Name;
+                result.AdapterType = adapterInfo.Type;
+                result.LinkSpeedMbps = adapterInfo.SpeedMbps;
+                result.IsWifi = adapterInfo.IsWifi;
+                result.WifiSignalPercent = adapterInfo.WifiSignalPercent;
 
-                // Ping each target
-                foreach (var target in allTargets)
+                // 2. Gateway ping (local)
+                string? gateway = adapterInfo.Gateway;
+                if (gateway != null && IsLocalIp(gateway))
                 {
-                    if (ct.IsCancellationRequested) break;
-                    
-                    var pingResult = await PingTargetAsync(target, ct);
+                    var pingResult = await PingTargetAsync(gateway, "gateway", ct);
                     targetResults.Add(pingResult);
+                }
+                else
+                {
+                    targetResults.Add(new PingTargetResultOffline
+                    {
+                        Ip = gateway ?? "unknown",
+                        Label = "gateway",
+                        Available = false,
+                        Reason = gateway == null ? "gateway_not_found" : "gateway_not_local"
+                    });
+                }
+
+                // 3. Localhost ping (always available, baseline)
+                var localhostResult = await PingTargetAsync("127.0.0.1", "localhost", ct);
+                targetResults.Add(localhostResult);
+
+                // 4. Local DNS servers ping (only if RFC1918)
+                var dnsServers = adapterInfo.DnsServers;
+                foreach (var dns in dnsServers.Take(2))
+                {
+                    if (IsLocalIp(dns))
+                    {
+                        var dnsResult = await PingTargetAsync(dns, "dns_local", ct);
+                        targetResults.Add(dnsResult);
+                    }
+                    else
+                    {
+                        targetResults.Add(new PingTargetResultOffline
+                        {
+                            Ip = dns,
+                            Label = "dns",
+                            Available = false,
+                            Reason = "dns_not_local_rfc1918"
+                        });
+                    }
                 }
 
                 result.Targets = targetResults;
 
-                // Calculate overall metrics
-                var successfulTargets = targetResults.Where(t => t.Received > 0).ToList();
+                // 5. Calculate overall metrics from successful local targets
+                var successfulTargets = targetResults.Where(t => t.Available && t.Received > 0).ToList();
                 if (successfulTargets.Count > 0)
                 {
-                    result.OverallLossPercent = Math.Round(targetResults.Average(t => t.LossPercent), 1);
-                    result.OverallJitterMs = Math.Round(successfulTargets.Average(t => t.JitterMs), 2);
-                    result.OverallRttAvg = Math.Round(successfulTargets.Average(t => t.RttAvg), 1);
+                    result.LatencyMsP50 = Math.Round(successfulTargets.Average(t => t.LatencyMsP50), 1);
+                    result.LatencyMsP95 = Math.Round(successfulTargets.Max(t => t.LatencyMsP95), 1);
+                    result.JitterMsP95 = Math.Round(successfulTargets.Max(t => t.JitterMsP95), 2);
+                    result.PacketLossPercent = Math.Round(successfulTargets.Average(t => t.LossPercent), 1);
                 }
 
-                // DNS latency test
-                result.DnsMsP95 = await MeasureDnsLatencyAsync(ct);
+                // 6. DNS latency test (resolve local hostname only - no external domains)
+                result.DnsLatencyMs = await MeasureLocalDnsAsync(ct);
 
-                // TCP retransmit rate (optional)
-                result.TcpRetransPerSec = GetTcpRetransmitRate();
+                // 7. TCP retransmit rate (if available via perf counters)
+                result.TcpRetransmitRate = GetTcpRetransmitRate();
 
-                var quality = result.OverallLossPercent > 5 ? "suspect" :
-                              result.OverallLossPercent > 1 ? "partial" : "ok";
+                // 8. Calculate connection verdict
+                result.CalculateVerdict();
+
+                // 9. Generate recommendations based on local quality
+                result.Recommendations = GenerateRecommendations(result);
+
+                var quality = result.PacketLossPercent > 5 ? "suspect" :
+                              result.PacketLossPercent > 1 ? "partial" : "ok";
 
                 return new SignalResult
                 {
                     Name = Name,
                     Value = result,
                     Available = true,
-                    Source = "ICMP_Ping+DNS",
+                    Source = "NetworkQualityCollector_LocalOnly",
                     Quality = quality,
-                    Notes = $"loss={result.OverallLossPercent}%, jitter={result.OverallJitterMs}ms, rtt={result.OverallRttAvg}ms",
+                    Notes = $"OFFLINE: link={result.LinkSpeedMbps}Mbps, latencyP95={result.LatencyMsP95}ms, loss={result.PacketLossPercent}%",
                     Timestamp = DateTime.UtcNow
                 };
             }
             catch (Exception ex)
             {
                 SignalsLogger.LogException(Name, ex);
-                return SignalResult.Unavailable(Name, $"error: {ex.Message}", "ICMP_Ping+DNS");
+                return SignalResult.Unavailable(Name, $"error: {ex.Message}", "NetworkQualityCollector_LocalOnly");
             }
         }
 
-        private async Task<PingTargetResult> PingTargetAsync(string target, CancellationToken ct)
+        #region Adapter Info
+
+        private AdapterInfo GetPrimaryAdapterInfo()
         {
-            var result = new PingTargetResult { Ip = target, Sent = PingCount };
+            var info = new AdapterInfo();
+
+            try
+            {
+                var nics = NetworkInterface.GetAllNetworkInterfaces()
+                    .Where(n => n.OperationalStatus == OperationalStatus.Up)
+                    .Where(n => n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                    .OrderByDescending(n => n.Speed) // Prefer fastest
+                    .ToList();
+
+                foreach (var nic in nics)
+                {
+                    var props = nic.GetIPProperties();
+                    var gateway = props.GatewayAddresses
+                        .FirstOrDefault(g => g.Address.AddressFamily == AddressFamily.InterNetwork);
+
+                    if (gateway != null)
+                    {
+                        info.Name = nic.Name;
+                        info.Type = nic.NetworkInterfaceType.ToString();
+                        info.SpeedMbps = nic.Speed / 1_000_000;
+                        info.Gateway = gateway.Address.ToString();
+                        info.IsWifi = nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211;
+
+                        // Get DNS servers
+                        foreach (var dns in props.DnsAddresses)
+                        {
+                            if (dns.AddressFamily == AddressFamily.InterNetwork)
+                                info.DnsServers.Add(dns.ToString());
+                        }
+
+                        // Wi-Fi signal strength (if applicable)
+                        if (info.IsWifi)
+                        {
+                            info.WifiSignalPercent = TryGetWifiSignalStrength();
+                        }
+
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SignalsLogger.LogWarning(Name, $"GetPrimaryAdapterInfo failed: {ex.Message}");
+            }
+
+            return info;
+        }
+
+        private int? TryGetWifiSignalStrength()
+        {
+            try
+            {
+                // Use netsh wlan show interfaces to get signal strength
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "netsh",
+                    Arguments = "wlan show interfaces",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(psi);
+                if (process == null) return null;
+
+                var output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit(2000);
+
+                // Parse "Signal : 85%"
+                var lines = output.Split('\n');
+                foreach (var line in lines)
+                {
+                    if (line.Contains("Signal") && line.Contains("%"))
+                    {
+                        var parts = line.Split(':');
+                        if (parts.Length >= 2)
+                        {
+                            var signalStr = parts[1].Trim().Replace("%", "");
+                            if (int.TryParse(signalStr, out int signal))
+                                return signal;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        #endregion
+
+        #region Ping Tests
+
+        private async Task<PingTargetResultOffline> PingTargetAsync(string target, string label, CancellationToken ct)
+        {
+            var result = new PingTargetResultOffline
+            {
+                Ip = target,
+                Label = label,
+                Sent = PingCount,
+                Available = true
+            };
+
             var rtts = new List<long>();
 
             try
             {
                 using var ping = new Ping();
-                
+
                 for (int i = 0; i < PingCount && !ct.IsCancellationRequested; i++)
                 {
                     try
@@ -104,78 +259,74 @@ namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
                         }
                     }
                     catch { /* Timeout or error */ }
-                    
-                    await Task.Delay(50, ct); // Small delay between pings
+
+                    await Task.Delay(30, ct);
                 }
 
                 result.Lost = result.Sent - result.Received;
-                result.LossPercent = result.Sent > 0 
-                    ? Math.Round((double)result.Lost / result.Sent * 100, 1) 
+                result.LossPercent = result.Sent > 0
+                    ? Math.Round((double)result.Lost / result.Sent * 100, 1)
                     : 100;
 
                 if (rtts.Count > 0)
                 {
-                    result.RttMin = rtts.Min();
-                    result.RttMax = rtts.Max();
-                    result.RttAvg = Math.Round(rtts.Average(), 1);
-                    
-                    // Calculate jitter (standard deviation)
+                    rtts.Sort();
+                    result.LatencyMsMin = rtts.Min();
+                    result.LatencyMsMax = rtts.Max();
+                    result.LatencyMsP50 = GetPercentile(rtts, 50);
+                    result.LatencyMsP95 = GetPercentile(rtts, 95);
+
+                    // Calculate jitter (differences between consecutive RTTs)
                     if (rtts.Count > 1)
                     {
-                        double avg = rtts.Average();
-                        double sumSquares = rtts.Sum(r => Math.Pow(r - avg, 2));
-                        result.JitterMs = Math.Round(Math.Sqrt(sumSquares / rtts.Count), 2);
+                        var jitters = new List<double>();
+                        for (int i = 1; i < rtts.Count; i++)
+                            jitters.Add(Math.Abs(rtts[i] - rtts[i - 1]));
+                        jitters.Sort();
+                        result.JitterMsP95 = GetPercentile(jitters, 95);
                     }
                 }
             }
             catch (Exception ex)
             {
-                SignalsLogger.LogWarning(Name, $"Ping to {target} failed: {ex.Message}");
-                result.Error = ex.Message;
+                SignalsLogger.LogWarning(Name, $"Ping to {target} ({label}) failed: {ex.Message}");
+                result.Available = false;
+                result.Reason = ex.Message;
             }
 
             return result;
         }
 
-        private async Task<double> MeasureDnsLatencyAsync(CancellationToken ct)
-        {
-            var latencies = new List<double>();
-            var testDomains = new[] { "www.google.com", "www.microsoft.com" };
-            
-            foreach (var domain in testDomains)
-            {
-                if (ct.IsCancellationRequested) break;
-                
-                for (int i = 0; i < 3; i++)
-                {
-                    try
-                    {
-                        var sw = Stopwatch.StartNew();
-                        await Dns.GetHostAddressesAsync(domain);
-                        sw.Stop();
-                        latencies.Add(sw.ElapsedMilliseconds);
-                    }
-                    catch { /* DNS resolution failed */ }
-                    
-                    await Task.Delay(50, ct);
-                }
-            }
+        #endregion
 
-            if (latencies.Count == 0) return -1;
-            
-            // Return P95
-            latencies.Sort();
-            int p95Index = (int)Math.Ceiling(latencies.Count * 0.95) - 1;
-            return latencies[Math.Max(0, p95Index)];
+        #region DNS Test
+
+        private async Task<double> MeasureLocalDnsAsync(CancellationToken ct)
+        {
+            try
+            {
+                // Only resolve local machine name - NO external domains
+                var sw = Stopwatch.StartNew();
+                await Dns.GetHostAddressesAsync(Environment.MachineName);
+                sw.Stop();
+                return sw.ElapsedMilliseconds;
+            }
+            catch
+            {
+                return -1;
+            }
         }
+
+        #endregion
+
+        #region TCP Stats
 
         private double GetTcpRetransmitRate()
         {
             try
             {
-                using var counter = new PerformanceCounter(
-                    "TCPv4", "Segments Retransmitted/sec", "", true);
-                counter.NextValue(); // First call returns 0
+                using var counter = new PerformanceCounter("TCPv4", "Segments Retransmitted/sec", "", true);
+                counter.NextValue();
                 Thread.Sleep(100);
                 return Math.Round(counter.NextValue(), 2);
             }
@@ -185,49 +336,292 @@ namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
             }
         }
 
-        private string? GetDefaultGateway()
-        {
-            try
-            {
-                var nics = NetworkInterface.GetAllNetworkInterfaces()
-                    .Where(n => n.OperationalStatus == OperationalStatus.Up)
-                    .Where(n => n.NetworkInterfaceType != NetworkInterfaceType.Loopback);
+        #endregion
 
-                foreach (var nic in nics)
+        #region Recommendations
+
+        private List<NetworkRecommendation> GenerateRecommendations(NetworkQualityResultOffline result)
+        {
+            var recs = new List<NetworkRecommendation>();
+
+            // Link speed recommendations
+            if (result.LinkSpeedMbps > 0)
+            {
+                if (result.LinkSpeedMbps < 5)
                 {
-                    var props = nic.GetIPProperties();
-                    var gateway = props.GatewayAddresses
-                        .FirstOrDefault(g => g.Address.AddressFamily == AddressFamily.InterNetwork);
-                    if (gateway != null)
-                        return gateway.Address.ToString();
+                    recs.Add(new NetworkRecommendation
+                    {
+                        Category = "speed",
+                        Severity = "high",
+                        Text = "Débit très faible (<5 Mbps). Navigation basique uniquement. Gaming et streaming déconseillés.",
+                        Action = "Vérifier le câble réseau ou la connexion Wi-Fi"
+                    });
+                }
+                else if (result.LinkSpeedMbps < 20)
+                {
+                    recs.Add(new NetworkRecommendation
+                    {
+                        Category = "speed",
+                        Severity = "medium",
+                        Text = "Débit modéré (5-20 Mbps). Streaming HD possible. Gaming déconseillé si latence/jitter élevés.",
+                        Action = null
+                    });
+                }
+                else if (result.LinkSpeedMbps < 100)
+                {
+                    recs.Add(new NetworkRecommendation
+                    {
+                        Category = "speed",
+                        Severity = "low",
+                        Text = "Bon débit (20-100 Mbps). Gaming possible si perte <1% et jitter <20ms.",
+                        Action = null
+                    });
+                }
+                else
+                {
+                    recs.Add(new NetworkRecommendation
+                    {
+                        Category = "speed",
+                        Severity = "info",
+                        Text = "Excellent débit (>100 Mbps). Gaming compétitif et cloud gaming possibles.",
+                        Action = null
+                    });
                 }
             }
-            catch { }
-            return null;
+
+            // Packet loss recommendations
+            if (result.PacketLossPercent > 2)
+            {
+                recs.Add(new NetworkRecommendation
+                {
+                    Category = "stability",
+                    Severity = "high",
+                    Text = $"Perte de paquets élevée ({result.PacketLossPercent}%). Réseau instable.",
+                    Action = "Vérifier le câble, redémarrer le routeur, ou changer de canal Wi-Fi"
+                });
+            }
+            else if (result.PacketLossPercent > 0.5)
+            {
+                recs.Add(new NetworkRecommendation
+                {
+                    Category = "stability",
+                    Severity = "medium",
+                    Text = $"Perte de paquets modérée ({result.PacketLossPercent}%). Peut affecter le gaming.",
+                    Action = null
+                });
+            }
+
+            // Jitter recommendations
+            if (result.JitterMsP95 > 30)
+            {
+                recs.Add(new NetworkRecommendation
+                {
+                    Category = "latency",
+                    Severity = "high",
+                    Text = $"Jitter élevé ({result.JitterMsP95:F1}ms). Appels vidéo et gaming affectés.",
+                    Action = "Réduire le nombre d'appareils connectés ou utiliser une connexion filaire"
+                });
+            }
+            else if (result.JitterMsP95 > 15)
+            {
+                recs.Add(new NetworkRecommendation
+                {
+                    Category = "latency",
+                    Severity = "medium",
+                    Text = $"Jitter modéré ({result.JitterMsP95:F1}ms). Gaming compétitif peut être affecté.",
+                    Action = null
+                });
+            }
+
+            // Wi-Fi signal recommendations
+            if (result.IsWifi && result.WifiSignalPercent.HasValue)
+            {
+                if (result.WifiSignalPercent < 40)
+                {
+                    recs.Add(new NetworkRecommendation
+                    {
+                        Category = "wifi",
+                        Severity = "high",
+                        Text = $"Signal Wi-Fi faible ({result.WifiSignalPercent}%). Connexion instable probable.",
+                        Action = "Rapprocher l'appareil du routeur ou utiliser un répéteur Wi-Fi"
+                    });
+                }
+                else if (result.WifiSignalPercent < 60)
+                {
+                    recs.Add(new NetworkRecommendation
+                    {
+                        Category = "wifi",
+                        Severity = "medium",
+                        Text = $"Signal Wi-Fi moyen ({result.WifiSignalPercent}%). Performance réduite possible.",
+                        Action = null
+                    });
+                }
+            }
+
+            // No recommendations = good!
+            if (recs.Count == 0)
+            {
+                recs.Add(new NetworkRecommendation
+                {
+                    Category = "general",
+                    Severity = "info",
+                    Text = "Réseau local en bon état. Aucun problème détecté.",
+                    Action = null
+                });
+            }
+
+            return recs;
+        }
+
+        #endregion
+
+        #region Helpers
+
+        private bool IsLocalIp(string ip)
+        {
+            if (string.IsNullOrEmpty(ip)) return false;
+            if (ip == "127.0.0.1" || ip.StartsWith("127.")) return true;
+            foreach (var range in PrivateRanges)
+            {
+                if (ip.StartsWith(range)) return true;
+            }
+            return false;
+        }
+
+        private double GetPercentile(List<long> sortedValues, int percentile)
+        {
+            if (sortedValues.Count == 0) return 0;
+            int index = (int)Math.Ceiling(sortedValues.Count * percentile / 100.0) - 1;
+            return sortedValues[Math.Max(0, Math.Min(index, sortedValues.Count - 1))];
+        }
+
+        private double GetPercentile(List<double> sortedValues, int percentile)
+        {
+            if (sortedValues.Count == 0) return 0;
+            int index = (int)Math.Ceiling(sortedValues.Count * percentile / 100.0) - 1;
+            return sortedValues[Math.Max(0, Math.Min(index, sortedValues.Count - 1))];
+        }
+
+        #endregion
+    }
+
+    #region Models
+
+    public class AdapterInfo
+    {
+        public string Name { get; set; } = "Unknown";
+        public string Type { get; set; } = "Unknown";
+        public long SpeedMbps { get; set; }
+        public string? Gateway { get; set; }
+        public List<string> DnsServers { get; set; } = new();
+        public bool IsWifi { get; set; }
+        public int? WifiSignalPercent { get; set; }
+    }
+
+    public class NetworkQualityResultOffline
+    {
+        // Adapter info
+        public string AdapterName { get; set; } = "";
+        public string AdapterType { get; set; } = "";
+        public long LinkSpeedMbps { get; set; }
+        public bool IsWifi { get; set; }
+        public int? WifiSignalPercent { get; set; }
+
+        // Ping targets
+        public List<PingTargetResultOffline> Targets { get; set; } = new();
+
+        // Overall metrics
+        public double LatencyMsP50 { get; set; }
+        public double LatencyMsP95 { get; set; }
+        public double JitterMsP95 { get; set; }
+        public double PacketLossPercent { get; set; }
+        public double DnsLatencyMs { get; set; }
+        public double TcpRetransmitRate { get; set; }
+
+        // Connection verdict
+        public string ConnectionVerdict { get; set; } = "Unknown"; // Excellent, Bon, Moyen, Mauvais
+        public string VerdictReason { get; set; } = "";
+
+        // Recommendations
+        public List<NetworkRecommendation> Recommendations { get; set; } = new();
+        
+        /// <summary>
+        /// Calculate connection verdict based on local metrics
+        /// </summary>
+        public void CalculateVerdict()
+        {
+            // Excellent: linkSpeed >= 300 Mbps, loss < 1%, latency p95 < 20ms, jitter < 10ms
+            // Bon: linkSpeed >= 100 Mbps, loss < 2%, latency p95 < 35ms
+            // Moyen: loss 2-5% or latency p95 35-80ms
+            // Mauvais: loss > 5% or latency p95 > 80ms or linkSpeed < 30 Mbps
+
+            var reasons = new List<string>();
+
+            if (PacketLossPercent > 5)
+            {
+                ConnectionVerdict = "Mauvais";
+                reasons.Add($"Perte paquets élevée ({PacketLossPercent}%)");
+            }
+            else if (LatencyMsP95 > 80)
+            {
+                ConnectionVerdict = "Mauvais";
+                reasons.Add($"Latence très élevée ({LatencyMsP95}ms)");
+            }
+            else if (LinkSpeedMbps > 0 && LinkSpeedMbps < 30)
+            {
+                ConnectionVerdict = "Mauvais";
+                reasons.Add($"Débit lien faible ({LinkSpeedMbps} Mbps)");
+            }
+            else if (PacketLossPercent > 2 || (LatencyMsP95 > 35 && LatencyMsP95 <= 80))
+            {
+                ConnectionVerdict = "Moyen";
+                if (PacketLossPercent > 2) reasons.Add($"Perte paquets ({PacketLossPercent}%)");
+                if (LatencyMsP95 > 35) reasons.Add($"Latence modérée ({LatencyMsP95}ms)");
+            }
+            else if (LinkSpeedMbps >= 300 && PacketLossPercent < 1 && LatencyMsP95 < 20 && JitterMsP95 < 10)
+            {
+                ConnectionVerdict = "Excellent";
+                reasons.Add($"Lien {LinkSpeedMbps} Mbps, perte {PacketLossPercent}%, latence {LatencyMsP95}ms");
+            }
+            else if (LinkSpeedMbps >= 100 && PacketLossPercent < 2 && LatencyMsP95 < 35)
+            {
+                ConnectionVerdict = "Bon";
+                reasons.Add($"Lien {LinkSpeedMbps} Mbps, perte {PacketLossPercent}%, latence {LatencyMsP95}ms");
+            }
+            else
+            {
+                ConnectionVerdict = "Moyen";
+                reasons.Add($"Lien {LinkSpeedMbps} Mbps, perte {PacketLossPercent}%, latence {LatencyMsP95}ms");
+            }
+
+            VerdictReason = string.Join("; ", reasons);
         }
     }
 
-    public class NetworkQualityResult
-    {
-        public List<PingTargetResult> Targets { get; set; } = new();
-        public double OverallLossPercent { get; set; }
-        public double OverallJitterMs { get; set; }
-        public double OverallRttAvg { get; set; }
-        public double DnsMsP95 { get; set; }
-        public double TcpRetransPerSec { get; set; }
-    }
-
-    public class PingTargetResult
+    public class PingTargetResultOffline
     {
         public string Ip { get; set; } = "";
+        public string Label { get; set; } = "";
+        public bool Available { get; set; } = true;
+        public string? Reason { get; set; }
         public int Sent { get; set; }
         public int Received { get; set; }
         public int Lost { get; set; }
         public double LossPercent { get; set; }
-        public double RttMin { get; set; }
-        public double RttMax { get; set; }
-        public double RttAvg { get; set; }
-        public double JitterMs { get; set; }
-        public string? Error { get; set; }
+        public double LatencyMsMin { get; set; }
+        public double LatencyMsMax { get; set; }
+        public double LatencyMsP50 { get; set; }
+        public double LatencyMsP95 { get; set; }
+        public double JitterMsP95 { get; set; }
     }
+
+    public class NetworkRecommendation
+    {
+        public string Category { get; set; } = "";
+        public string Severity { get; set; } = "info";
+        public string Text { get; set; } = "";
+        public string? Action { get; set; }
+    }
+
+    #endregion
 }
