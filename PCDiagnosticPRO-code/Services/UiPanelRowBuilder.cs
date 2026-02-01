@@ -70,20 +70,10 @@ namespace PCDiagnosticPro.Services
                         firstCpu = cpusArray.EnumerateArray().FirstOrDefault();
                         basePath = "scan_powershell.sections.CPU.data.cpus[0]";
                     }
-                    else if (cpuData.Value.TryGetProperty("cpus", out var cpusObject) && cpusObject.ValueKind == JsonValueKind.Object)
-                    {
-                        firstCpu = cpusObject;
-                        basePath = "scan_powershell.sections.CPU.data.cpus";
-                    }
                     else if (cpuData.Value.TryGetProperty("cpuList", out var cpuListArray) && cpuListArray.ValueKind == JsonValueKind.Array)
                     {
                         firstCpu = cpuListArray.EnumerateArray().FirstOrDefault();
                         basePath = "scan_powershell.sections.CPU.data.cpuList[0]";
-                    }
-                    else if (cpuData.Value.TryGetProperty("cpuList", out var cpuListObj) && cpuListObj.ValueKind == JsonValueKind.Object)
-                    {
-                        firstCpu = cpuListObj;
-                        basePath = "scan_powershell.sections.CPU.data.cpuList";
                     }
                 }
 
@@ -175,20 +165,10 @@ namespace PCDiagnosticPro.Services
                         firstGpu = gpuListArray.EnumerateArray().FirstOrDefault();
                         basePath = "scan_powershell.sections.GPU.data.gpuList[0]";
                     }
-                    else if (gpuData.Value.TryGetProperty("gpuList", out var gpuListObject) && gpuListObject.ValueKind == JsonValueKind.Object)
-                    {
-                        firstGpu = gpuListObject;
-                        basePath = "scan_powershell.sections.GPU.data.gpuList";
-                    }
                     else if (gpuData.Value.TryGetProperty("gpus", out var gpusArray) && gpusArray.ValueKind == JsonValueKind.Array)
                     {
                         firstGpu = gpusArray.EnumerateArray().FirstOrDefault();
                         basePath = "scan_powershell.sections.GPU.data.gpus[0]";
-                    }
-                    else if (gpuData.Value.TryGetProperty("gpus", out var gpusObject) && gpusObject.ValueKind == JsonValueKind.Object)
-                    {
-                        firstGpu = gpusObject;
-                        basePath = "scan_powershell.sections.GPU.data.gpus";
                     }
                 }
 
@@ -308,8 +288,6 @@ namespace PCDiagnosticPro.Services
                 {
                     var totalGB = GetDoubleValue(memData, "totalGB");
                     var availableGB = GetDoubleValue(memData, "availableGB");
-                    if (!availableGB.HasValue)
-                        availableGB = GetDoubleValue(memData, "freeGB");
                     var usedPercent = GetDoubleValue(memData, "usedPercent");
                     
                     if (totalGB.HasValue && totalGB.Value > 0)
@@ -326,12 +304,6 @@ namespace PCDiagnosticPro.Services
                     {
                         var computed = ((totalGB.Value - availableGB.Value) / totalGB.Value) * 100;
                         AddDetail(details, "Utilisation", $"{computed:F0} % (calculé)", "computed");
-                    }
-
-                    var moduleCount = GetIntValue(memData, "moduleCount");
-                    if (moduleCount.HasValue)
-                    {
-                        AddDetail(details, "Barrettes", moduleCount.Value.ToString(), $"{basePath}.moduleCount");
                     }
                 }
             }
@@ -376,39 +348,17 @@ namespace PCDiagnosticPro.Services
                         if (totalCapacity > 0)
                             AddDetail(details, "Capacité totale", $"{totalCapacity:F0} GB", $"{basePath}.disks[*].sizeGB");
                     }
-                    else if (storageData.Value.TryGetProperty("physicalDisks", out var physicalDisks) && physicalDisks.ValueKind == JsonValueKind.Array)
-                    {
-                        var diskCount = physicalDisks.GetArrayLength();
-                        double totalCapacity = 0;
-
-                        foreach (var disk in physicalDisks.EnumerateArray())
-                        {
-                            var sizeGB = GetDoubleValue(disk, "sizeGB");
-                            if (sizeGB.HasValue) totalCapacity += sizeGB.Value;
-                        }
-
-                        AddDetail(details, "Disques", diskCount.ToString(), $"{basePath}.physicalDisks.length");
-                        if (totalCapacity > 0)
-                            AddDetail(details, "Capacité totale", $"{totalCapacity:F0} GB", $"{basePath}.physicalDisks[*].sizeGB");
-                    }
                     
                     // Volumes (C: drive specifically)
                     if (storageData.Value.TryGetProperty("volumes", out var volumesEl) && volumesEl.ValueKind == JsonValueKind.Array)
                     {
                         foreach (var vol in volumesEl.EnumerateArray())
                         {
-                            var letter = GetStringValue(vol, "driveLetter")?.ToUpper();
-                            if (string.IsNullOrEmpty(letter))
-                                letter = GetStringValue(vol, "letter")?.ToUpper();
-                            letter ??= "";
+                            var letter = GetStringValue(vol, "driveLetter")?.ToUpper() ?? "";
                             if (letter == "C")
                             {
                                 var sizeGB = GetDoubleValue(vol, "sizeGB");
-                                if (!sizeGB.HasValue)
-                                    sizeGB = GetDoubleValue(vol, "totalGB");
                                 var freeGB = GetDoubleValue(vol, "freeSpaceGB");
-                                if (!freeGB.HasValue)
-                                    freeGB = GetDoubleValue(vol, "freeGB");
                                 
                                 if (sizeGB.HasValue && sizeGB.Value > 0)
                                 {
@@ -458,11 +408,6 @@ namespace PCDiagnosticPro.Services
                     {
                         var name = GetStringValue(firstAdapter, "name");
                         var ipv4 = GetStringValue(firstAdapter, "ipv4");
-                        if (string.IsNullOrEmpty(ipv4) && firstAdapter.TryGetProperty("ip", out var ipArray) && 
-                            ipArray.ValueKind == JsonValueKind.Array)
-                        {
-                            ipv4 = ipArray.EnumerateArray().FirstOrDefault().GetString();
-                        }
                         var status = GetStringValue(firstAdapter, "status");
                         var speed = GetStringValue(firstAdapter, "speed");
                         
@@ -545,17 +490,6 @@ namespace PCDiagnosticPro.Services
                             AddDetail(details, "Uptime", uptimeStr, $"{basePath}.lastBootUpTime (computed)");
                         }
                     }
-                }
-
-                var machineData = GetNestedElement(root, "scan_powershell", "sections", "MachineIdentity", "data");
-                if (!machineData.HasValue)
-                    machineData = GetNestedElement(root, "sections", "MachineIdentity", "data");
-
-                if (machineData.HasValue)
-                {
-                    AddDetail(details, "Version", GetStringValue(machineData, "osCaption"), "scan_powershell.sections.MachineIdentity.data.osCaption");
-                    AddDetail(details, "Build", GetStringValue(machineData, "osBuild"), "scan_powershell.sections.MachineIdentity.data.osBuild");
-                    AddDetail(details, "Nom machine", GetStringValue(machineData, "computerName"), "scan_powershell.sections.MachineIdentity.data.computerName");
                 }
                 
                 // Windows Update status

@@ -1892,6 +1892,27 @@ namespace PCDiagnosticPro.ViewModels
                 await GenerateUnifiedTxtReportAsync(outputDir);
                 // ===== FIN TXT UNIFIÉ =====
 
+                // ===== VALIDATION COMPLÉTUDE UI (NON-BLOQUANT) =====
+                try
+                {
+                    using var validationDoc = JsonDocument.Parse(jsonContent);
+                    var validationResult = UiCompletenessValidator.Validate(validationDoc.RootElement, HealthReport, _lastSensorsResult);
+                    if (!validationResult.AllValid)
+                    {
+                        App.LogMessage($"[UiValidator] WARNINGS: {validationResult.CriticalWarnings.Count}");
+                        // Log le rapport détaillé en mode debug
+                        if (ComprehensiveEvidenceExtractor.DebugPathsEnabled)
+                        {
+                            App.LogMessage(UiCompletenessValidator.GenerateReport(validationResult));
+                        }
+                    }
+                }
+                catch (Exception valEx)
+                {
+                    App.LogMessage($"[UiValidator] Erreur non-bloquante: {valEx.Message}");
+                }
+                // ===== FIN VALIDATION UI =====
+
                 App.LogMessage($"Scan terminé: Score={result.Summary.Score} | JSON={_resultJsonPath}");
                 App.LogMessage("Parse OK");
                 if (result.IsValid)

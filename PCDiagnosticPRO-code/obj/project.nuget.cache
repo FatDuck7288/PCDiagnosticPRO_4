@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "GZkUhUxy3MQ=",
+  "dgSpecHash": "2XeLjkjxaD0=",
   "success": true,
-  "projectFilePath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
+  "projectFilePath": "d:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\rams_\\.nuget\\packages\\hidsharp\\2.1.0\\hidsharp.2.1.0.nupkg.sha512",
     "C:\\Users\\rams_\\.nuget\\packages\\librehardwaremonitorlib\\0.9.2\\librehardwaremonitorlib.0.9.2.nupkg.sha512",

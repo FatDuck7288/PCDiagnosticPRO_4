@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj": {}
+    "d:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj": {}
   },
   "projects": {
-    "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj": {
+    "d:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
+        "projectUniqueName": "d:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
         "projectName": "PCDiagnosticPro",
-        "projectPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
+        "projectPath": "d:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
         "packagesPath": "C:\\Users\\rams_\\.nuget\\packages\\",
-        "outputPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\obj\\",
+        "outputPath": "d:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\NuGet.Config",
+          "d:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\NuGet.Config",
           "C:\\Users\\rams_\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
