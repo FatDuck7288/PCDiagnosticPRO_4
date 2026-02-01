@@ -536,8 +536,17 @@ namespace PCDiagnosticPro.Services
         private static ScoreV2Data ExtractScoreV2(JsonElement root)
         {
             var scoreV2 = new ScoreV2Data();
-            
-            if (root.TryGetProperty("scoreV2", out var scoreElement))
+
+            JsonElement scoreElement = default;
+            var hasScoreV2 = root.TryGetProperty("scoreV2", out scoreElement);
+            if (!hasScoreV2 && root.TryGetProperty("scan_powershell", out var scanPs) &&
+                scanPs.TryGetProperty("scoreV2", out var psScore))
+            {
+                scoreElement = psScore;
+                hasScoreV2 = true;
+            }
+
+            if (hasScoreV2)
             {
                 try
                 {
@@ -560,16 +569,37 @@ namespace PCDiagnosticPro.Services
                     }
                     
                     // Top penalties
-                    if (scoreElement.TryGetProperty("topPenalties", out var tpArray) && tpArray.ValueKind == JsonValueKind.Array)
+                    if (scoreElement.TryGetProperty("topPenalties", out var tpArray))
                     {
-                        foreach (var penalty in tpArray.EnumerateArray())
+                        if (tpArray.ValueKind == JsonValueKind.Array)
                         {
-                            var p = new PenaltyInfo();
-                            if (penalty.TryGetProperty("type", out var pt)) p.Type = pt.GetString() ?? "";
-                            if (penalty.TryGetProperty("source", out var ps)) p.Source = ps.GetString() ?? "";
-                            if (penalty.TryGetProperty("penalty", out var pp)) p.Penalty = pp.GetInt32();
-                            if (penalty.TryGetProperty("msg", out var pm)) p.Message = pm.GetString() ?? "";
-                            scoreV2.TopPenalties.Add(p);
+                            foreach (var penalty in tpArray.EnumerateArray())
+                            {
+                                var p = new PenaltyInfo();
+                                if (penalty.TryGetProperty("type", out var pt)) p.Type = pt.GetString() ?? "";
+                                if (penalty.TryGetProperty("source", out var ps)) p.Source = ps.GetString() ?? "";
+                                if (penalty.TryGetProperty("penalty", out var pp)) p.Penalty = pp.GetInt32();
+                                if (penalty.TryGetProperty("msg", out var pm)) p.Message = pm.GetString() ?? "";
+                                scoreV2.TopPenalties.Add(p);
+                            }
+                        }
+                        else if (tpArray.ValueKind == JsonValueKind.Object)
+                        {
+                            foreach (var penaltyProp in tpArray.EnumerateObject())
+                            {
+                                if (penaltyProp.Value.ValueKind != JsonValueKind.Object) continue;
+                                var penalty = penaltyProp.Value;
+                                var p = new PenaltyInfo
+                                {
+                                    Type = penaltyProp.Name
+                                };
+                                if (penalty.TryGetProperty("type", out var pt)) p.Type = pt.GetString() ?? p.Type;
+                                if (penalty.TryGetProperty("source", out var ps)) p.Source = ps.GetString() ?? "";
+                                if (penalty.TryGetProperty("penalty", out var pp)) p.Penalty = pp.GetInt32();
+                                if (penalty.TryGetProperty("msg", out var pm)) p.Message = pm.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(p.Type) || !string.IsNullOrEmpty(p.Source))
+                                    scoreV2.TopPenalties.Add(p);
+                            }
                         }
                     }
                 }
