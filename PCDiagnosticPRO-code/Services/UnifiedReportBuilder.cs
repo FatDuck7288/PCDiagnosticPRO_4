@@ -466,10 +466,12 @@ namespace PCDiagnosticPro.Services
             
             if (psData.HasValue)
             {
-                var os = GetNestedString(psData.Value, "sections", "OSInfo", "data", "Caption");
+                var os = GetNestedString(psData.Value, "sections", "OS", "data", "caption") ??
+                         GetNestedString(psData.Value, "sections", "MachineIdentity", "data", "osCaption");
                 if (!string.IsNullOrEmpty(os)) rows.Add(("Édition Windows", os));
                 
-                var build = GetNestedString(psData.Value, "sections", "OSInfo", "data", "BuildNumber");
+                var build = GetNestedString(psData.Value, "sections", "OS", "data", "buildNumber") ??
+                            GetNestedString(psData.Value, "sections", "MachineIdentity", "data", "osBuild");
                 if (!string.IsNullOrEmpty(build)) rows.Add(("Build", build));
             }
 
@@ -495,25 +497,20 @@ namespace PCDiagnosticPro.Services
             if (psData.HasValue)
             {
                 // Machine model
-                var model = GetNestedString(psData.Value, "sections", "SystemInfo", "data", "Model");
-                var manufacturer = GetNestedString(psData.Value, "sections", "SystemInfo", "data", "Manufacturer");
+                var model = GetNestedString(psData.Value, "sections", "MachineIdentity", "data", "model");
+                var manufacturer = GetNestedString(psData.Value, "sections", "MachineIdentity", "data", "manufacturer");
                 if (!string.IsNullOrEmpty(model))
                     rows.Add(("Modèle machine", $"{manufacturer} {model}".Trim()));
 
                 // Motherboard
-                var mbProduct = GetNestedString(psData.Value, "sections", "SystemInfo", "data", "MotherboardProduct");
+                var mbProduct = GetNestedString(psData.Value, "sections", "MachineIdentity", "data", "biosVersion");
                 if (!string.IsNullOrEmpty(mbProduct))
-                    rows.Add(("Carte mère", mbProduct));
-
-                // BIOS
-                var biosVersion = GetNestedString(psData.Value, "sections", "BIOSInfo", "data", "SMBIOSBIOSVersion");
-                if (!string.IsNullOrEmpty(biosVersion))
-                    rows.Add(("Version BIOS", biosVersion));
+                    rows.Add(("BIOS", mbProduct));
 
                 // CPU
-                var cpuName = GetNestedString(psData.Value, "sections", "CPUInfo", "data", "Name");
-                var cpuCores = GetNestedInt(psData.Value, "sections", "CPUInfo", "data", "NumberOfCores");
-                var cpuThreads = GetNestedInt(psData.Value, "sections", "CPUInfo", "data", "NumberOfLogicalProcessors");
+                var cpuName = GetNestedString(psData.Value, "sections", "CPU", "data", "cpus", "name");
+                var cpuCores = GetNestedInt(psData.Value, "sections", "CPU", "data", "cpus", "cores");
+                var cpuThreads = GetNestedInt(psData.Value, "sections", "CPU", "data", "cpus", "threads");
                 if (!string.IsNullOrEmpty(cpuName))
                     rows.Add(("CPU", $"{cpuName} ({cpuCores}C/{cpuThreads}T)"));
             }
@@ -527,7 +524,7 @@ namespace PCDiagnosticPro.Services
             }
             else if (psData.HasValue)
             {
-                var gpuName = GetNestedString(psData.Value, "sections", "GPUInfo", "data", "Name");
+                var gpuName = GetNestedString(psData.Value, "sections", "GPU", "data", "gpuList", "name");
                 if (!string.IsNullOrEmpty(gpuName))
                     rows.Add(("GPU", gpuName));
             }
@@ -535,7 +532,7 @@ namespace PCDiagnosticPro.Services
             // RAM total
             if (psData.HasValue)
             {
-                var totalRam = GetNestedDouble(psData.Value, "sections", "MemoryInfo", "data", "TotalPhysicalMemoryGB");
+                var totalRam = GetNestedDouble(psData.Value, "sections", "Memory", "data", "totalGB");
                 if (totalRam > 0)
                     rows.Add(("RAM totale", $"{totalRam:F1} GB"));
             }
@@ -565,20 +562,25 @@ namespace PCDiagnosticPro.Services
             {
                 var cpuData = GetNestedElement(psData.Value, "sections", "CPU", "data");
                 if (!cpuData.HasValue) cpuData = GetNestedElement(psData.Value, "sections", "CPUInfo", "data");
-                if (cpuData.HasValue && cpuData.Value.TryGetProperty("cpus", out var cpusEl) && cpusEl.ValueKind == JsonValueKind.Array)
+                if (cpuData.HasValue && cpuData.Value.TryGetProperty("cpus", out var cpusEl))
                 {
-                    var firstCpu = cpusEl.EnumerateArray().FirstOrDefault();
-                    if (firstCpu.ValueKind != JsonValueKind.Undefined)
+                    JsonElement? firstCpu = null;
+                    if (cpusEl.ValueKind == JsonValueKind.Array)
+                        firstCpu = cpusEl.EnumerateArray().FirstOrDefault();
+                    else if (cpusEl.ValueKind == JsonValueKind.Object)
+                        firstCpu = cpusEl;
+
+                    if (firstCpu.HasValue)
                     {
-                        var maxSpeedMhz = firstCpu.TryGetProperty("maxClockSpeed", out var mcs) ? mcs.GetDouble() : -1;
-                        var currentSpeedMhz = firstCpu.TryGetProperty("currentClockSpeed", out var ccs) ? ccs.GetDouble() : maxSpeedMhz;
+                        var maxSpeedMhz = firstCpu.Value.TryGetProperty("maxClockSpeed", out var mcs) ? mcs.GetDouble() : -1;
+                        var currentSpeedMhz = firstCpu.Value.TryGetProperty("currentClockSpeed", out var ccs) ? ccs.GetDouble() : maxSpeedMhz;
                         if (maxSpeedMhz > 0)
                         {
                             rows.Add(("Fréquence CPU (max)", $"{maxSpeedMhz / 1000:F2} GHz"));
                             if (currentSpeedMhz > 0 && Math.Abs(currentSpeedMhz - maxSpeedMhz) > 1)
                                 rows.Add(("Fréquence CPU (instantanée)", $"{currentSpeedMhz / 1000:F2} GHz"));
                         }
-                        cpuUsage = firstCpu.TryGetProperty("currentLoad", out var cl) ? cl.GetDouble() : -1;
+                        cpuUsage = firstCpu.Value.TryGetProperty("currentLoad", out var cl) ? cl.GetDouble() : -1;
                     }
                 }
                 if (cpuUsage < 0) cpuUsage = GetNestedDouble(psData.Value, "sections", "CPUInfo", "data", "LoadPercentage");
@@ -923,12 +925,15 @@ namespace PCDiagnosticPro.Services
                     {
                         foreach (var vol in volumesEl.EnumerateArray())
                         {
-                            var letter = vol.TryGetProperty("letter", out var l) ? l.GetString() ?? "?" : 
-                                         vol.TryGetProperty("DeviceID", out var l2) ? l2.GetString() ?? "?" : "?";
-                            var sizeGb = vol.TryGetProperty("totalGB", out var s) ? s.GetDouble() : 
-                                         vol.TryGetProperty("SizeGB", out var s2) ? s2.GetDouble() : 0;
-                            var freeGb = vol.TryGetProperty("freeGB", out var f) ? f.GetDouble() : 
-                                         vol.TryGetProperty("FreeSpaceGB", out var f2) ? f2.GetDouble() : 0;
+                            var letter = vol.TryGetProperty("driveLetter", out var l) ? l.GetString() ?? "?" :
+                                         vol.TryGetProperty("letter", out var l2) ? l2.GetString() ?? "?" :
+                                         vol.TryGetProperty("DeviceID", out var l3) ? l3.GetString() ?? "?" : "?";
+                            var sizeGb = vol.TryGetProperty("sizeGB", out var s) ? s.GetDouble() :
+                                         vol.TryGetProperty("totalGB", out var s2) ? s2.GetDouble() :
+                                         vol.TryGetProperty("SizeGB", out var s3) ? s3.GetDouble() : 0;
+                            var freeGb = vol.TryGetProperty("freeSpaceGB", out var f) ? f.GetDouble() :
+                                         vol.TryGetProperty("freeGB", out var f2) ? f2.GetDouble() :
+                                         vol.TryGetProperty("FreeSpaceGB", out var f3) ? f3.GetDouble() : 0;
                             var usedGb = sizeGb - freeGb;
                             // FIX: Calcul du pourcentage utilisé
                             var usedPct = sizeGb > 0 ? ((usedGb / sizeGb) * 100) : 0;
@@ -1212,6 +1217,7 @@ namespace PCDiagnosticPro.Services
                             var name = TryGetString(adapter, "name", "Description") ?? "Adaptateur";
                             string? ip = null;
                             string? gateway = null;
+                            string? dns = null;
                             if (adapter.TryGetProperty("ip", out var ipProp))
                             {
                                 if (ipProp.ValueKind == JsonValueKind.Array)
@@ -1222,6 +1228,8 @@ namespace PCDiagnosticPro.Services
                                 else if (ipProp.ValueKind == JsonValueKind.String)
                                     ip = ipProp.GetString();
                             }
+                            if (string.IsNullOrEmpty(ip))
+                                ip = TryGetString(adapter, "ipv4", "IPAddress");
                             if (adapter.TryGetProperty("gateway", out var gwProp))
                             {
                                 if (gwProp.ValueKind == JsonValueKind.Array)
@@ -1232,10 +1240,24 @@ namespace PCDiagnosticPro.Services
                                 else if (gwProp.ValueKind == JsonValueKind.String)
                                     gateway = gwProp.GetString();
                             }
+                            if (adapter.TryGetProperty("dns", out var dnsProp))
+                            {
+                                if (dnsProp.ValueKind == JsonValueKind.Array)
+                                {
+                                    dns = string.Join(", ", dnsProp.EnumerateArray()
+                                        .Select(d => d.GetString())
+                                        .Where(d => !string.IsNullOrEmpty(d)));
+                                }
+                                else if (dnsProp.ValueKind == JsonValueKind.String)
+                                {
+                                    dns = dnsProp.GetString();
+                                }
+                            }
                             
                             rows.Add(("Adaptateur actif", name));
                             if (!string.IsNullOrEmpty(ip)) rows.Add(("IP locale", ip));
                             if (!string.IsNullOrEmpty(gateway)) rows.Add(("Gateway", gateway));
+                            if (!string.IsNullOrEmpty(dns)) rows.Add(("DNS", dns));
                             break; // Premier adaptateur actif
                         }
                     }
@@ -1798,26 +1820,24 @@ namespace PCDiagnosticPro.Services
                 // FIX 8: GPU driver - plusieurs chemins
                 var gpuPaths = new[]
                 {
-                    GetNestedElement(psData.Value, "sections", "GPUInfo", "data"),
-                    GetNestedElement(psData.Value, "sections", "GPU", "data"),
-                    GetNestedElement(psData.Value, "GPUInfo"),
-                    GetNestedElement(psData.Value, "GPU")
+                    GetNestedElement(psData.Value, "sections", "GPU", "data", "gpuList"),
+                    GetNestedElement(psData.Value, "sections", "GPU", "data")
                 };
                 
                 foreach (var gpuData in gpuPaths)
                 {
                     if (gpuData.HasValue)
                     {
-                        var driver = TryGetString(gpuData.Value, "DriverVersion", "Driver", "Version");
+                        var driver = TryGetString(gpuData.Value, "driverVersion", "DriverVersion", "Driver", "Version");
                         if (!string.IsNullOrEmpty(driver))
                         {
                             rows.Add(("Pilote GPU", driver));
                             foundData = true;
                         }
-                        var gpuName = TryGetString(gpuData.Value, "Name", "GPUName", "DeviceName");
+                        var gpuName = TryGetString(gpuData.Value, "name", "Name", "GPUName", "DeviceName");
                         if (!string.IsNullOrEmpty(gpuName))
                             rows.Add(("  GPU", gpuName));
-                        var driverDate = TryGetString(gpuData.Value, "DriverDate", "Date");
+                        var driverDate = TryGetString(gpuData.Value, "driverDate", "DriverDate", "Date");
                         if (!string.IsNullOrEmpty(driverDate))
                             rows.Add(("  Date pilote", driverDate));
                         break;
@@ -3017,7 +3037,7 @@ namespace PCDiagnosticPro.Services
             var current = root;
             foreach (var key in path)
             {
-                if (!current.TryGetProperty(key, out current))
+                if (!TryGetPropertyRobust(current, out current, key))
                     return null;
             }
             return current.ValueKind == JsonValueKind.String ? current.GetString() : null;

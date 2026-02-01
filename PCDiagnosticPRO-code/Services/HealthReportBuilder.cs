@@ -580,12 +580,56 @@ namespace PCDiagnosticPro.Services
                     scoreV2 = CalculateLegacyScore(root);
                 }
             }
+            else if (root.TryGetProperty("scan_powershell", out var psRoot) &&
+                     psRoot.TryGetProperty("scoreV2", out var psScore))
+            {
+                return ParseScoreV2Element(psScore);
+            }
             else
             {
                 // Pas de scoreV2, utiliser calcul legacy
                 scoreV2 = CalculateLegacyScore(root);
             }
             
+            return scoreV2;
+        }
+
+        private static ScoreV2Data ParseScoreV2Element(JsonElement scoreElement)
+        {
+            var scoreV2 = new ScoreV2Data();
+            if (scoreElement.ValueKind != JsonValueKind.Object)
+                return scoreV2;
+
+            if (scoreElement.TryGetProperty("score", out var s)) scoreV2.Score = s.GetInt32();
+            if (scoreElement.TryGetProperty("baseScore", out var bs)) scoreV2.BaseScore = bs.GetInt32();
+            if (scoreElement.TryGetProperty("totalPenalty", out var tp)) scoreV2.TotalPenalty = tp.GetInt32();
+            if (scoreElement.TryGetProperty("grade", out var g)) scoreV2.Grade = g.GetString() ?? "N/A";
+
+            if (scoreElement.TryGetProperty("breakdown", out var bdElement))
+            {
+                var bd = new ScoreBreakdown();
+                if (bdElement.TryGetProperty("critical", out var c)) bd.Critical = c.GetInt32();
+                if (bdElement.TryGetProperty("collectorErrors", out var ce)) bd.CollectorErrors = ce.GetInt32();
+                if (bdElement.TryGetProperty("warnings", out var w)) bd.Warnings = w.GetInt32();
+                if (bdElement.TryGetProperty("timeouts", out var to)) bd.Timeouts = to.GetInt32();
+                if (bdElement.TryGetProperty("infoIssues", out var ii)) bd.InfoIssues = ii.GetInt32();
+                if (bdElement.TryGetProperty("excludedLimitations", out var el)) bd.ExcludedLimitations = el.GetInt32();
+                scoreV2.Breakdown = bd;
+            }
+
+            if (scoreElement.TryGetProperty("topPenalties", out var tpArray) && tpArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var penalty in tpArray.EnumerateArray())
+                {
+                    var p = new PenaltyInfo();
+                    if (penalty.TryGetProperty("type", out var pt)) p.Type = pt.GetString() ?? "";
+                    if (penalty.TryGetProperty("source", out var ps)) p.Source = ps.GetString() ?? "";
+                    if (penalty.TryGetProperty("penalty", out var pp)) p.Penalty = pp.GetInt32();
+                    if (penalty.TryGetProperty("msg", out var pm)) p.Message = pm.GetString() ?? "";
+                    scoreV2.TopPenalties.Add(p);
+                }
+            }
+
             return scoreV2;
         }
 
@@ -748,6 +792,8 @@ namespace PCDiagnosticPro.Services
                         section.EvidenceData = ExtractEvidenceData(domain, domainData[domain]);
                     }
                     
+                    section.DetailsRows = BuildDetailRows(section.EvidenceData);
+                    
                     // Générer le message de statut
                     section.StatusMessage = GenerateSectionMessage(section);
                     
@@ -772,6 +818,17 @@ namespace PCDiagnosticPro.Services
             }
             
             return sections;
+        }
+
+        private static List<DetailRow> BuildDetailRows(Dictionary<string, string> evidence)
+        {
+            return evidence
+                .Select(item => new DetailRow
+                {
+                    Label = item.Key,
+                    Value = item.Value
+                })
+                .ToList();
         }
 
         private static int CalculateSectionScore(HealthDomain domain, ScoreV2Data scoreV2, List<(string sectionName, JsonElement data, string status)> sectionData)

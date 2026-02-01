@@ -251,22 +251,27 @@ namespace PCDiagnosticPro.Services
                 // From MachineIdentity (handle data wrapper)
                 if (TryGetSectionData(sections, out var machineId, "MachineIdentity"))
                 {
-                    _snapshot.Machine.Hostname = GetStringValue(machineId, "ComputerName") ?? _snapshot.Machine.Hostname;
-                    _snapshot.Machine.CpuName = GetStringValue(machineId, "ProcessorName");
+                    _snapshot.Machine.Hostname = GetStringValue(machineId, "computerName") ?? GetStringValue(machineId, "ComputerName") ?? _snapshot.Machine.Hostname;
+                    _snapshot.Machine.CpuName = GetStringValue(machineId, "processorName") ?? GetStringValue(machineId, "ProcessorName");
                     
-                    if (TryGetPropertyCaseInsensitive(machineId, out var ram, "TotalRAM_GB", "TotalRamGB", "TotalRAM"))
+                    if (TryGetPropertyCaseInsensitive(machineId, out var ram, "TotalRAM_GB", "TotalRamGB", "TotalRAM", "totalRamGB"))
                         _snapshot.Machine.TotalRamGB = GetDoubleValue(ram);
+                    
+                    var uptimeDays = TryGetInt(machineId, "uptimeDays");
+                    var uptimeHours = TryGetInt(machineId, "uptimeHours");
+                    if (uptimeDays.HasValue || uptimeHours.HasValue)
+                        _snapshot.Machine.Uptime = $"{uptimeDays.GetValueOrDefault()}j {uptimeHours.GetValueOrDefault()}h";
                 }
                 
                 // From OS section (handle data wrapper)
                 if (TryGetSectionData(sections, out var os, "OS"))
                 {
-                    _snapshot.Machine.OsVersion = GetStringValue(os, "Caption") ?? GetStringValue(os, "OSName");
-                    _snapshot.Machine.OsBuild = GetStringValue(os, "BuildNumber") ?? GetStringValue(os, "Version");
-                    _snapshot.Machine.InstallDate = GetStringValue(os, "InstallDate");
-                    _snapshot.Machine.LastBootTime = GetStringValue(os, "LastBootUpTime");
-                    _snapshot.Machine.Architecture = GetStringValue(os, "OSArchitecture");
-                    _snapshot.Machine.Uptime = GetStringValue(os, "Uptime");
+                    _snapshot.Machine.OsVersion = GetStringValue(os, "caption") ?? GetStringValue(os, "Caption") ?? GetStringValue(os, "OSName");
+                    _snapshot.Machine.OsBuild = GetStringValue(os, "buildNumber") ?? GetStringValue(os, "BuildNumber") ?? GetStringValue(os, "Version");
+                    _snapshot.Machine.InstallDate = GetStringValue(os, "installDate") ?? GetStringValue(os, "InstallDate");
+                    _snapshot.Machine.LastBootTime = GetStringValue(os, "lastBootUpTime") ?? GetStringValue(os, "LastBootUpTime");
+                    _snapshot.Machine.Architecture = GetStringValue(os, "architecture") ?? GetStringValue(os, "OSArchitecture");
+                    _snapshot.Machine.Uptime = GetStringValue(os, "uptime") ?? GetStringValue(os, "Uptime") ?? _snapshot.Machine.Uptime;
                 }
                 
                 LogBuild("[AddMachineInfoFromPs] Machine info enriched from PS");
@@ -285,19 +290,26 @@ namespace PCDiagnosticPro.Services
             {
                 if (TryGetSectionData(sections, out var os, "OS"))
                 {
-                    osMetrics["caption"] = MetricFromString(os, "Caption", "PS/OS");
-                    osMetrics["version"] = MetricFromString(os, "Version", "PS/OS");
-                    osMetrics["buildNumber"] = MetricFromString(os, "BuildNumber", "PS/OS");
-                    osMetrics["installDate"] = MetricFromString(os, "InstallDate", "PS/OS");
-                    osMetrics["lastBootTime"] = MetricFromString(os, "LastBootUpTime", "PS/OS");
-                    osMetrics["uptime"] = MetricFromString(os, "Uptime", "PS/OS");
-                    osMetrics["architecture"] = MetricFromString(os, "OSArchitecture", "PS/OS");
+                    osMetrics["caption"] = MetricFromStringAny(os, "PS/OS", "caption", "Caption", "osCaption");
+                    osMetrics["version"] = MetricFromStringAny(os, "PS/OS", "version", "Version", "displayVersion");
+                    osMetrics["buildNumber"] = MetricFromStringAny(os, "PS/OS", "buildNumber", "BuildNumber", "osBuild");
+                    osMetrics["installDate"] = MetricFromStringAny(os, "PS/OS", "installDate", "InstallDate");
+                    osMetrics["lastBootTime"] = MetricFromStringAny(os, "PS/OS", "lastBootUpTime", "LastBootUpTime");
+                    osMetrics["uptime"] = MetricFromStringAny(os, "PS/OS", "uptime", "Uptime");
+                    osMetrics["architecture"] = MetricFromStringAny(os, "PS/OS", "architecture", "OSArchitecture");
+                }
+                
+                if (TryGetSectionData(sections, out var machine, "MachineIdentity"))
+                {
+                    osMetrics["caption"] = MergeMetric(osMetrics, "caption", MetricFromStringAny(machine, "PS/MachineIdentity", "osCaption"));
+                    osMetrics["buildNumber"] = MergeMetric(osMetrics, "buildNumber", MetricFromStringAny(machine, "PS/MachineIdentity", "osBuild"));
+                    osMetrics["lastBootTime"] = MergeMetric(osMetrics, "lastBootTime", MetricFromStringAny(machine, "PS/MachineIdentity", "lastBoot"));
                 }
                 
                 if (TryGetSectionData(sections, out var integrity, "SystemIntegrity"))
                 {
-                    osMetrics["sfcStatus"] = MetricFromString(integrity, "SfcStatus", "PS/SystemIntegrity");
-                    osMetrics["dismHealth"] = MetricFromString(integrity, "DismHealth", "PS/SystemIntegrity");
+                    osMetrics["sfcStatus"] = MetricFromStringAny(integrity, "PS/SystemIntegrity", "sfcStatus", "SfcStatus");
+                    osMetrics["dismHealth"] = MetricFromStringAny(integrity, "PS/SystemIntegrity", "dismHealth", "DismHealth");
                 }
                 
                 if (osMetrics.Count > 0)
@@ -320,13 +332,13 @@ namespace PCDiagnosticPro.Services
             {
                 if (TryGetSectionData(sections, out var mem, "Memory", "MemoryInfo"))
                 {
-                    memMetrics["totalGB"] = MetricFromNumber(mem, "TotalMemoryGB", "GB", "PS/Memory");
-                    memMetrics["availableGB"] = MetricFromNumber(mem, "AvailableMemoryGB", "GB", "PS/Memory");
-                    memMetrics["usedPercent"] = MetricFromNumber(mem, "UsedMemoryPercent", "%", "PS/Memory");
-                    memMetrics["freePercent"] = MetricFromNumber(mem, "FreeMemoryPercent", "%", "PS/Memory");
-                    memMetrics["commitTotalGB"] = MetricFromNumber(mem, "CommitTotalGB", "GB", "PS/Memory");
-                    memMetrics["commitUsedGB"] = MetricFromNumber(mem, "CommitUsedGB", "GB", "PS/Memory");
-                    memMetrics["pageFileUsagePercent"] = MetricFromNumber(mem, "PageFileUsagePercent", "%", "PS/Memory");
+                    memMetrics["totalGB"] = MetricFromNumberAny(mem, "GB", "PS/Memory", "totalGB", "TotalMemoryGB", "TotalPhysicalMemoryGB");
+                    memMetrics["availableGB"] = MetricFromNumberAny(mem, "GB", "PS/Memory", "availableGB", "freeGB", "AvailableMemoryGB");
+                    memMetrics["usedPercent"] = MetricFromNumberAny(mem, "%", "PS/Memory", "usedPercent", "UsedMemoryPercent");
+                    memMetrics["freePercent"] = MetricFromNumberAny(mem, "%", "PS/Memory", "freePercent", "FreeMemoryPercent");
+                    memMetrics["commitTotalGB"] = MetricFromNumberAny(mem, "GB", "PS/Memory", "commitTotalGB", "CommitTotalGB", "commitLimitGB");
+                    memMetrics["commitUsedGB"] = MetricFromNumberAny(mem, "GB", "PS/Memory", "commitUsedGB", "CommitUsedGB", "virtualUsedGB");
+                    memMetrics["pageFileUsagePercent"] = MetricFromNumberAny(mem, "%", "PS/Memory", "pageFileUsagePercent", "PageFileUsagePercent");
                 }
                 
                 if (memMetrics.Count > 0)
@@ -350,7 +362,7 @@ namespace PCDiagnosticPro.Services
                 if (TryGetSectionData(sections, out var net, "Network"))
                 {
                     // Adapters info - handle both array and object
-                    if (net.TryGetProperty("Adapters", out var adapters))
+                    if (TryGetPropertyCaseInsensitive(net, out var adapters, "Adapters", "adapters"))
                     {
                         int adapterCount = 0;
                         if (adapters.ValueKind == JsonValueKind.Array)
@@ -359,10 +371,29 @@ namespace PCDiagnosticPro.Services
                             adapterCount = 1;
                         netMetrics["adapterCount"] = MetricFactory.CreateAvailable(adapterCount, "count", "PS/Network", 100);
                     }
+                    else
+                    {
+                        var adapterCount = TryGetInt(net, "adapterCount");
+                        if (adapterCount.HasValue)
+                            netMetrics["adapterCount"] = MetricFactory.CreateAvailable(adapterCount.Value, "count", "PS/Network", 100);
+                    }
                     
-                    netMetrics["defaultGateway"] = MetricFromString(net, "DefaultGateway", "PS/Network");
-                    netMetrics["dnsServers"] = MetricFromString(net, "DnsServers", "PS/Network");
-                    netMetrics["publicIP"] = MetricFromString(net, "PublicIP", "PS/Network");
+                    netMetrics["defaultGateway"] = MetricFromStringAny(net, "PS/Network", "DefaultGateway", "defaultGateway");
+                    netMetrics["dnsServers"] = MetricFromStringAny(net, "PS/Network", "DnsServers", "dnsServers");
+                    netMetrics["publicIP"] = MetricFromStringAny(net, "PS/Network", "PublicIP", "publicIP");
+                    
+                    if (TryGetPropertyCaseInsensitive(net, out var firstAdapter, "adapters") &&
+                        firstAdapter.ValueKind == JsonValueKind.Array)
+                    {
+                        var adapter = firstAdapter.EnumerateArray().FirstOrDefault();
+                        if (adapter.ValueKind == JsonValueKind.Object)
+                        {
+                            netMetrics["defaultGateway"] = MergeMetric(netMetrics, "defaultGateway",
+                                MetricFromStringAny(adapter, "PS/Network", "gateway"));
+                            netMetrics["dnsServers"] = MergeMetric(netMetrics, "dnsServers",
+                                MetricFromStringAny(adapter, "PS/Network", "dns"));
+                        }
+                    }
                 }
                 
                 if (TryGetSectionData(sections, out var latency, "NetworkLatency"))
@@ -438,12 +469,16 @@ namespace PCDiagnosticPro.Services
             {
                 if (TryGetSectionData(sections, out var sec, "Security"))
                 {
-                    secMetrics["antivirusStatus"] = MetricFromString(sec, "AntivirusStatus", "PS/Security");
-                    secMetrics["antivirusName"] = MetricFromString(sec, "AntivirusName", "PS/Security");
-                    secMetrics["firewallStatus"] = MetricFromString(sec, "FirewallStatus", "PS/Security");
-                    secMetrics["uacEnabled"] = MetricFromBool(sec, "UacEnabled", "PS/Security");
-                    secMetrics["secureBootEnabled"] = MetricFromBool(sec, "SecureBootEnabled", "PS/Security");
-                    secMetrics["bitlockerStatus"] = MetricFromString(sec, "BitlockerStatus", "PS/Security");
+                    secMetrics["antivirusStatus"] = MetricFromStringAny(sec, "PS/Security", "AntivirusStatus", "antivirusStatus", "defenderEnabled");
+                    secMetrics["antivirusName"] = MetricFromStringAny(sec, "PS/Security", "AntivirusName", "antivirusName");
+                    if (TryGetPropertyCaseInsensitive(sec, out var avProducts, "antivirusProducts"))
+                    {
+                        secMetrics["antivirusName"] = MetricFactory.CreateAvailable(avProducts.ToString(), "", "PS/Security", 100);
+                    }
+                    secMetrics["firewallStatus"] = MetricFromStringAny(sec, "PS/Security", "FirewallStatus", "firewall");
+                    secMetrics["uacEnabled"] = MetricFromBoolAny(sec, "PS/Security", "UacEnabled", "uacEnabled");
+                    secMetrics["secureBootEnabled"] = MetricFromBoolAny(sec, "PS/Security", "SecureBootEnabled", "secureBoot");
+                    secMetrics["bitlockerStatus"] = MetricFromStringAny(sec, "PS/Security", "BitlockerStatus", "bitlockerEnabled", "bitLocker");
                 }
                 
                 if (secMetrics.Count > 0)
@@ -755,9 +790,10 @@ namespace PCDiagnosticPro.Services
                 // Event Logs
                 if (TryGetSectionData(sections, out var events, "EventLogs", "EventLogInfo"))
                 {
-                    stabMetrics["criticalEvents24h"] = MetricFromNumber(events, "Critical24h", "count", "PS/EventLogs");
-                    stabMetrics["errorEvents24h"] = MetricFromNumber(events, "Error24h", "count", "PS/EventLogs");
-                    stabMetrics["warningEvents24h"] = MetricFromNumber(events, "Warning24h", "count", "PS/EventLogs");
+                    stabMetrics["criticalEvents24h"] = MetricFromNumberAny(events, "count", "PS/EventLogs", "Critical24h", "critical24h");
+                    stabMetrics["errorEvents24h"] = MetricFromNumberAny(events, "count", "PS/EventLogs", "Error24h", "error24h");
+                    stabMetrics["warningEvents24h"] = MetricFromNumberAny(events, "count", "PS/EventLogs", "Warning24h", "warning24h");
+                    stabMetrics["bsodCount"] = MetricFromNumberAny(events, "count", "PS/EventLogs", "bsodCount");
                     
                     if (TryGetPropertyCaseInsensitive(events, out var summary, "Summary"))
                     {
@@ -769,16 +805,16 @@ namespace PCDiagnosticPro.Services
                 // Reliability History
                 if (TryGetSectionData(sections, out var reliability, "ReliabilityHistory"))
                 {
-                    stabMetrics["reliabilityIndex"] = MetricFromNumber(reliability, "ReliabilityIndex", "", "PS/ReliabilityHistory");
-                    stabMetrics["appFailures30d"] = MetricFromNumber(reliability, "AppFailures30d", "count", "PS/ReliabilityHistory");
-                    stabMetrics["hwFailures30d"] = MetricFromNumber(reliability, "HwFailures30d", "count", "PS/ReliabilityHistory");
+                    stabMetrics["reliabilityIndex"] = MetricFromNumberAny(reliability, "", "PS/ReliabilityHistory", "ReliabilityIndex", "reliabilityIndex");
+                    stabMetrics["appFailures30d"] = MetricFromNumberAny(reliability, "count", "PS/ReliabilityHistory", "AppFailures30d", "appCrashes");
+                    stabMetrics["hwFailures30d"] = MetricFromNumberAny(reliability, "count", "PS/ReliabilityHistory", "HwFailures30d");
                 }
                 
                 // Minidump Analysis
                 if (TryGetSectionData(sections, out var minidump, "MinidumpAnalysis"))
                 {
-                    stabMetrics["minidumpCount"] = MetricFromNumber(minidump, "Count", "count", "PS/MinidumpAnalysis");
-                    stabMetrics["lastBsodDate"] = MetricFromString(minidump, "LastBsod", "PS/MinidumpAnalysis");
+                    stabMetrics["minidumpCount"] = MetricFromNumberAny(minidump, "count", "PS/MinidumpAnalysis", "Count", "minidumpCount");
+                    stabMetrics["lastBsodDate"] = MetricFromStringAny(minidump, "PS/MinidumpAnalysis", "LastBsod", "lastBsod");
                 }
                 
                 if (stabMetrics.Count > 0)
@@ -839,14 +875,14 @@ namespace PCDiagnosticPro.Services
                 if (TryGetSectionData(sections, out var storage, "Storage"))
                 {
                     // Disk space info
-                    if (storage.TryGetProperty("Drives", out var drives) && drives.ValueKind == JsonValueKind.Array)
+                    if (TryGetPropertyCaseInsensitive(storage, out var drives, "Drives", "volumes") && drives.ValueKind == JsonValueKind.Array)
                     {
                         int idx = 0;
                         foreach (var drive in drives.EnumerateArray())
                         {
-                            storageMetrics[$"drive_{idx}_totalGB"] = MetricFromNumber(drive, "TotalSizeGB", "GB", "PS/Storage");
-                            storageMetrics[$"drive_{idx}_freeGB"] = MetricFromNumber(drive, "FreeSpaceGB", "GB", "PS/Storage");
-                            storageMetrics[$"drive_{idx}_usedPercent"] = MetricFromNumber(drive, "UsedPercent", "%", "PS/Storage");
+                            storageMetrics[$"drive_{idx}_totalGB"] = MetricFromNumberAny(drive, "GB", "PS/Storage", "TotalSizeGB", "sizeGB");
+                            storageMetrics[$"drive_{idx}_freeGB"] = MetricFromNumberAny(drive, "GB", "PS/Storage", "FreeSpaceGB", "freeSpaceGB");
+                            storageMetrics[$"drive_{idx}_usedPercent"] = MetricFromNumberAny(drive, "%", "PS/Storage", "UsedPercent", "usedPercent");
                             idx++;
                         }
                     }
@@ -1075,7 +1111,7 @@ namespace PCDiagnosticPro.Services
         
         private static string? GetStringValue(JsonElement element, string propertyName)
         {
-            if (element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String)
+            if (TryGetPropertyCaseInsensitive(element, out var prop, propertyName) && prop.ValueKind == JsonValueKind.String)
                 return prop.GetString();
             return null;
         }
@@ -1204,7 +1240,7 @@ namespace PCDiagnosticPro.Services
         
         private static NormalizedMetric MetricFromString(JsonElement parent, string prop, string source)
         {
-            if (parent.TryGetProperty(prop, out var val))
+            if (TryGetPropertyCaseInsensitive(parent, out var val, prop))
             {
                 if (val.ValueKind == JsonValueKind.String)
                     return MetricFactory.CreateAvailable(val.GetString() ?? "", "", source, 100);
@@ -1216,7 +1252,7 @@ namespace PCDiagnosticPro.Services
         
         private static NormalizedMetric MetricFromNumber(JsonElement parent, string prop, string unit, string source)
         {
-            if (parent.TryGetProperty(prop, out var val))
+            if (TryGetPropertyCaseInsensitive(parent, out var val, prop))
             {
                 if (val.ValueKind == JsonValueKind.Number)
                     return MetricFactory.CreateAvailable(Math.Round(val.GetDouble(), 2), unit, source, 100);
@@ -1228,12 +1264,52 @@ namespace PCDiagnosticPro.Services
         
         private static NormalizedMetric MetricFromBool(JsonElement parent, string prop, string source)
         {
-            if (parent.TryGetProperty(prop, out var val))
+            if (TryGetPropertyCaseInsensitive(parent, out var val, prop))
             {
                 if (val.ValueKind == JsonValueKind.True || val.ValueKind == JsonValueKind.False)
                     return MetricFactory.CreateAvailable(val.GetBoolean(), "bool", source, 100);
             }
             return MetricFactory.CreateUnavailable("bool", source, "property_not_found");
+        }
+
+        private static NormalizedMetric MetricFromStringAny(JsonElement parent, string source, params string[] props)
+        {
+            foreach (var prop in props)
+            {
+                var metric = MetricFromString(parent, prop, source);
+                if (metric.Available)
+                    return metric;
+            }
+            return MetricFactory.CreateUnavailable("", source, "property_not_found");
+        }
+
+        private static NormalizedMetric MetricFromNumberAny(JsonElement parent, string unit, string source, params string[] props)
+        {
+            foreach (var prop in props)
+            {
+                var metric = MetricFromNumber(parent, prop, unit, source);
+                if (metric.Available)
+                    return metric;
+            }
+            return MetricFactory.CreateUnavailable(unit, source, "property_not_found");
+        }
+
+        private static NormalizedMetric MetricFromBoolAny(JsonElement parent, string source, params string[] props)
+        {
+            foreach (var prop in props)
+            {
+                var metric = MetricFromBool(parent, prop, source);
+                if (metric.Available)
+                    return metric;
+            }
+            return MetricFactory.CreateUnavailable("bool", source, "property_not_found");
+        }
+
+        private static NormalizedMetric MergeMetric(Dictionary<string, NormalizedMetric> metrics, string key, NormalizedMetric candidate)
+        {
+            if (metrics.TryGetValue(key, out var existing) && existing.Available)
+                return existing;
+            return candidate;
         }
         
         #endregion

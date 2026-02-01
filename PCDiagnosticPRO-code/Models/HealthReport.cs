@@ -185,6 +185,9 @@ namespace PCDiagnosticPro.Models
         
         /// <summary>Données utilisées pour calculer le score</summary>
         public Dictionary<string, string> EvidenceData { get; set; } = new();
+
+        /// <summary>Détails UI (label/valeur) pour affichage</summary>
+        public List<DetailRow> DetailsRows { get; set; } = new();
         
         /// <summary>Recommandations spécifiques à cette section</summary>
         public List<string> SectionRecommendations { get; set; } = new();

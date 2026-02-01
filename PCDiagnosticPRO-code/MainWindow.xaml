@@ -993,7 +993,7 @@
                                                                 <!-- Données utilisées -->
                                                                 <TextBlock Text="📊 Données analysées" FontWeight="SemiBold" FontSize="11"
                                                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
-                                                                <ItemsControl ItemsSource="{Binding EvidenceData}">
+                                                                <ItemsControl ItemsSource="{Binding DetailsRows}">
                                                                     <ItemsControl.ItemTemplate>
                                                                         <DataTemplate>
                                                                             <Grid Margin="0,2">
@@ -1001,7 +1001,7 @@
                                                                                     <ColumnDefinition Width="130"/>
                                                                                     <ColumnDefinition Width="*"/>
                                                                                 </Grid.ColumnDefinitions>
-                                                                                <TextBox Grid.Column="0" Text="{Binding Key, Mode=OneWay}" 
+                                                                                <TextBox Grid.Column="0" Text="{Binding Label, Mode=OneWay}" 
                                                                                          Style="{StaticResource SelectableTextSecondaryStyle}"/>
                                                                                 <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" 
                                                                                          Style="{StaticResource SelectableTextStyle}"/>

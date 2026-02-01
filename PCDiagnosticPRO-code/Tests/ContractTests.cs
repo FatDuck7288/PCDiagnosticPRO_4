@@ -44,6 +44,13 @@ namespace PCDiagnosticPro.Tests
             Test_Unavailable_Metric_Has_Reason();
             Test_Unavailable_Metric_Has_Zero_Confidence();
 
+            // 7.5 UI coverage tests
+            Test_RamRow_Has_Minimum_Details();
+            Test_StorageRow_Contains_Partitions();
+            Test_CpuRow_Has_Minimum_Details();
+            Test_GpuRow_Has_Minimum_Details();
+            Test_NetworkRow_Has_Minimum_Details();
+
             return (_successes.Count, _failures.Count, _failures.ToList());
         }
 
@@ -63,6 +70,108 @@ namespace PCDiagnosticPro.Tests
             {
                 Fail("Test_SchemaVersion_Is_2_2_0", ex.Message);
             }
+        }
+
+        #endregion
+
+        #region 7.5 UI Coverage Tests
+
+        private static void Test_RamRow_Has_Minimum_Details()
+        {
+            try
+            {
+                var root = BuildMinimalCombinedJson();
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.RAM, root, null);
+                Assert(ev.Count >= 3, "RAM row should have at least 3 details", $"Count: {ev.Count}");
+                Pass("Test_RamRow_Has_Minimum_Details");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_RamRow_Has_Minimum_Details", ex.Message);
+            }
+        }
+
+        private static void Test_StorageRow_Contains_Partitions()
+        {
+            try
+            {
+                var root = BuildMinimalCombinedJson();
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.Storage, root, null);
+                Assert(ev.ContainsKey("Partitions"), "Storage row should include partitions", "Partitions missing");
+                Pass("Test_StorageRow_Contains_Partitions");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_StorageRow_Contains_Partitions", ex.Message);
+            }
+        }
+
+        private static void Test_CpuRow_Has_Minimum_Details()
+        {
+            try
+            {
+                var root = BuildMinimalCombinedJson();
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.CPU, root, null);
+                Assert(ev.ContainsKey("Modèle"), "CPU row should include model", "Modèle missing");
+                Assert(ev.ContainsKey("Cœurs / Threads"), "CPU row should include cores/threads", "Cœurs/Threads missing");
+                Pass("Test_CpuRow_Has_Minimum_Details");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_CpuRow_Has_Minimum_Details", ex.Message);
+            }
+        }
+
+        private static void Test_GpuRow_Has_Minimum_Details()
+        {
+            try
+            {
+                var root = BuildMinimalCombinedJson();
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.GPU, root, null);
+                Assert(ev.ContainsKey("GPU"), "GPU row should include GPU name", "GPU missing");
+                Assert(ev.ContainsKey("Version pilote"), "GPU row should include driver version", "Driver version missing");
+                Pass("Test_GpuRow_Has_Minimum_Details");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_GpuRow_Has_Minimum_Details", ex.Message);
+            }
+        }
+
+        private static void Test_NetworkRow_Has_Minimum_Details()
+        {
+            try
+            {
+                var root = BuildMinimalCombinedJson();
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.Network, root, null);
+                Assert(ev.ContainsKey("Adaptateur"), "Network row should include adapter", "Adaptateur missing");
+                Assert(ev.ContainsKey("Adresse IP"), "Network row should include IP", "Adresse IP missing");
+                Pass("Test_NetworkRow_Has_Minimum_Details");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_NetworkRow_Has_Minimum_Details", ex.Message);
+            }
+        }
+
+        private static JsonElement BuildMinimalCombinedJson()
+        {
+            const string json = """
+            {
+              "scan_powershell": {
+                "sections": {
+                  "Memory": { "data": { "totalGB": 16, "freeGB": 4, "usedPercent": 75, "moduleCount": 2 } },
+                  "Storage": { "data": { "physicalDisks": [ { "model": "SSD", "sizeGB": 512 } ], "volumes": [ { "driveLetter": "C", "sizeGB": 512, "freeSpaceGB": 128 } ] } },
+                  "CPU": { "data": { "cpuCount": 1, "cpus": { "name": "Test CPU", "cores": 4, "threads": 8, "maxClockSpeed": 3200, "currentLoad": 20 } } },
+                  "GPU": { "data": { "gpuList": { "name": "Test GPU", "vendor": "NVIDIA", "driverVersion": "1.0", "driverDate": { "DateTime": "2024-01-01" } } } },
+                  "Network": { "data": { "adapters": [ { "name": "Ethernet", "ipv4": "192.168.1.2", "gateway": "192.168.1.1", "dns": [ "1.1.1.1" ], "speedMbps": 1000 } ] } }
+                }
+              }
+            }
+            """;
+
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.Clone();
         }
 
         #endregion
