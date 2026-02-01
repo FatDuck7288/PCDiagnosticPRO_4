@@ -7,9 +7,9 @@ L'analyse et l'interpretation sont effectuees par l'IA externe.
 
 METADATA
 --------------------------------------------------
-Run ID               : f8347a32-4bd4-4552-8ffc-8494d3109be9
+Run ID               : bdc26022-d9b8-40de-aba8-d592630ecdc6
 Version              : 7.0
-Date                 : 2026-01-30 20:07:12
+Date                 : 2026-01-31 21:00:03
 Machine              : PC-52391b
 Admin                : True
 Redaction            : Full
@@ -34,8 +34,8 @@ Build                    : 26200
 
 UPTIME
 --------------------------------------------------
-Dernier Boot             : 2026-01-26 21:57
-Uptime                   : 3j 22h
+Dernier Boot             : 2026-01-31 10:26
+Uptime                   : 0j 10h
 
 FABRICANT
 --------------------------------------------------
@@ -73,7 +73,7 @@ PROCESSEUR(S)
 CPU: AMD Ryzen 9 5900X 12-Core Processor            
   Cores/Threads          : 12 / 24
   Frequence Max          : 3701 MHz
-  Charge Actuelle        : 13%
+  Charge Actuelle        : 8%
 
 ====================================================================================================
 [4. MEMOIRE]
@@ -81,8 +81,8 @@ CPU: AMD Ryzen 9 5900X 12-Core Processor
 MEMOIRE PHYSIQUE (RAM)
 --------------------------------------------------
 Memoire Totale           : 95.93 GB
-Memoire Libre            : 66.05 GB
-Utilisation              : 31.1%
+Memoire Libre            : 74.31 GB
+Utilisation              : 22.5%
 
 MODULES
 --------------------------------------------------
@@ -109,9 +109,9 @@ Disque: TOSHIBA DT01ACA200
 
 VOLUMES
 --------------------------------------------------
-C: 952.65 GB | Libre: 364.95 GB (61.7% utilise)
-D: 1863.02 GB | Libre: 1095.08 GB (41.2% utilise)
-E: 1862.17 GB | Libre: 1492.68 GB (19.8% utilise)
+C: 952.65 GB | Libre: 370.33 GB (61.1% utilise)
+D: 1863.02 GB | Libre: 1094.91 GB (41.2% utilise)
+E: 1862.17 GB | Libre: 1492.69 GB (19.8% utilise)
 H: 1862.88 GB | Libre: 701.18 GB (62.4% utilise)
 
 SMART
@@ -153,7 +153,7 @@ Interface: RZ616 Wi-Fi 6E 160MHz
 
 CONNEXIONS
 --------------------------------------------------
-Total connexions: 188 | Ports en ecoute: 36
+Total connexions: 115 | Ports en ecoute: 38
 
 ====================================================================================================
 [8. SECURITE]
@@ -183,13 +183,13 @@ UAC: Active
 ====================================================================================================
 SERVICES CRITIQUES
 --------------------------------------------------
-[OK] Windows Update
+[STOP] Windows Update
 [OK] Service antivirus Microsoft Defender
 [OK] Pare-feu Windows Defender
 [OK] Journal d’événements Windows
 [OK] Services de chiffrement
 
-Total: 310 | Running: 133
+Total: 310 | Running: 130
 
 ====================================================================================================
 [10. DEMARRAGE]
@@ -217,7 +217,7 @@ VERIFICATION SANTE SYSTEME
 
 REDEMARRAGE REQUIS
 --------------------------------------------------
-[ATTENTION] Redemarrage requis: Windows Update, Composants CBS
+[OK] Aucun redemarrage en attente
 
 ====================================================================================================
 [12. JOURNAUX EVENEMENTS]
@@ -240,7 +240,7 @@ BSOD detectes: 0
 ====================================================================================================
 WINDOWS UPDATE
 --------------------------------------------------
-Mises a jour en attente  : 1
+Mises a jour en attente  : 2
 
 ====================================================================================================
 [14. AUDIO]
@@ -248,59 +248,16 @@ Mises a jour en attente  : 1
 PERIPHERIQUES AUDIO
 --------------------------------------------------
 Device: Realtek High Definition Audio - OK
-Device: Périphérique audio USB - OK
-Device: NVIDIA Virtual Audio Device (Wave Extensible) (WDM) - OK
 Device: NVIDIA High Definition Audio - OK
+Device: NVIDIA Virtual Audio Device (Wave Extensible) (WDM) - OK
+Device: Périphérique audio USB - OK
 
 ====================================================================================================
 [15. PERIPHERIQUES]
 ====================================================================================================
 PERIPHERIQUES AVEC PROBLEMES
 --------------------------------------------------
-[Unknown] Volume
-[Unknown] Dispositif de stockage de masse USB
-[Unknown] Périphérique d’entrée USB
-[Unknown] Périphérique clavier PIH
-[Unknown] Generic Monitor (LG FHD)
-[Unknown] Périphérique d’entrée USB
-[Unknown] [LG] webOS TV OLED65C1AUB
-[Unknown] Périphérique d’entrée USB
-[Unknown] Périphérique d’entrée USB
-[Unknown] SAMSUNG HD103SI USB Device
-[Unknown] Périphérique fournisseur HID
-[Unknown] Cliché instantané de volume générique
-[Unknown] Cliché instantané de volume générique
-[Unknown] Cliché instantané de volume générique
-[Unknown] Cliché instantané de volume générique
-[Unknown] My Passport
-[Unknown] DiscSoft Virtual SCSI CdRom Device
-[Unknown] Home Hub 3000
-[Unknown] Cliché instantané de volume générique
-[Unknown] Cliché instantané de volume générique
-[Unknown] Cliché instantané de volume générique
-[Unknown] Cliché instantané de volume générique
-[Unknown] Contrôleur système HID
-[Unknown] Dispositif de stockage de masse USB
-[Unknown] Périphérique fournisseur HID
-[Unknown] Generic Monitor (LG TV SSCR2)
-[Unknown] Volume
-[Unknown] WD SES Device USB Device
-[Unknown] Périphérique USB composite
-[Unknown] Périphérique de contrôle consommateur conforme aux Périphériques d'interface utilisateur (HID)
-[Unknown] Souris HID
-[Unknown] Jeux
-[Unknown] Contrôleur de jeu HID
-[Unknown] WD My Passport 2627 USB Device
-[Unknown] Périphérique fournisseur HID
-[Unknown] Périphérique fournisseur HID
-[Unknown] Volume
-[Degraded] AMDRyzenMaster Device
-[Unknown] Périphérique clavier PIH
-[Error] Périphérique USB inconnu (échec de réinitialisation de port)
-[Error] Périphérique USB inconnu (échec de réinitialisation de port)
-[Error] Périphérique USB inconnu (échec de réinitialisation de port)
-[Error] Périphérique USB inconnu (échec de réinitialisation de port)
-[Unknown] Contrôleur XBOX 360 pour Windows
+[INFO] Get-PnpDevice non disponible
 
 ====================================================================================================
 [16. APPLICATIONS]
@@ -314,7 +271,7 @@ Total: 87 applications
 ====================================================================================================
 TACHES PLANIFIEES
 --------------------------------------------------
-Total: 292 | Actives: 234
+Total: 292 | Actives: 235
 
 ====================================================================================================
 [18. PROCESSUS]
@@ -360,16 +317,16 @@ Est une VM: Non
 ====================================================================================================
 POINTS DE RESTAURATION
 --------------------------------------------------
-Points disponibles: 3
+Points disponibles: 4
 
 ====================================================================================================
 [24. FICHIERS TEMPORAIRES]
 ====================================================================================================
 FICHIERS TEMPORAIRES
 --------------------------------------------------
-Temp User : 1,81 GB
-Temp Windows : 116,84 MB
-TOTAL: 1,92 GB
+Temp User : 1,91 GB
+Temp Windows : 121,84 MB
+TOTAL: 2,03 GB
 
 ====================================================================================================
 [25. VARIABLES ENVIRONNEMENT]
@@ -431,7 +388,7 @@ Disques: 5
 ====================================================================================================
 INTEGRITE SYSTEME
 --------------------------------------------------
-[ATTENTION] Composants CBS en attente
+[OK] Aucune operation CBS en attente
 
 Commandes de verification:
   sfc /scannow
@@ -458,7 +415,7 @@ ANALYSE MINIDUMPS
 HISTORIQUE DE FIABILITE
 --------------------------------------------------
 Evenements fiabilite (30j): 20
-Crashes applications: 0
+Crashes applications: 1
 
 ====================================================================================================
 [33. COMPTEURS PERFORMANCE]
@@ -491,7 +448,7 @@ SMART DETAILLE
 Disque: 5&221baba8&0&020000_0
   Prediction defaillance : Non
   Reallocated Sectors    : 0
-  Power-On Hours         : 22918 h
+  Power-On Hours         : 22934 h
   Temperature            : 35 C
   Reallocation Events    : 0
   Pending Sectors        : 0
@@ -506,12 +463,12 @@ SIGNES DYNAMIQUES (DONNEES BRUTES)
 
 [CONFIG] Duree: 10s | Echantillons: 10
 
-CPU: moyenne 8% | max 8% | min 8% [WMI-Fallback]
-Memoire: 31.5% utilisee | 67289.96 MB libres [WMI-Fallback]
+CPU: moyenne 0% | max 0% | min 0% [WMI-Fallback]
+Memoire: 22.76% utilisee | 75868.09 MB libres [WMI-Fallback]
 Disque: utilisation 0% | file 0 [WMI-Fallback]
 Top CPU: dwm
-Top RAM: Cursor (3003.22 MB)
-Reseau: 0.21 Mbps | erreurs: 0
+Top RAM: Cursor (1388.74 MB)
+Reseau: 0.00 Mbps | erreurs: 0
 
 ====================================================================================================
 [37. ANALYSE AVANCEE]
@@ -564,8 +521,8 @@ RESUME DE COLLECTE
 METADATA
 --------------------------------------------------
 Version              : 7.0
-Run ID               : f8347a32-4bd4-4552-8ffc-8494d3109be9
-Date                 : 2026-01-30 20:08:21
+Run ID               : bdc26022-d9b8-40de-aba8-d592630ecdc6
+Date                 : 2026-01-31 21:00:56
 Admin                : True
 Redaction            : Full
 QuickScan            : False
@@ -617,7 +574,7 @@ ERREURS
 Erreurs de collecte: 1
 
 ####################################################################################################
-Duree collecte       : 69.9 secondes
-Genere le            : 2026-01-30 20:08:21
+Duree collecte       : 54 secondes
+Genere le            : 2026-01-31 21:00:56
 
-Hash (SHA256): C77059B3BFE63640E2A617A513DA3F6AC7CB7CABD2E8A15354EBCEC4640F5732
+Hash (SHA256): 1C9E109C64D07F16C2E4AD9E7A0C1ED26E7AD06CF456D8DFAD605A504F26B726

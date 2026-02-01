@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Management;
 using System.Text.Json;
 using PCDiagnosticPro.Models;
 
@@ -14,6 +15,7 @@ namespace PCDiagnosticPro.Services
     {
         /// <summary>
         /// Mapping des sections JSON vers les domaines de santé
+        /// Extended to cover all PS sections (Schema 2.1.0)
         /// </summary>
         private static readonly Dictionary<string, HealthDomain> SectionToDomain = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -21,13 +23,19 @@ namespace PCDiagnosticPro.Services
             { "OS", HealthDomain.OS },
             { "MachineIdentity", HealthDomain.OS },
             { "WindowsUpdate", HealthDomain.OS },
-            { "Security", HealthDomain.OS },
             { "SystemIntegrity", HealthDomain.OS },
+            { "UserProfiles", HealthDomain.OS },
+            { "EnvironmentVariables", HealthDomain.OS },
+            { "Virtualization", HealthDomain.OS },
+            { "Registry", HealthDomain.OS },
+            
+            // Security (new domain)
+            { "Security", HealthDomain.Security },
+            { "Certificates", HealthDomain.Security },
             
             // CPU
             { "CPU", HealthDomain.CPU },
             { "Temperatures", HealthDomain.CPU },
-            { "PerformanceCounters", HealthDomain.CPU },
             
             // GPU
             { "GPU", HealthDomain.GPU },
@@ -50,16 +58,30 @@ namespace PCDiagnosticPro.Services
             { "MinidumpAnalysis", HealthDomain.SystemStability },
             { "RestorePoints", HealthDomain.SystemStability },
             { "Services", HealthDomain.SystemStability },
-            { "Processes", HealthDomain.SystemStability },
             
             // Drivers
             { "DevicesDrivers", HealthDomain.Drivers },
             { "Audio", HealthDomain.Drivers },
-            { "Printers", HealthDomain.Drivers }
+            { "Printers", HealthDomain.Drivers },
+            
+            // Applications (new domain)
+            { "StartupPrograms", HealthDomain.Applications },
+            { "InstalledApplications", HealthDomain.Applications },
+            { "ScheduledTasks", HealthDomain.Applications },
+            
+            // Performance (new domain)
+            { "Processes", HealthDomain.Performance },
+            { "PerformanceCounters", HealthDomain.Performance },
+            { "DynamicSignals", HealthDomain.Performance },
+            { "AdvancedAnalysis", HealthDomain.Performance },
+            
+            // Power (new domain)
+            { "Battery", HealthDomain.Power },
+            { "PowerSettings", HealthDomain.Power }
         };
 
         /// <summary>
-        /// Icônes par domaine
+        /// Icônes par domaine (extended with new domains)
         /// </summary>
         private static readonly Dictionary<HealthDomain, string> DomainIcons = new()
         {
@@ -70,11 +92,15 @@ namespace PCDiagnosticPro.Services
             { HealthDomain.Storage, "💾" },
             { HealthDomain.Network, "🌐" },
             { HealthDomain.SystemStability, "🛡️" },
-            { HealthDomain.Drivers, "🔧" }
+            { HealthDomain.Drivers, "🔧" },
+            { HealthDomain.Applications, "📦" },
+            { HealthDomain.Performance, "📊" },
+            { HealthDomain.Security, "🔒" },
+            { HealthDomain.Power, "🔋" }
         };
 
         /// <summary>
-        /// Noms affichés par domaine
+        /// Noms affichés par domaine (extended with new domains)
         /// </summary>
         private static readonly Dictionary<HealthDomain, string> DomainDisplayNames = new()
         {
@@ -85,7 +111,11 @@ namespace PCDiagnosticPro.Services
             { HealthDomain.Storage, "Stockage" },
             { HealthDomain.Network, "Réseau" },
             { HealthDomain.SystemStability, "Stabilité système" },
-            { HealthDomain.Drivers, "Pilotes" }
+            { HealthDomain.Drivers, "Pilotes" },
+            { HealthDomain.Applications, "Applications" },
+            { HealthDomain.Performance, "Performance" },
+            { HealthDomain.Security, "Sécurité" },
+            { HealthDomain.Power, "Alimentation" }
         };
 
         /// <summary>
@@ -93,14 +123,18 @@ namespace PCDiagnosticPro.Services
         /// </summary>
         public static HealthReport Build(string jsonContent)
         {
-            return Build(jsonContent, null);
+            return Build(jsonContent, null, null, null);
         }
 
         /// <summary>
         /// Construit un HealthReport depuis le JSON brut du PowerShell AVEC données capteurs hardware.
         /// P0/P1: collectorErrorsLogical, missingData/topPenalties flexibles, FinalScoreCalculator, DataSanitizer.
         /// </summary>
-        public static HealthReport Build(string jsonContent, HardwareSensorsResult? sensors)
+        public static HealthReport Build(
+            string jsonContent,
+            HardwareSensorsResult? sensors,
+            DriverInventoryResult? driverInventory = null,
+            WindowsUpdateResult? updatesCsharp = null)
         {
             var report = new HealthReport();
             
@@ -130,8 +164,14 @@ namespace PCDiagnosticPro.Services
                 
                 App.LogMessage($"COLLECTOR_ERRORS_LOGICAL={report.CollectorErrorsLogical} (from errors[]={report.Errors.Count})");
                 
-                // 4. Construire les sections par domaine (ScoreV2 lu uniquement pour structure, pas source de vérité)
-                report.Sections = BuildHealthSections(root, report.ScoreV2);
+                // 4. Construire les sections par domaine avec extraction complète (PS + C# sensors + diagnostics)
+                report.Sections = BuildHealthSections(root, report.ScoreV2, sensors);
+                
+                // 4.1 Injecter les données C# pour Drivers / Updates si disponibles
+                if (driverInventory != null)
+                    InjectDriverInventory(report, driverInventory);
+                if (updatesCsharp != null)
+                    InjectUpdatesCsharp(report, updatesCsharp);
                 
                 // 5. INJECTER LES DONNÉES CAPTEURS HARDWARE (déjà sanitized par Analyze)
                 if (sensors != null)
@@ -265,6 +305,71 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
+        /// Injecte l'inventaire pilotes C# dans la section Drivers (UI).
+        /// Fallback légal basé sur WMI, sans code tiers.
+        /// </summary>
+        private static void InjectDriverInventory(HealthReport report, DriverInventoryResult driverInventory)
+        {
+            if (!driverInventory.Available || driverInventory.Drivers.Count == 0) return;
+
+            var driversSection = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.Drivers);
+            if (driversSection == null) return;
+
+            driversSection.HasData = true;
+            if (driversSection.CollectionStatus == "MISSING")
+                driversSection.CollectionStatus = "C#_FALLBACK";
+
+            // Evidence data summary
+            driversSection.EvidenceData["Pilotes détectés"] = driverInventory.TotalCount.ToString();
+            if (driverInventory.UnsignedCount > 0)
+                driversSection.EvidenceData["Non signés"] = driverInventory.UnsignedCount.ToString();
+            if (driverInventory.ProblemCount > 0)
+                driversSection.EvidenceData["Périph. en erreur"] = driverInventory.ProblemCount.ToString();
+
+            var outdated = driverInventory.Drivers.Count(d => d.UpdateStatus == "Outdated");
+            if (outdated > 0)
+                driversSection.EvidenceData["Obsolètes"] = outdated.ToString();
+
+            if (driverInventory.ByClass.Count > 0)
+            {
+                var topClasses = string.Join(", ", driverInventory.ByClass.Keys.Take(5));
+                driversSection.EvidenceData["Classes"] = topClasses;
+            }
+
+            // Only override status if section was previously empty/unknown
+            if (driversSection.Score == 0 && driversSection.Severity == HealthSeverity.Unknown)
+            {
+                driversSection.Score = outdated > 0 ? 70 : 85;
+                driversSection.Severity = outdated > 0 ? HealthSeverity.Warning : HealthSeverity.Healthy;
+                driversSection.StatusMessage = outdated > 0 ? "Mises à jour recommandées" : "Pilotes détectés";
+                driversSection.DetailedExplanation = outdated > 0
+                    ? "Des mises à jour de pilotes sont disponibles via Windows Update."
+                    : "Inventaire pilotes détecté via WMI (Windows).";
+            }
+        }
+
+        /// <summary>
+        /// Injecte le statut Windows Update C# dans la section OS (UI).
+        /// </summary>
+        private static void InjectUpdatesCsharp(HealthReport report, WindowsUpdateResult updatesCsharp)
+        {
+            if (!updatesCsharp.Available) return;
+
+            var osSection = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.OS);
+            if (osSection == null) return;
+
+            osSection.HasData = true;
+
+            osSection.EvidenceData["Updates en attente"] = updatesCsharp.PendingCount.ToString();
+            osSection.EvidenceData["UpdateStatus"] = updatesCsharp.PendingCount > 0
+                ? $"Obsolète ({updatesCsharp.PendingCount})"
+                : "À jour";
+
+            if (updatesCsharp.RebootRequired.HasValue)
+                osSection.EvidenceData["Redémarrage requis"] = updatesCsharp.RebootRequired.Value ? "Oui" : "Non";
+        }
+
+        /// <summary>
         /// Construit le modèle de confiance (coverage + cohérence).
         /// ConfidenceScore pénalise l'ABSENCE de données, pas les anomalies (c'est HealthScore).
         /// </summary>
@@ -273,7 +378,7 @@ namespace PCDiagnosticPro.Services
             var model = new ConfidenceModel();
             
             // 1. Coverage des sections PS
-            int expectedSections = 8; // 8 domaines
+            int expectedSections = 12; // 12 domaines (extended with Applications, Performance, Security, Power)
             int availableSections = report.Sections.Count(s => s.HasData);
             model.SectionsCoverage = (double)availableSections / expectedSections;
             
@@ -537,7 +642,7 @@ namespace PCDiagnosticPro.Services
             return missing;
         }
 
-        private static List<HealthSection> BuildHealthSections(JsonElement root, ScoreV2Data scoreV2)
+        private static List<HealthSection> BuildHealthSections(JsonElement root, ScoreV2Data scoreV2, HardwareSensorsResult? sensors = null)
         {
             var sections = new List<HealthSection>();
             var domainData = new Dictionary<HealthDomain, List<(string sectionName, JsonElement data, string status)>>();
@@ -548,8 +653,26 @@ namespace PCDiagnosticPro.Services
                 domainData[domain] = new List<(string, JsonElement, string)>();
             }
             
-            // Parser les sections JSON
-            if (root.TryGetProperty("sections", out var sectionsElement) && sectionsElement.ValueKind == JsonValueKind.Object)
+            // Parser les sections JSON (scan_powershell.sections ou sections directement)
+            JsonElement sectionsElement = default;
+            bool hasSections = false;
+            
+            // Try scan_powershell.sections first
+            if (root.TryGetProperty("scan_powershell", out var psRoot) && 
+                psRoot.TryGetProperty("sections", out var psSections) && 
+                psSections.ValueKind == JsonValueKind.Object)
+            {
+                sectionsElement = psSections;
+                hasSections = true;
+            }
+            // Direct sections access
+            else if (root.TryGetProperty("sections", out var directSections) && directSections.ValueKind == JsonValueKind.Object)
+            {
+                sectionsElement = directSections;
+                hasSections = true;
+            }
+            
+            if (hasSections)
             {
                 foreach (var section in sectionsElement.EnumerateObject())
                 {
@@ -580,15 +703,50 @@ namespace PCDiagnosticPro.Services
                     HasData = domainData[domain].Count > 0
                 };
                 
-                if (section.HasData)
+                // FIX: Pour le domaine Drivers, utiliser les données WMI en fallback si PS est vide
+                if (domain == HealthDomain.Drivers && !section.HasData)
                 {
-                    // Calculer le score de la section depuis les pénalités associées
+                    var wmiDriverData = GetEssentialDriversFromWmiForHealth();
+                    if (wmiDriverData.Count > 0)
+                    {
+                        section.HasData = true;
+                        section.Score = 85; // Score par défaut si WMI fonctionne
+                        section.Severity = HealthSeverity.Healthy;
+                        section.CollectionStatus = "WMI_FALLBACK";
+                        section.StatusMessage = "Pilotes détectés (WMI)";
+                        section.EvidenceData = new Dictionary<string, string>
+                        {
+                            ["Source"] = "WMI Win32_PnPSignedDriver",
+                            ["Pilotes essentiels"] = wmiDriverData.Count.ToString(),
+                            ["Classes détectées"] = string.Join(", ", wmiDriverData.Select(d => d.cls).Distinct().Take(5))
+                        };
+                        section.DetailedExplanation = $"Les pilotes ont été détectés via WMI. {wmiDriverData.Count} pilotes essentiels trouvés.";
+                        section.SectionRecommendations = new List<string> { "Mettez à jour les pilotes obsolètes" };
+                        App.LogMessage($"[HealthReportBuilder] Drivers domain: WMI fallback utilisé, {wmiDriverData.Count} pilotes");
+                    }
+                }
+                
+                // Calculer le score de la section depuis les pénalités associées
+                if (section.HasData || domain == HealthDomain.Performance || domain == HealthDomain.Security)
+                {
                     section.Score = CalculateSectionScore(domain, scoreV2, domainData[domain]);
                     section.Severity = HealthReport.ScoreToSeverity(section.Score);
                     section.CollectionStatus = GetWorstStatus(domainData[domain]);
                     
-                    // Extraire les données clés pour l'affichage
-                    section.EvidenceData = ExtractEvidenceData(domain, domainData[domain]);
+                    // === NOUVEAU: Utiliser ComprehensiveEvidenceExtractor pour données complètes ===
+                    // Extrait données de: PS sections, sensors C#, diagnostic_signals, network_diagnostics, etc.
+                    var comprehensiveEvidence = ComprehensiveEvidenceExtractor.Extract(domain, root, sensors);
+                    
+                    if (comprehensiveEvidence.Count > 0)
+                    {
+                        section.EvidenceData = comprehensiveEvidence;
+                        section.HasData = true;
+                    }
+                    else if (section.EvidenceData.Count == 0)
+                    {
+                        // Fallback sur l'ancienne méthode si le nouvel extracteur n'a rien trouvé
+                        section.EvidenceData = ExtractEvidenceData(domain, domainData[domain]);
+                    }
                     
                     // Générer le message de statut
                     section.StatusMessage = GenerateSectionMessage(section);
@@ -602,7 +760,7 @@ namespace PCDiagnosticPro.Services
                     // Générer les recommandations
                     section.SectionRecommendations = GenerateSectionRecommendations(section);
                 }
-                else
+                else if (!section.HasData)
                 {
                     section.Score = 0;
                     section.Severity = HealthSeverity.Unknown;
@@ -660,28 +818,133 @@ namespace PCDiagnosticPro.Services
                         case HealthDomain.OS:
                             if (sectionName == "OS" && data.ValueKind == JsonValueKind.Object)
                             {
-                                if (data.TryGetProperty("caption", out var caption)) evidence["Version"] = caption.GetString() ?? "";
-                                if (data.TryGetProperty("architecture", out var arch)) evidence["Architecture"] = arch.GetString() ?? "";
+                                // Version (caption)
+                                if (data.TryGetProperty("caption", out var caption))
+                                {
+                                    var capStr = caption.GetString() ?? "";
+                                    if (!string.IsNullOrEmpty(capStr))
+                                        evidence["Version"] = capStr;
+                                }
+                                
+                                // Build number
+                                if (data.TryGetProperty("buildNumber", out var build))
+                                {
+                                    var buildStr = build.GetString() ?? build.ToString();
+                                    if (!string.IsNullOrEmpty(buildStr))
+                                        evidence["Build"] = buildStr;
+                                }
+                                
+                                // Architecture
+                                if (data.TryGetProperty("architecture", out var arch))
+                                {
+                                    var archStr = arch.GetString() ?? "";
+                                    if (!string.IsNullOrEmpty(archStr))
+                                        evidence["Architecture"] = archStr;
+                                }
+                                
+                                // Computer name
+                                if (data.TryGetProperty("computerName", out var compName))
+                                {
+                                    var nameStr = compName.GetString() ?? "";
+                                    if (!string.IsNullOrEmpty(nameStr))
+                                        evidence["Nom machine"] = nameStr;
+                                }
+                                
+                                // Install date
+                                if (data.TryGetProperty("installDate", out var installDate))
+                                {
+                                    var dateStr = installDate.GetString();
+                                    if (!string.IsNullOrEmpty(dateStr) && DateTime.TryParse(dateStr, out var dt))
+                                    {
+                                        evidence["Date installation"] = dt.ToString("d MMMM yyyy");
+                                    }
+                                    else if (!string.IsNullOrEmpty(dateStr))
+                                    {
+                                        evidence["Date installation"] = dateStr;
+                                    }
+                                }
+                                
+                                // Last boot time / Uptime
+                                if (data.TryGetProperty("lastBootUpTime", out var lastBoot))
+                                {
+                                    var bootStr = lastBoot.GetString();
+                                    if (!string.IsNullOrEmpty(bootStr) && DateTime.TryParse(bootStr, out var bootDt))
+                                    {
+                                        var uptime = DateTime.Now - bootDt;
+                                        var uptimeStr = uptime.TotalDays >= 1 
+                                            ? $"{(int)uptime.TotalDays}j {uptime.Hours}h {uptime.Minutes}min"
+                                            : $"{uptime.Hours}h {uptime.Minutes}min";
+                                        evidence["Uptime"] = uptimeStr;
+                                    }
+                                }
                             }
                             break;
                             
                         case HealthDomain.CPU:
                             if (sectionName == "CPU" && data.ValueKind == JsonValueKind.Object)
                             {
-                                if (data.TryGetProperty("cpuList", out var cpuList) && cpuList.ValueKind == JsonValueKind.Array)
+                                // FIX: Use correct field name 'cpus' (PS script), with 'cpuList' fallback
+                                JsonElement cpuArray = default;
+                                bool hasCpuArray = false;
+                                
+                                if (data.TryGetProperty("cpus", out var cpusEl) && cpusEl.ValueKind == JsonValueKind.Array)
                                 {
-                                    var firstCpu = cpuList.EnumerateArray().FirstOrDefault();
-                                    if (firstCpu.TryGetProperty("name", out var name)) evidence["Modèle"] = name.GetString() ?? "";
-                                    if (firstCpu.TryGetProperty("cores", out var cores)) evidence["Cœurs"] = cores.ToString();
-                                    // === P0-B: CPU LOAD depuis PowerShell ===
-                                    if (firstCpu.TryGetProperty("currentLoad", out var load))
+                                    cpuArray = cpusEl;
+                                    hasCpuArray = true;
+                                }
+                                else if (data.TryGetProperty("cpuList", out var cpuListEl) && cpuListEl.ValueKind == JsonValueKind.Array)
+                                {
+                                    cpuArray = cpuListEl;
+                                    hasCpuArray = true;
+                                }
+                                
+                                if (hasCpuArray)
+                                {
+                                    var firstCpu = cpuArray.EnumerateArray().FirstOrDefault();
+                                    if (firstCpu.ValueKind == JsonValueKind.Object)
                                     {
-                                        evidence["Charge CPU (PS)"] = $"{load.GetDouble():F0}%";
+                                        // Modèle
+                                        if (firstCpu.TryGetProperty("name", out var name))
+                                        {
+                                            var nameStr = name.GetString()?.Trim() ?? "";
+                                            if (!string.IsNullOrEmpty(nameStr))
+                                                evidence["Modèle"] = nameStr;
+                                        }
+                                        
+                                        // Cœurs
+                                        if (firstCpu.TryGetProperty("cores", out var cores))
+                                            evidence["Cœurs"] = cores.ToString();
+                                        
+                                        // Threads
+                                        if (firstCpu.TryGetProperty("threads", out var threads))
+                                            evidence["Threads"] = threads.ToString();
+                                        
+                                        // Fréquence max
+                                        if (firstCpu.TryGetProperty("maxClockSpeed", out var maxClock))
+                                        {
+                                            var mhz = maxClock.ValueKind == JsonValueKind.Number ? maxClock.GetDouble() : 0;
+                                            if (mhz > 0)
+                                                evidence["Fréquence max"] = $"{mhz:F0} MHz";
+                                        }
+                                        
+                                        // Charge actuelle (currentLoad or load)
+                                        if (firstCpu.TryGetProperty("currentLoad", out var load))
+                                        {
+                                            evidence["Charge actuelle"] = $"{load.GetDouble():F0} %";
+                                        }
+                                        else if (firstCpu.TryGetProperty("load", out var load2))
+                                        {
+                                            evidence["Charge actuelle"] = $"{load2.GetDouble():F0} %";
+                                        }
                                     }
-                                    else if (firstCpu.TryGetProperty("load", out var load2))
-                                    {
-                                        evidence["Charge CPU (PS)"] = $"{load2.GetDouble():F0}%";
-                                    }
+                                }
+                                
+                                // Nombre de CPU
+                                if (data.TryGetProperty("cpuCount", out var cpuCount))
+                                {
+                                    var count = cpuCount.ValueKind == JsonValueKind.Number ? cpuCount.GetInt32() : 0;
+                                    if (count > 0)
+                                        evidence["Nombre de CPU"] = count.ToString();
                                 }
                             }
                             break;
@@ -689,11 +952,119 @@ namespace PCDiagnosticPro.Services
                         case HealthDomain.GPU:
                             if (sectionName == "GPU" && data.ValueKind == JsonValueKind.Object)
                             {
-                                if (data.TryGetProperty("gpuList", out var gpuList) && gpuList.ValueKind == JsonValueKind.Array)
+                                // Try 'gpuList' first, then 'gpus' for compatibility
+                                JsonElement gpuArray = default;
+                                bool hasGpuArray = false;
+                                
+                                if (data.TryGetProperty("gpuList", out var gpuListEl) && gpuListEl.ValueKind == JsonValueKind.Array)
                                 {
-                                    var firstGpu = gpuList.EnumerateArray().FirstOrDefault();
-                                    if (firstGpu.TryGetProperty("name", out var name)) evidence["Modèle"] = name.GetString() ?? "";
-                                    if (firstGpu.TryGetProperty("adapterRAM_GB", out var ram)) evidence["VRAM"] = $"{ram.GetDouble():F1} GB";
+                                    gpuArray = gpuListEl;
+                                    hasGpuArray = true;
+                                }
+                                else if (data.TryGetProperty("gpus", out var gpusEl) && gpusEl.ValueKind == JsonValueKind.Array)
+                                {
+                                    gpuArray = gpusEl;
+                                    hasGpuArray = true;
+                                }
+                                
+                                if (hasGpuArray)
+                                {
+                                    var firstGpu = gpuArray.EnumerateArray().FirstOrDefault();
+                                    if (firstGpu.ValueKind == JsonValueKind.Object)
+                                    {
+                                        // Nom
+                                        if (firstGpu.TryGetProperty("name", out var name))
+                                        {
+                                            var nameStr = name.GetString()?.Trim() ?? "";
+                                            if (!string.IsNullOrEmpty(nameStr))
+                                                evidence["Nom"] = nameStr;
+                                        }
+                                        
+                                        // Fabricant (vendor)
+                                        if (firstGpu.TryGetProperty("vendor", out var vendor))
+                                        {
+                                            var vendorStr = vendor.GetString()?.Trim() ?? "";
+                                            if (!string.IsNullOrEmpty(vendorStr))
+                                                evidence["Fabricant"] = vendorStr;
+                                        }
+                                        
+                                        // Résolution
+                                        if (firstGpu.TryGetProperty("resolution", out var res))
+                                        {
+                                            var resStr = res.GetString() ?? "";
+                                            if (!string.IsNullOrEmpty(resStr))
+                                                evidence["Résolution"] = resStr;
+                                        }
+                                        
+                                        // Version pilote
+                                        if (firstGpu.TryGetProperty("driverVersion", out var driverVer))
+                                        {
+                                            var verStr = driverVer.GetString() ?? "";
+                                            if (!string.IsNullOrEmpty(verStr))
+                                                evidence["Version pilote"] = verStr;
+                                        }
+                                        
+                                        // Date pilote (nested: driverDate.DateTime or driverDate directly)
+                                        if (firstGpu.TryGetProperty("driverDate", out var driverDateEl))
+                                        {
+                                            string? dateStr = null;
+                                            if (driverDateEl.ValueKind == JsonValueKind.Object && 
+                                                driverDateEl.TryGetProperty("DateTime", out var dateTimeEl))
+                                            {
+                                                dateStr = dateTimeEl.GetString();
+                                            }
+                                            else if (driverDateEl.ValueKind == JsonValueKind.String)
+                                            {
+                                                dateStr = driverDateEl.GetString();
+                                            }
+                                            if (!string.IsNullOrEmpty(dateStr))
+                                                evidence["Date pilote"] = dateStr;
+                                        }
+                                        
+                                        // VRAM: Try vramTotalMB first, fallback to vramNote, then adapterRAM_GB
+                                        bool vramFound = false;
+                                        
+                                        if (firstGpu.TryGetProperty("vramTotalMB", out var vramMB) && 
+                                            vramMB.ValueKind == JsonValueKind.Number)
+                                        {
+                                            var mb = vramMB.GetDouble();
+                                            if (mb > 0)
+                                            {
+                                                evidence["VRAM totale"] = mb >= 1024 
+                                                    ? $"{mb / 1024:F1} GB" 
+                                                    : $"{mb:F0} MB";
+                                                vramFound = true;
+                                            }
+                                        }
+                                        
+                                        // Fallback to vramNote if vramTotalMB is null/0
+                                        if (!vramFound && firstGpu.TryGetProperty("vramNote", out var vramNote))
+                                        {
+                                            var noteStr = vramNote.GetString();
+                                            if (!string.IsNullOrEmpty(noteStr))
+                                            {
+                                                evidence["VRAM totale"] = noteStr;
+                                                vramFound = true;
+                                            }
+                                        }
+                                        
+                                        // Fallback to adapterRAM_GB (legacy field)
+                                        if (!vramFound && firstGpu.TryGetProperty("adapterRAM_GB", out var adapterRam) &&
+                                            adapterRam.ValueKind == JsonValueKind.Number)
+                                        {
+                                            var gb = adapterRam.GetDouble();
+                                            if (gb > 0)
+                                                evidence["VRAM totale"] = $"{gb:F1} GB";
+                                        }
+                                    }
+                                }
+                                
+                                // Nombre de GPU
+                                if (data.TryGetProperty("gpuCount", out var gpuCount))
+                                {
+                                    var count = gpuCount.ValueKind == JsonValueKind.Number ? gpuCount.GetInt32() : 0;
+                                    if (count > 0)
+                                        evidence["Nombre de GPU"] = count.ToString();
                                 }
                             }
                             break;
@@ -701,8 +1072,43 @@ namespace PCDiagnosticPro.Services
                         case HealthDomain.RAM:
                             if (sectionName == "Memory" && data.ValueKind == JsonValueKind.Object)
                             {
-                                if (data.TryGetProperty("totalGB", out var total)) evidence["Total"] = $"{total.GetDouble():F1} GB";
-                                if (data.TryGetProperty("availableGB", out var avail)) evidence["Disponible"] = $"{avail.GetDouble():F1} GB";
+                                double? totalGB = null;
+                                double? availableGB = null;
+                                
+                                if (data.TryGetProperty("totalGB", out var total) && total.ValueKind == JsonValueKind.Number)
+                                {
+                                    totalGB = total.GetDouble();
+                                    if (totalGB > 0)
+                                        evidence["Total"] = $"{totalGB:F1} GB";
+                                }
+                                
+                                if (data.TryGetProperty("availableGB", out var avail) && avail.ValueKind == JsonValueKind.Number)
+                                {
+                                    availableGB = avail.GetDouble();
+                                    evidence["Disponible"] = $"{availableGB:F1} GB";
+                                }
+                                
+                                // Compute and show usage percentage
+                                if (totalGB.HasValue && totalGB > 0 && availableGB.HasValue)
+                                {
+                                    var usedGB = totalGB.Value - availableGB.Value;
+                                    var usedPercent = (usedGB / totalGB.Value) * 100;
+                                    evidence["Utilisée"] = $"{usedGB:F1} GB ({usedPercent:F0} %)";
+                                }
+                                
+                                // Memory modules (slots) if available
+                                if (data.TryGetProperty("modules", out var modulesEl) && modulesEl.ValueKind == JsonValueKind.Array)
+                                {
+                                    var moduleCount = modulesEl.GetArrayLength();
+                                    if (moduleCount > 0)
+                                        evidence["Barrettes"] = moduleCount.ToString();
+                                }
+                                else if (data.TryGetProperty("moduleCount", out var modCount) && modCount.ValueKind == JsonValueKind.Number)
+                                {
+                                    var count = modCount.GetInt32();
+                                    if (count > 0)
+                                        evidence["Barrettes"] = count.ToString();
+                                }
                             }
                             break;
                             
@@ -768,7 +1174,126 @@ namespace PCDiagnosticPro.Services
                                 if (data.TryGetProperty("adapters", out var adapters) && adapters.ValueKind == JsonValueKind.Array)
                                 {
                                     var activeAdapter = adapters.EnumerateArray().FirstOrDefault();
-                                    if (activeAdapter.TryGetProperty("name", out var name)) evidence["Adaptateur"] = name.GetString() ?? "";
+                                    if (activeAdapter.ValueKind == JsonValueKind.Object)
+                                    {
+                                        // Adapter name
+                                        if (activeAdapter.TryGetProperty("name", out var name))
+                                        {
+                                            var nameStr = name.GetString() ?? "";
+                                            if (!string.IsNullOrEmpty(nameStr))
+                                                evidence["Adaptateur"] = nameStr;
+                                        }
+                                        
+                                        // IP address
+                                        if (activeAdapter.TryGetProperty("ipv4", out var ipv4))
+                                        {
+                                            var ipStr = ipv4.GetString() ?? "";
+                                            if (!string.IsNullOrEmpty(ipStr))
+                                                evidence["Adresse IP"] = ipStr;
+                                        }
+                                        
+                                        // MAC address
+                                        if (activeAdapter.TryGetProperty("macAddress", out var mac))
+                                        {
+                                            var macStr = mac.GetString() ?? "";
+                                            if (!string.IsNullOrEmpty(macStr))
+                                                evidence["Adresse MAC"] = macStr;
+                                        }
+                                        
+                                        // Connection status
+                                        if (activeAdapter.TryGetProperty("status", out var status))
+                                        {
+                                            var statusStr = status.GetString() ?? "";
+                                            if (!string.IsNullOrEmpty(statusStr))
+                                                evidence["Statut"] = statusStr;
+                                        }
+                                        
+                                        // Speed
+                                        if (activeAdapter.TryGetProperty("speed", out var speed))
+                                        {
+                                            var speedStr = speed.GetString() ?? "";
+                                            if (!string.IsNullOrEmpty(speedStr))
+                                                evidence["Vitesse"] = speedStr;
+                                        }
+                                        else if (activeAdapter.TryGetProperty("speedMbps", out var speedMbps) &&
+                                            speedMbps.ValueKind == JsonValueKind.Number)
+                                        {
+                                            var mbps = speedMbps.GetDouble();
+                                            if (mbps > 0)
+                                                evidence["Vitesse"] = $"{mbps:F0} Mbps";
+                                        }
+                                        
+                                        // Gateway
+                                        if (activeAdapter.TryGetProperty("gateway", out var gateway))
+                                        {
+                                            var gwStr = gateway.GetString() ?? "";
+                                            if (!string.IsNullOrEmpty(gwStr))
+                                                evidence["Passerelle"] = gwStr;
+                                        }
+                                        
+                                        // DNS
+                                        if (activeAdapter.TryGetProperty("dns", out var dns))
+                                        {
+                                            if (dns.ValueKind == JsonValueKind.Array)
+                                            {
+                                                var dnsServers = string.Join(", ", dns.EnumerateArray()
+                                                    .Select(d => d.GetString())
+                                                    .Where(s => !string.IsNullOrEmpty(s)));
+                                                if (!string.IsNullOrEmpty(dnsServers))
+                                                    evidence["DNS"] = dnsServers;
+                                            }
+                                            else if (dns.ValueKind == JsonValueKind.String)
+                                            {
+                                                var dnsStr = dns.GetString() ?? "";
+                                                if (!string.IsNullOrEmpty(dnsStr))
+                                                    evidence["DNS"] = dnsStr;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Total adapters count
+                                    var adapterCount = adapters.GetArrayLength();
+                                    if (adapterCount > 1)
+                                        evidence["Adaptateurs détectés"] = adapterCount.ToString();
+                                }
+                            }
+                            break;
+                            
+                        // FIX: Ajouter extraction evidence pour le domaine Drivers
+                        case HealthDomain.Drivers:
+                            if (sectionName == "DevicesDrivers" && data.ValueKind == JsonValueKind.Object)
+                            {
+                                var problemCount = data.TryGetProperty("problemDeviceCount", out var pc) ? pc.GetInt32() : 
+                                                   data.TryGetProperty("ProblemDeviceCount", out var pc2) ? pc2.GetInt32() : -1;
+                                if (problemCount >= 0)
+                                {
+                                    evidence["Périph. en erreur"] = problemCount > 0 ? $"⚠️ {problemCount}" : "0 ✅";
+                                }
+                                if (data.TryGetProperty("problemDevices", out var pd) && pd.ValueKind == JsonValueKind.Array)
+                                {
+                                    var count = pd.GetArrayLength();
+                                    if (count > 0 && problemCount < 0)
+                                    {
+                                        evidence["Périph. en erreur"] = $"⚠️ {count}";
+                                    }
+                                }
+                            }
+                            else if (sectionName == "Audio" && data.ValueKind == JsonValueKind.Object)
+                            {
+                                var deviceCount = data.TryGetProperty("deviceCount", out var dc) ? dc.GetInt32() :
+                                                  data.TryGetProperty("DeviceCount", out var dc2) ? dc2.GetInt32() : -1;
+                                if (deviceCount >= 0)
+                                {
+                                    evidence["Périph. audio"] = deviceCount.ToString();
+                                }
+                            }
+                            else if (sectionName == "Printers" && data.ValueKind == JsonValueKind.Object)
+                            {
+                                var printerCount = data.TryGetProperty("printerCount", out var prc) ? prc.GetInt32() :
+                                                   data.TryGetProperty("PrinterCount", out var prc2) ? prc2.GetInt32() : -1;
+                                if (printerCount >= 0)
+                                {
+                                    evidence["Imprimantes"] = printerCount.ToString();
                                 }
                             }
                             break;
@@ -933,6 +1458,58 @@ namespace PCDiagnosticPro.Services
             
             // Trier par priorité
             return recommendations.OrderByDescending(r => r.Priority).ToList();
+        }
+        
+        /// <summary>
+        /// FIX: Récupère les pilotes essentiels via WMI pour le domaine Drivers (fallback quand PS est vide)
+        /// </summary>
+        private static List<(string cls, string? name, string? version, string date)> GetEssentialDriversFromWmiForHealth()
+        {
+            var result = new List<(string, string?, string?, string)>();
+            var classes = new[] { "DISPLAY", "NET", "MEDIA", "SYSTEM", "HDC", "BLUETOOTH", "USB", "Sound", "Image" };
+            try
+            {
+                using var searcher = new ManagementObjectSearcher(
+                    "root\\cimv2",
+                    "SELECT DeviceClass, DeviceName, DriverVersion, DriverDate FROM Win32_PnPSignedDriver WHERE DeviceClass IS NOT NULL");
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var obj in searcher.Get().OfType<ManagementObject>())
+                {
+                    try
+                    {
+                        var devClass = obj["DeviceClass"]?.ToString() ?? "";
+                        if (!classes.Any(c => string.Equals(devClass, c, StringComparison.OrdinalIgnoreCase)))
+                            continue;
+                        var name = obj["DeviceName"]?.ToString();
+                        var version = obj["DriverVersion"]?.ToString();
+                        var dateRaw = obj["DriverDate"]?.ToString();
+                        var date = ParseWmiDateForHealth(dateRaw);
+                        var key = $"{devClass}|{name}";
+                        if (seen.Add(key) && !string.IsNullOrEmpty(name))
+                            result.Add((devClass, name, version ?? "—", date));
+                    }
+                    catch { /* Skip faulty device */ }
+                }
+                result = result.OrderBy(r => r.Item1).ThenBy(r => r.Item2).ToList();
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[HealthReportBuilder] GetEssentialDriversFromWmiForHealth WMI failed: {ex.Message}");
+            }
+            return result;
+        }
+        
+        private static string ParseWmiDateForHealth(string? wmiDate)
+        {
+            if (string.IsNullOrEmpty(wmiDate) || wmiDate.Length < 8) return "";
+            try
+            {
+                var y = wmiDate.Substring(0, 4);
+                var m = wmiDate.Substring(4, 2);
+                var d = wmiDate.Substring(6, 2);
+                return $"{y}-{m}-{d}";
+            }
+            catch { return wmiDate ?? ""; }
         }
     }
 }

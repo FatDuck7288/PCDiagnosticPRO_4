@@ -59,6 +59,12 @@ namespace PCDiagnosticPro.ViewModels
         // Résultat des diagnostics réseau complets
         private NetworkDiagnosticsResult? _lastNetworkDiagnostics;
 
+        // Résultat inventaire pilotes (C#)
+        private DriverInventoryResult? _lastDriverInventory;
+
+        // Résultat Windows Update (C#)
+        private WindowsUpdateResult? _lastWindowsUpdateResult;
+
         // Chemins relatifs
         private readonly string _baseDir = AppContext.BaseDirectory;
         private readonly string _appDataDir = Path.Combine(
@@ -653,6 +659,44 @@ namespace PCDiagnosticPro.ViewModels
         public double? NetworkLatencyMs => HealthReport?.UdisReport?.LatencyMs;
         public string NetworkSpeedTier => HealthReport?.UdisReport?.NetworkSpeedTier ?? "Non mesuré";
         public string NetworkRecommendation => HealthReport?.UdisReport?.NetworkRecommendation ?? "";
+        
+        // === PROCESS TELEMETRY — UI DISPLAY ===
+        public bool HasProcessTelemetry => _lastProcessTelemetry?.Available ?? false;
+        public int ProcessCount => _lastProcessTelemetry?.TotalProcessCount ?? 0;
+        public string TopCpuProcess => _lastProcessTelemetry?.TopByCpu?.FirstOrDefault()?.Name ?? "N/A";
+        public double TopCpuPercent => _lastProcessTelemetry?.TopByCpu?.FirstOrDefault()?.CpuPercent ?? 0;
+        public string TopMemoryProcess => _lastProcessTelemetry?.TopByMemory?.FirstOrDefault()?.Name ?? "N/A";
+        public double TopMemoryMB => _lastProcessTelemetry?.TopByMemory?.FirstOrDefault()?.WorkingSetMB ?? 0;
+        public string ProcessTelemetryDisplay => HasProcessTelemetry 
+            ? $"{ProcessCount} processus | Top CPU: {TopCpuProcess} ({TopCpuPercent:F1}%) | Top RAM: {TopMemoryProcess} ({TopMemoryMB:F0} MB)"
+            : "Données non disponibles";
+        
+        // === SENSOR BLOCKING STATUS — UI DISPLAY ===
+        public bool IsSensorBlocked => _lastSensorsResult?.BlockedBySecurity ?? false;
+        public string SensorBlockingMessage => _lastSensorsResult?.BlockingMessage ?? "";
+        public bool HasSensorBlockingMessage => !string.IsNullOrEmpty(SensorBlockingMessage);
+        
+        // === NETWORK DIAGNOSTICS — UI DISPLAY ===
+        public bool HasNetworkDiagnostics => _lastNetworkDiagnostics?.Available ?? false;
+        public double NetLatencyP50 => _lastNetworkDiagnostics?.OverallLatencyMsP50 ?? 0;
+        public double NetLatencyP95 => _lastNetworkDiagnostics?.OverallLatencyMsP95 ?? 0;
+        public double NetJitterP95 => _lastNetworkDiagnostics?.OverallJitterMsP95 ?? 0;
+        public double NetPacketLoss => _lastNetworkDiagnostics?.OverallLossPercent ?? 0;
+        public double NetDnsP95 => _lastNetworkDiagnostics?.DnsP95Ms ?? 0;
+        public string NetGateway => _lastNetworkDiagnostics?.Gateway ?? "N/A";
+        public double? NetThroughputMbps => _lastNetworkDiagnostics?.Throughput?.DownloadMbpsMedian;
+        public string NetworkDiagnosticsDisplay => HasNetworkDiagnostics
+            ? $"Latence: {NetLatencyP50:F0}ms | Jitter: {NetJitterP95:F1}ms | Perte: {NetPacketLoss:F1}% | DNS: {NetDnsP95:F0}ms"
+            : "Données non disponibles";
+        public string NetworkQualityVerdict => GetNetworkQualityVerdict();
+        
+        private string GetNetworkQualityVerdict()
+        {
+            if (!HasNetworkDiagnostics) return "Non mesuré";
+            if (NetPacketLoss > 5 || NetLatencyP95 > 200) return "⚠️ Dégradé";
+            if (NetPacketLoss > 1 || NetLatencyP95 > 100) return "⚡ Acceptable";
+            return "✅ Excellent";
+        }
 
         private bool _isSpeedTestRunning;
         public bool IsSpeedTestRunning
@@ -706,6 +750,47 @@ namespace PCDiagnosticPro.ViewModels
                     }
                 }
             });
+        }
+        
+        /// <summary>
+        /// Notify UI when process telemetry data changes
+        /// </summary>
+        private void NotifyProcessTelemetryChanged()
+        {
+            OnPropertyChanged(nameof(HasProcessTelemetry));
+            OnPropertyChanged(nameof(ProcessCount));
+            OnPropertyChanged(nameof(TopCpuProcess));
+            OnPropertyChanged(nameof(TopCpuPercent));
+            OnPropertyChanged(nameof(TopMemoryProcess));
+            OnPropertyChanged(nameof(TopMemoryMB));
+            OnPropertyChanged(nameof(ProcessTelemetryDisplay));
+        }
+        
+        /// <summary>
+        /// Notify UI when network diagnostics data changes
+        /// </summary>
+        private void NotifyNetworkDiagnosticsChanged()
+        {
+            OnPropertyChanged(nameof(HasNetworkDiagnostics));
+            OnPropertyChanged(nameof(NetLatencyP50));
+            OnPropertyChanged(nameof(NetLatencyP95));
+            OnPropertyChanged(nameof(NetJitterP95));
+            OnPropertyChanged(nameof(NetPacketLoss));
+            OnPropertyChanged(nameof(NetDnsP95));
+            OnPropertyChanged(nameof(NetGateway));
+            OnPropertyChanged(nameof(NetThroughputMbps));
+            OnPropertyChanged(nameof(NetworkDiagnosticsDisplay));
+            OnPropertyChanged(nameof(NetworkQualityVerdict));
+        }
+        
+        /// <summary>
+        /// Notify UI when sensor blocking status changes
+        /// </summary>
+        private void NotifySensorBlockingChanged()
+        {
+            OnPropertyChanged(nameof(IsSensorBlocked));
+            OnPropertyChanged(nameof(SensorBlockingMessage));
+            OnPropertyChanged(nameof(HasSensorBlockingMessage));
         }
 
         private void UpdateUdisSectionsSummary()
@@ -1358,6 +1443,15 @@ namespace PCDiagnosticPro.ViewModels
                     _lastSensorsResult = sensorsResult; // Stocker pour injection dans HealthReport
                     var (avail, total) = sensorsResult.GetAvailabilitySummary();
                     App.LogMessage($"[Sensors] Collectés: {avail}/{total} métriques disponibles");
+                    
+                    // Check for security blocking
+                    if (sensorsResult.BlockedBySecurity)
+                    {
+                        App.LogMessage($"[Sensors] ⚠️ BLOCKED BY SECURITY: {sensorsResult.BlockingMessage}");
+                    }
+                    
+                    // Notify UI of sensor blocking status
+                    NotifySensorBlockingChanged();
                 }
                 catch (Exception ex)
                 {
@@ -1405,6 +1499,9 @@ namespace PCDiagnosticPro.ViewModels
                     var processCollector = new ProcessTelemetryCollector();
                     _lastProcessTelemetry = await processCollector.CollectAsync(_scanCts.Token);
                     App.LogMessage($"[ProcessTelemetry] Collected: {_lastProcessTelemetry.TotalProcessCount} processes, available={_lastProcessTelemetry.Available}");
+                    
+                    // Notify UI of new process telemetry data
+                    NotifyProcessTelemetryChanged();
                 }
                 catch (Exception ex)
                 {
@@ -1419,6 +1516,9 @@ namespace PCDiagnosticPro.ViewModels
                     var networkCollector = new NetworkDiagnosticsCollector();
                     _lastNetworkDiagnostics = await networkCollector.CollectAsync(_scanCts.Token);
                     App.LogMessage($"[NetworkDiagnostics] Completed: latency={_lastNetworkDiagnostics.OverallLatencyMsP50}ms, loss={_lastNetworkDiagnostics.OverallLossPercent}%");
+                    
+                    // Notify UI of new network diagnostics data
+                    NotifyNetworkDiagnosticsChanged();
                 }
                 catch (Exception ex)
                 {
@@ -1427,9 +1527,40 @@ namespace PCDiagnosticPro.ViewModels
                 }
                 UpdateProgress(96, "Network diagnostics completed");
 
+                // === PHASE 2F: Inventaire pilotes (C#) ===
+                try
+                {
+                    UpdateProgress(96, "Collecting driver inventory...");
+                    var driverCollector = new DriverInventoryCollector();
+                    _lastDriverInventory = await driverCollector.CollectAsync(
+                        _scanCts.Token,
+                        includeUpdateLookup: true,
+                        onlineUpdateSearch: _allowExternalNetworkTests);
+                    App.LogMessage($"[DriverInventory] Completed: total={_lastDriverInventory.TotalCount}, available={_lastDriverInventory.Available}");
+                }
+                catch (Exception ex)
+                {
+                    _lastDriverInventory = null;
+                    App.LogMessage($"[DriverInventory] Erreur: {ex.Message}");
+                }
+
+                // === PHASE 2G: Windows Update (C#) ===
+                try
+                {
+                    UpdateProgress(97, "Collecting Windows Update status...");
+                    var updateCollector = new WindowsUpdateCollector();
+                    _lastWindowsUpdateResult = await updateCollector.CollectAsync(_scanCts.Token, _allowExternalNetworkTests);
+                    App.LogMessage($"[WindowsUpdate] Completed: pending={_lastWindowsUpdateResult.PendingCount}, available={_lastWindowsUpdateResult.Available}");
+                }
+                catch (Exception ex)
+                {
+                    _lastWindowsUpdateResult = null;
+                    App.LogMessage($"[WindowsUpdate] Erreur: {ex.Message}");
+                }
+
                 _resultJsonPath = await ResolveResultJsonPathAsync(outputDir, _scanStartTime, _scanCts.Token);
                 await WriteCombinedResultAsync(outputDir, sensorsResult);
-                UpdateProgress(97, "JSON resolved");
+                UpdateProgress(98, "JSON resolved");
 
                 // Lire le JSON
                 if (!string.IsNullOrWhiteSpace(_resultJsonPath) && File.Exists(_resultJsonPath))
@@ -1725,7 +1856,11 @@ namespace PCDiagnosticPro.ViewModels
                 try
                 {
                     // Passer les capteurs hardware pour injection dans EvidenceData
-                    var healthReport = HealthReportBuilder.Build(jsonContent, _lastSensorsResult);
+                    var healthReport = HealthReportBuilder.Build(
+                        jsonContent,
+                        _lastSensorsResult,
+                        _lastDriverInventory,
+                        _lastWindowsUpdateResult);
                     HealthReport = healthReport;
                     App.LogMessage($"[HealthReport] Construit: Score={healthReport.GlobalScore}, Grade={healthReport.Grade}, " +
                         $"Sections={healthReport.Sections.Count}, Confiance={healthReport.ConfidenceModel.ConfidenceLevel}");
@@ -2021,6 +2156,7 @@ namespace PCDiagnosticPro.ViewModels
                     .AddCpuMetrics(sensorsResult)
                     .AddGpuMetrics(sensorsResult)
                     .AddStorageMetrics(sensorsResult)
+                    .AddPowerShellData(doc.RootElement)
                     .AddDiagnosticSignals(_lastDiagnosticSignals?.Signals);
                 
                 var diagnosticSnapshot = snapshotBuilder.Build();
@@ -2042,7 +2178,9 @@ namespace PCDiagnosticPro.ViewModels
                     DiagnosticSignals = _lastDiagnosticSignals?.Signals,
                     ProcessTelemetry = _lastProcessTelemetry,
                     NetworkDiagnostics = _lastNetworkDiagnostics,
-                    CollectorDiagnostics = collectorDiagnostics
+                    CollectorDiagnostics = collectorDiagnostics,
+                    DriverInventory = _lastDriverInventory,
+                    UpdatesCsharp = _lastWindowsUpdateResult
                 };
                 
                 // === EXTRACTION DES NŒUDS EXPLICITES (missingData, metadata, findings, errors, sections, paths) ===
@@ -2068,24 +2206,21 @@ namespace PCDiagnosticPro.ViewModels
         /// Extrait les nœuds explicites du JSON PS vers le CombinedScanResult
         /// pour garantir que missingData, metadata, findings, errors, sections, paths
         /// sont TOUJOURS présents dans scan_result_combined.json
+        /// ROBUST: Handles both Array and Object ValueKind for all nodes
         /// </summary>
         private void ExtractExplicitNodes(JsonElement psRoot, CombinedScanResult combined, string outputDir)
         {
             try
             {
-                // 1. Extract missingData
-                if (psRoot.TryGetProperty("missingData", out var missingDataEl) && 
-                    missingDataEl.ValueKind == JsonValueKind.Array)
+                // 1. Extract missingData (ROBUST: Array OR Object)
+                if (psRoot.TryGetProperty("missingData", out var missingDataEl))
                 {
-                    foreach (var item in missingDataEl.EnumerateArray())
-                    {
-                        if (item.ValueKind == JsonValueKind.String)
-                            combined.MissingData.Add(item.GetString() ?? "");
-                    }
+                    ExtractMissingData(missingDataEl, combined);
                 }
                 
-                // 2. Extract metadata
-                if (psRoot.TryGetProperty("metadata", out var metaEl))
+                // 2. Extract metadata (ROBUST: Object check)
+                if (psRoot.TryGetProperty("metadata", out var metaEl) && 
+                    metaEl.ValueKind == JsonValueKind.Object)
                 {
                     combined.Metadata.Version = metaEl.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "";
                     combined.Metadata.RunId = metaEl.TryGetProperty("runId", out var r) ? r.GetString() ?? "" : "";
@@ -2095,47 +2230,22 @@ namespace PCDiagnosticPro.ViewModels
                     combined.Metadata.DurationSeconds = metaEl.TryGetProperty("durationSeconds", out var d) ? d.GetDouble() : 0;
                 }
                 
-                // 3. Extract findings
-                if (psRoot.TryGetProperty("findings", out var findingsEl) && 
-                    findingsEl.ValueKind == JsonValueKind.Array)
+                // 3. Extract findings (ROBUST: Array OR Object)
+                if (psRoot.TryGetProperty("findings", out var findingsEl))
                 {
-                    foreach (var f in findingsEl.EnumerateArray())
-                    {
-                        combined.Findings.Add(new FindingExtract
-                        {
-                            Type = f.TryGetProperty("type", out var ft) ? ft.GetString() ?? "" : "",
-                            Severity = f.TryGetProperty("severity", out var fs) ? fs.GetString() ?? "" : "",
-                            Message = f.TryGetProperty("message", out var fm) ? fm.GetString() ?? "" :
-                                     f.TryGetProperty("msg", out var fmsg) ? fmsg.GetString() ?? "" : "",
-                            Source = f.TryGetProperty("source", out var src) ? src.GetString() ?? "" : ""
-                        });
-                    }
+                    ExtractFindings(findingsEl, combined);
                 }
                 
-                // 4. Extract errors
-                if (psRoot.TryGetProperty("errors", out var errorsEl) && 
-                    errorsEl.ValueKind == JsonValueKind.Array)
+                // 4. Extract errors (ROBUST: Array OR Object)
+                if (psRoot.TryGetProperty("errors", out var errorsEl))
                 {
-                    foreach (var e in errorsEl.EnumerateArray())
-                    {
-                        combined.Errors.Add(new ErrorExtract
-                        {
-                            Code = e.TryGetProperty("code", out var ec) ? ec.GetString() ?? "" : "",
-                            Message = e.TryGetProperty("message", out var em) ? em.GetString() ?? "" :
-                                     e.TryGetProperty("msg", out var emsg) ? emsg.GetString() ?? "" : "",
-                            Section = e.TryGetProperty("section", out var es) ? es.GetString() ?? "" : ""
-                        });
-                    }
+                    ExtractErrors(errorsEl, combined);
                 }
                 
-                // 5. Extract sections (liste des clés présentes)
-                if (psRoot.TryGetProperty("sections", out var sectionsEl) && 
-                    sectionsEl.ValueKind == JsonValueKind.Object)
+                // 5. Extract sections (ROBUST: Object OR Array)
+                if (psRoot.TryGetProperty("sections", out var sectionsEl))
                 {
-                    foreach (var prop in sectionsEl.EnumerateObject())
-                    {
-                        combined.Sections.Add(prop.Name);
-                    }
+                    ExtractSections(sectionsEl, combined);
                 }
                 
                 // 6. Set paths
@@ -2143,12 +2253,265 @@ namespace PCDiagnosticPro.ViewModels
                 combined.Paths.CombinedJson = Path.Combine(outputDir, "scan_result_combined.json");
                 combined.Paths.UnifiedTxt = Path.Combine(outputDir, $"Rapport_Unifie_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
                 
+                // Log to file for debugging
+                LogExtractedNodes(combined, outputDir);
+                
                 App.LogMessage($"[ExtractNodes] missingData={combined.MissingData.Count}, findings={combined.Findings.Count}, errors={combined.Errors.Count}, sections={combined.Sections.Count}");
             }
             catch (Exception ex)
             {
                 App.LogMessage($"[ExtractNodes] Erreur extraction: {ex.Message}");
             }
+        }
+        
+        /// <summary>
+        /// Extract missingData - handles both Array and Object formats
+        /// </summary>
+        private void ExtractMissingData(JsonElement element, CombinedScanResult combined)
+        {
+            try
+            {
+                if (element.ValueKind == JsonValueKind.Array)
+                {
+                    // Standard array format
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        if (item.ValueKind == JsonValueKind.String)
+                            combined.MissingData.Add(item.GetString() ?? "");
+                        else if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("name", out var name))
+                            combined.MissingData.Add(name.GetString() ?? "");
+                    }
+                }
+                else if (element.ValueKind == JsonValueKind.Object)
+                {
+                    // Object format: extract keys or values
+                    foreach (var prop in element.EnumerateObject())
+                    {
+                        // If value is a string, use it; otherwise use the key name
+                        if (prop.Value.ValueKind == JsonValueKind.String)
+                            combined.MissingData.Add(prop.Value.GetString() ?? prop.Name);
+                        else
+                            combined.MissingData.Add(prop.Name);
+                    }
+                    App.LogMessage($"[ExtractMissingData] Converted Object to Array: {combined.MissingData.Count} items");
+                }
+                else if (element.ValueKind == JsonValueKind.String)
+                {
+                    // Single string value
+                    combined.MissingData.Add(element.GetString() ?? "");
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ExtractMissingData] Error: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Extract findings - handles both Array and Object formats
+        /// </summary>
+        private void ExtractFindings(JsonElement element, CombinedScanResult combined)
+        {
+            try
+            {
+                if (element.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var f in element.EnumerateArray())
+                    {
+                        var finding = ExtractSingleFinding(f);
+                        if (finding != null) combined.Findings.Add(finding);
+                    }
+                }
+                else if (element.ValueKind == JsonValueKind.Object)
+                {
+                    // Object format: each property is a finding
+                    foreach (var prop in element.EnumerateObject())
+                    {
+                        if (prop.Value.ValueKind == JsonValueKind.Object)
+                        {
+                            var finding = ExtractSingleFinding(prop.Value);
+                            if (finding != null)
+                            {
+                                if (string.IsNullOrEmpty(finding.Source))
+                                    finding.Source = prop.Name;
+                                combined.Findings.Add(finding);
+                            }
+                        }
+                        else if (prop.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            // Nested array of findings under a key
+                            foreach (var f in prop.Value.EnumerateArray())
+                            {
+                                var finding = ExtractSingleFinding(f);
+                                if (finding != null)
+                                {
+                                    if (string.IsNullOrEmpty(finding.Source))
+                                        finding.Source = prop.Name;
+                                    combined.Findings.Add(finding);
+                                }
+                            }
+                        }
+                    }
+                    App.LogMessage($"[ExtractFindings] Converted Object to Array: {combined.Findings.Count} findings");
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ExtractFindings] Error: {ex.Message}");
+            }
+        }
+        
+        private FindingExtract? ExtractSingleFinding(JsonElement f)
+        {
+            if (f.ValueKind != JsonValueKind.Object) return null;
+            
+            return new FindingExtract
+            {
+                Type = f.TryGetProperty("type", out var ft) ? ft.GetString() ?? "" : "",
+                Severity = f.TryGetProperty("severity", out var fs) ? fs.GetString() ?? "" : "",
+                Message = f.TryGetProperty("message", out var fm) ? fm.GetString() ?? "" :
+                         f.TryGetProperty("msg", out var fmsg) ? fmsg.GetString() ?? "" : "",
+                Source = f.TryGetProperty("source", out var src) ? src.GetString() ?? "" : ""
+            };
+        }
+        
+        /// <summary>
+        /// Extract errors - handles both Array and Object formats
+        /// </summary>
+        private void ExtractErrors(JsonElement element, CombinedScanResult combined)
+        {
+            try
+            {
+                if (element.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var e in element.EnumerateArray())
+                    {
+                        var error = ExtractSingleError(e);
+                        if (error != null) combined.Errors.Add(error);
+                    }
+                }
+                else if (element.ValueKind == JsonValueKind.Object)
+                {
+                    // Object format: each property is an error or category
+                    foreach (var prop in element.EnumerateObject())
+                    {
+                        if (prop.Value.ValueKind == JsonValueKind.Object)
+                        {
+                            var error = ExtractSingleError(prop.Value);
+                            if (error != null)
+                            {
+                                if (string.IsNullOrEmpty(error.Section))
+                                    error.Section = prop.Name;
+                                combined.Errors.Add(error);
+                            }
+                        }
+                        else if (prop.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            // Nested array of errors under a key
+                            foreach (var e in prop.Value.EnumerateArray())
+                            {
+                                var error = ExtractSingleError(e);
+                                if (error != null)
+                                {
+                                    if (string.IsNullOrEmpty(error.Section))
+                                        error.Section = prop.Name;
+                                    combined.Errors.Add(error);
+                                }
+                            }
+                        }
+                        else if (prop.Value.ValueKind == JsonValueKind.String)
+                        {
+                            // Simple key-value error
+                            combined.Errors.Add(new ErrorExtract
+                            {
+                                Code = prop.Name,
+                                Message = prop.Value.GetString() ?? "",
+                                Section = ""
+                            });
+                        }
+                    }
+                    App.LogMessage($"[ExtractErrors] Converted Object to Array: {combined.Errors.Count} errors");
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ExtractErrors] Error: {ex.Message}");
+            }
+        }
+        
+        private ErrorExtract? ExtractSingleError(JsonElement e)
+        {
+            if (e.ValueKind != JsonValueKind.Object) return null;
+            
+            return new ErrorExtract
+            {
+                Code = e.TryGetProperty("code", out var ec) ? ec.GetString() ?? "" : "",
+                Message = e.TryGetProperty("message", out var em) ? em.GetString() ?? "" :
+                         e.TryGetProperty("msg", out var emsg) ? emsg.GetString() ?? "" : "",
+                Section = e.TryGetProperty("section", out var es) ? es.GetString() ?? "" : ""
+            };
+        }
+        
+        /// <summary>
+        /// Extract sections - handles both Object and Array formats
+        /// </summary>
+        private void ExtractSections(JsonElement element, CombinedScanResult combined)
+        {
+            try
+            {
+                if (element.ValueKind == JsonValueKind.Object)
+                {
+                    // Standard object format: extract keys
+                    foreach (var prop in element.EnumerateObject())
+                    {
+                        combined.Sections.Add(prop.Name);
+                    }
+                }
+                else if (element.ValueKind == JsonValueKind.Array)
+                {
+                    // Array format: extract string values or object keys
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        if (item.ValueKind == JsonValueKind.String)
+                            combined.Sections.Add(item.GetString() ?? "");
+                        else if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("name", out var name))
+                            combined.Sections.Add(name.GetString() ?? "");
+                    }
+                    App.LogMessage($"[ExtractSections] Converted Array to section list: {combined.Sections.Count} sections");
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ExtractSections] Error: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Log extracted nodes to %TEMP% for debugging
+        /// </summary>
+        private void LogExtractedNodes(CombinedScanResult combined, string outputDir)
+        {
+            try
+            {
+                var logPath = Path.Combine(Path.GetTempPath(), "PCDiagnosticPro_ExtractNodes.log");
+                var logContent = $"=== ExtractExplicitNodes Log - {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===\n" +
+                                 $"Output Dir: {outputDir}\n" +
+                                 $"MissingData Count: {combined.MissingData.Count}\n" +
+                                 $"Findings Count: {combined.Findings.Count}\n" +
+                                 $"Errors Count: {combined.Errors.Count}\n" +
+                                 $"Sections Count: {combined.Sections.Count}\n" +
+                                 $"Sections: {string.Join(", ", combined.Sections)}\n" +
+                                 $"MissingData: {string.Join(", ", combined.MissingData)}\n";
+                
+                if (combined.Findings.Count > 0)
+                    logContent += $"First Finding: Type={combined.Findings[0].Type}, Severity={combined.Findings[0].Severity}\n";
+                    
+                if (combined.Errors.Count > 0)
+                    logContent += $"First Error: Code={combined.Errors[0].Code}, Section={combined.Errors[0].Section}\n";
+                
+                File.AppendAllText(logPath, logContent + "\n");
+            }
+            catch { /* Ignore logging errors */ }
         }
 
         /// <summary>

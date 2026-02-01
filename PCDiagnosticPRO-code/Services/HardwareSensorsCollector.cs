@@ -18,6 +18,7 @@ namespace PCDiagnosticPro.Services
         private HardwareSensorsResult CollectInternal(CancellationToken ct)
         {
             var result = CreateDefaultResult();
+            result.CollectionExceptions = new List<string>();
             Computer computer = null;
 
             try
@@ -36,7 +37,12 @@ namespace PCDiagnosticPro.Services
             }
             catch (Exception ex)
             {
-                MarkAllUnavailable(result, string.Format("Erreur globale: {0}", ex.Message));
+                var exMsg = ex.Message;
+                result.CollectionExceptions.Add($"Global: {exMsg}");
+                MarkAllUnavailable(result, string.Format("Erreur globale: {0}", exMsg));
+                
+                // Detect Defender/WinRing0/security blocking
+                DetectSecurityBlocking(result, ex);
             }
             finally
             {
@@ -52,8 +58,128 @@ namespace PCDiagnosticPro.Services
                     }
                 }
             }
+            
+            // Post-process: check if blocking detected from individual collector errors
+            if (!result.BlockedBySecurity && result.CollectionExceptions?.Count > 0)
+            {
+                foreach (var ex in result.CollectionExceptions)
+                {
+                    if (IsSecurityBlockingError(ex))
+                    {
+                        result.BlockedBySecurity = true;
+                        result.BlockingMessage = "Capteurs bloqués par la sécurité. Exécuter en tant qu'administrateur ou ajouter une exclusion sur le dossier de l'application.";
+                        break;
+                    }
+                }
+            }
+            
+            // Log to temp for debugging
+            LogSensorCollectionStatus(result);
 
             return result;
+        }
+        
+        /// <summary>
+        /// Detect if exception indicates Defender/WinRing0/security blocking
+        /// </summary>
+        private static void DetectSecurityBlocking(HardwareSensorsResult result, Exception ex)
+        {
+            var exLower = ex.Message.ToLowerInvariant();
+            var innerEx = ex.InnerException?.Message?.ToLowerInvariant() ?? "";
+            
+            if (IsSecurityBlockingError(exLower) || IsSecurityBlockingError(innerEx))
+            {
+                result.BlockedBySecurity = true;
+                result.BlockingMessage = "Capteurs bloqués par la sécurité. Exécuter en tant qu'administrateur ou ajouter une exclusion sur le dossier de l'application.";
+                App.LogMessage($"[HardwareSensors] SECURITY BLOCKING DETECTED: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Check if error message indicates security blocking
+        /// </summary>
+        private static bool IsSecurityBlockingError(string errorMsg)
+        {
+            if (string.IsNullOrEmpty(errorMsg)) return false;
+            
+            var lower = errorMsg.ToLowerInvariant();
+            return lower.Contains("access denied") || 
+                   lower.Contains("access is denied") ||
+                   lower.Contains("defender") || 
+                   lower.Contains("antivirus") || 
+                   lower.Contains("blocked") ||
+                   lower.Contains("winring0") ||
+                   lower.Contains("ring0") ||
+                   lower.Contains("driver") && (lower.Contains("load") || lower.Contains("failed")) ||
+                   lower.Contains("security") ||
+                   lower.Contains("unauthorized") ||
+                   lower.Contains("permission") ||
+                   lower.Contains("privilege");
+        }
+        
+        /// <summary>
+        /// Log all GPU memory sensors for debugging VRAM accuracy
+        /// </summary>
+        private static void LogGpuMemorySensors(List<ISensor> sensors, double? selectedTotal, double? selectedUsed)
+        {
+            try
+            {
+                var memorySensors = sensors.Where(s => 
+                    s.Name.IndexOf("Memory", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    s.Name.IndexOf("VRAM", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    s.Name.IndexOf("D3D", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToList();
+                
+                if (memorySensors.Count > 0)
+                {
+                    var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "PCDiagnosticPro_VRAM_Debug.log");
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine($"=== GPU Memory Sensors - {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+                    sb.AppendLine($"Total sensors found: {memorySensors.Count}");
+                    sb.AppendLine();
+                    
+                    foreach (var sensor in memorySensors)
+                    {
+                        sb.AppendLine($"  Sensor: {sensor.Name}");
+                        sb.AppendLine($"    Type: {sensor.SensorType}");
+                        sb.AppendLine($"    Value: {sensor.Value?.ToString() ?? "null"} (Hardware: {sensor.Hardware?.Name ?? "unknown"})");
+                    }
+                    
+                    sb.AppendLine();
+                    sb.AppendLine($"SELECTED Values:");
+                    sb.AppendLine($"  VRAM Total: {selectedTotal?.ToString("F0") ?? "null"} MB");
+                    sb.AppendLine($"  VRAM Used:  {selectedUsed?.ToString("F0") ?? "null"} MB");
+                    sb.AppendLine();
+                    
+                    System.IO.File.AppendAllText(logPath, sb.ToString());
+                    App.LogMessage($"[GPU Memory] Found {memorySensors.Count} memory sensors. Selected: Total={selectedTotal:F0}MB, Used={selectedUsed:F0}MB");
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[GPU Memory] Logging error: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Log sensor collection status to %TEMP% for debugging
+        /// </summary>
+        private static void LogSensorCollectionStatus(HardwareSensorsResult result)
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "PCDiagnosticPro_SensorCollection.log");
+                var (available, total) = result.GetAvailabilitySummary();
+                var logContent = $"=== Sensor Collection Log - {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===\n" +
+                                 $"Available: {available}/{total}\n" +
+                                 $"BlockedBySecurity: {result.BlockedBySecurity}\n" +
+                                 $"BlockingMessage: {result.BlockingMessage ?? "N/A"}\n" +
+                                 $"Exceptions: {string.Join("; ", result.CollectionExceptions ?? new List<string>())}\n" +
+                                 $"CPU Temp: {(result.Cpu.CpuTempC.Available ? result.Cpu.CpuTempC.Value.ToString("F1") + "°C" : result.Cpu.CpuTempC.Reason)}\n" +
+                                 $"GPU Temp: {(result.Gpu.GpuTempC.Available ? result.Gpu.GpuTempC.Value.ToString("F1") + "°C" : result.Gpu.GpuTempC.Reason)}\n";
+                System.IO.File.AppendAllText(logPath, logContent + "\n");
+            }
+            catch { /* Ignore logging errors */ }
         }
 
         private static HardwareSensorsResult CreateDefaultResult()
@@ -125,17 +251,29 @@ namespace PCDiagnosticPro.Services
 
                 result.Gpu.Name = Available(gpu.Name);
 
-                var vramTotal = FindSensorValue(sensors, "Memory Total", "VRAM Total", "GPU Memory Total");
+                // VRAM Total: prioritize accurate sensors
+                var vramTotal = FindSensorValue(sensors, "GPU Memory Total", "Memory Total", "VRAM Total");
                 if (vramTotal.HasValue)
                     result.Gpu.VramTotalMB = Available(vramTotal.Value);
                 else
                     result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale indisponible");
 
-                var vramUsed = FindSensorValue(sensors, "Memory Used", "VRAM Used", "GPU Memory Used");
+                // VRAM Used: CRITICAL FIX - Prioritize "D3D Dedicated Memory Used" (matches Task Manager)
+                // over "GPU Memory Used" (which shows committed/allocated memory, not actual usage)
+                // Order matters: first match wins
+                var vramUsed = FindSensorValue(sensors, 
+                    "D3D Dedicated Memory Used",  // Task Manager value - actual dedicated VRAM in use
+                    "Dedicated Memory Used",       // Alternative naming
+                    "Memory Used",                 // Fallback - may be allocated/committed
+                    "VRAM Used", 
+                    "GPU Memory Used");
                 if (vramUsed.HasValue)
                     result.Gpu.VramUsedMB = Available(vramUsed.Value);
                 else
                     result.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisee indisponible");
+                
+                // Debug: Log all GPU memory sensors found for verification
+                LogGpuMemorySensors(sensors, vramTotal, vramUsed);
 
                 var gpuLoad = FindSensorValue(sensors, "GPU Core", "GPU", "Core");
                 if (gpuLoad.HasValue)
@@ -151,6 +289,7 @@ namespace PCDiagnosticPro.Services
             }
             catch (Exception ex)
             {
+                result.CollectionExceptions?.Add($"GPU: {ex.Message}");
                 SetGpuUnavailable(result, string.Format("Erreur GPU: {0}", ex.Message));
             }
         }
@@ -300,6 +439,7 @@ namespace PCDiagnosticPro.Services
             }
             catch (Exception ex)
             {
+                result.CollectionExceptions?.Add($"CPU: {ex.Message}");
                 result.Cpu.CpuTempC = UnavailableDouble(string.Format("Erreur CPU: {0}", ex.Message));
                 result.Cpu.CpuTempSource = "Erreur";
                 App.LogMessage($"[Sensors→CPU] ERREUR: {ex.Message}");
@@ -351,6 +491,7 @@ namespace PCDiagnosticPro.Services
             }
             catch (Exception ex)
             {
+                result.CollectionExceptions?.Add($"Disks: {ex.Message}");
                 result.Disks.Clear();
                 var diskMetric = new DiskMetrics();
                 diskMetric.Name = Unavailable(string.Format("Erreur disques: {0}", ex.Message));

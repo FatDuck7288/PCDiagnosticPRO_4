@@ -71,6 +71,26 @@ namespace PCDiagnosticPro.Models
 
         [JsonPropertyName("disks")]
         public List<DiskMetrics> Disks { get; set; } = new List<DiskMetrics>();
+        
+        /// <summary>
+        /// Exceptions encountered during sensor collection (for Defender/WinRing0 detection)
+        /// </summary>
+        [JsonPropertyName("collectionExceptions")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? CollectionExceptions { get; set; }
+        
+        /// <summary>
+        /// Indicates if sensors were blocked by security software (Defender, etc.)
+        /// </summary>
+        [JsonPropertyName("blockedBySecurity")]
+        public bool BlockedBySecurity { get; set; }
+        
+        /// <summary>
+        /// User-friendly message explaining sensor collection issues
+        /// </summary>
+        [JsonPropertyName("blockingMessage")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? BlockingMessage { get; set; }
 
         public static JsonSerializerOptions JsonOptions { get; } = new JsonSerializerOptions
         {

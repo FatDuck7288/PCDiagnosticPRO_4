@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using PCDiagnosticPro.Models;
@@ -31,6 +32,7 @@ namespace PCDiagnosticPro.Services
 
             result.Sections = BuildSections(root);
             PopulateSummary(root, result);
+            LogSectionsToTemp(root);
 
             return result;
         }
@@ -284,6 +286,59 @@ namespace PCDiagnosticPro.Services
             }
 
             return new string(result.ToArray());
+        }
+
+        private static void LogSectionsToTemp(JsonElement root)
+        {
+            try
+            {
+                var logPath = Path.Combine(Path.GetTempPath(), "PCDiagnosticPro_PowerShellJsonMapper.log");
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"=== PowerShellJsonMapper Log - {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+                
+                if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("sections", out var sections))
+                {
+                    sb.AppendLine("No sections found in PS JSON.");
+                    File.AppendAllText(logPath, sb.ToString() + Environment.NewLine);
+                    return;
+                }
+
+                if (sections.ValueKind != JsonValueKind.Object)
+                {
+                    sb.AppendLine($"Sections present but unexpected type: {sections.ValueKind}");
+                    File.AppendAllText(logPath, sb.ToString() + Environment.NewLine);
+                    return;
+                }
+
+                foreach (var section in sections.EnumerateObject())
+                {
+                    var name = section.Name;
+                    var valueKind = section.Value.ValueKind.ToString();
+                    var info = valueKind;
+                    
+                    if (section.Value.ValueKind == JsonValueKind.Object && section.Value.TryGetProperty("data", out var data))
+                    {
+                        if (data.ValueKind == JsonValueKind.Array)
+                            info = $"data=array[{data.GetArrayLength()}]";
+                        else if (data.ValueKind == JsonValueKind.Object)
+                            info = $"data=object[{data.EnumerateObject().Count()}]";
+                        else
+                            info = $"data={data.ValueKind}";
+                    }
+                    else if (section.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        info = $"array[{section.Value.GetArrayLength()}]";
+                    }
+
+                    sb.AppendLine($"- {name}: {info}");
+                }
+
+                File.AppendAllText(logPath, sb.ToString() + Environment.NewLine);
+            }
+            catch
+            {
+                // ignore logging errors
+            }
         }
     }
 }

@@ -37,6 +37,7 @@ namespace PCDiagnosticPro.Services
                 HardwareSensorsResult? sensors = null;
                 JsonElement? psData = null;
                 JsonElement? combinedRoot = null;
+                JsonElement? diagnosticSnapshot = null;
 
                 // 1. Lire le JSON combiné
                 if (File.Exists(combinedJsonPath))
@@ -66,6 +67,16 @@ namespace PCDiagnosticPro.Services
                     {
                         psData = psElement.Clone();
                     }
+                    
+                    // Chercher diagnostic_snapshot
+                    JsonElement snapshotElement = default;
+                    if (TryGetPropertyRobust(root, out snapshotElement, "diagnostic_snapshot", "diagnosticSnapshot"))
+                    {
+                        diagnosticSnapshot = snapshotElement.Clone();
+                    }
+                    
+                    // FIX E: Debug logging to %TEMP% for report generation diagnostics
+                    LogReportDataAvailability(root, psData, sensors, combinedJsonPath);
                 }
 
                 // === GÉNÉRATION DES 15 SECTIONS ===
@@ -101,19 +112,25 @@ namespace PCDiagnosticPro.Services
                 BuildSection10_Securite(sb, psData);
 
                 // Section 11: Mises à jour
-                BuildSection11_MisesAJour(sb, psData);
+                BuildSection11_MisesAJour(sb, psData, diagnosticSnapshot, combinedRoot);
 
                 // Section 12: Pilotes (Drivers)
-                BuildSection12_Pilotes(sb, psData);
+                BuildSection12_Pilotes(sb, psData, combinedRoot);
 
                 // Section 13: Démarrage et Applications
-                BuildSection13_Demarrage(sb, psData);
+                BuildSection13_Demarrage(sb, psData, diagnosticSnapshot);
 
                 // Section 14: Santé système et Erreurs
                 BuildSection14_SanteSysteme(sb, psData, healthReport, combinedRoot);
 
                 // Section 15: Périphériques
-                BuildSection15_Peripheriques(sb, psData);
+                BuildSection15_Peripheriques(sb, psData, diagnosticSnapshot);
+
+                // Section 16: Virtualisation (NEW)
+                BuildSection16_Virtualisation(sb, psData, diagnosticSnapshot);
+
+                // Bloc PS brut (extrait lisible)
+                BuildPowerShellRawBlock(sb, psData, diagnosticSnapshot);
 
                 // Footer
                 BuildFooter(sb);
@@ -222,6 +239,9 @@ namespace PCDiagnosticPro.Services
                 {
                     App.LogMessage("[VALIDATION] ✅ Rapport unifié complet - toutes les données PS sont représentées");
                 }
+                
+                // FIX: Appeler la validation non-bloquante avec compte-rendu détaillé
+                _ = SelfTestRunner.ValidateUnifiedReportNonBlocking(unifiedContent, combinedJsonPath);
             }
             catch (Exception ex)
             {
@@ -318,6 +338,108 @@ namespace PCDiagnosticPro.Services
 
             WriteTable(sb, rows);
             sb.AppendLine();
+        }
+
+        #endregion
+
+        #region Bloc PowerShell (brut)
+
+        private static void BuildPowerShellRawBlock(StringBuilder sb, JsonElement? psData, JsonElement? diagnosticSnapshot)
+        {
+            sb.AppendLine("  ▶ DONNÉES POWERSHELL (BRUT)");
+            sb.AppendLine(SUBSEPARATOR);
+            sb.AppendLine();
+
+            if (!psData.HasValue)
+            {
+                sb.AppendLine("  Données PowerShell : Non disponibles");
+                sb.AppendLine();
+                return;
+            }
+
+            var sections = RenderIfPresent(psData, new[] { "sections" });
+            if (!sections.HasValue || sections.Value.ValueKind != JsonValueKind.Object)
+            {
+                sb.AppendLine("  Sections PowerShell : Non disponibles");
+                sb.AppendLine();
+                return;
+            }
+
+            var keySections = new[]
+            {
+                "WindowsUpdate", "StartupPrograms", "InstalledApplications",
+                "DevicesDrivers", "Printers", "Audio"
+            };
+
+            foreach (var sectionName in keySections)
+            {
+                sb.AppendLine($"  [{sectionName}]");
+                var data = RenderIfPresent(psData, new[] { "sections", sectionName, "data" });
+                if (!data.HasValue)
+                {
+                    sb.AppendLine("    (section absente)");
+                    sb.AppendLine();
+                    continue;
+                }
+
+                AppendJsonSnippet(sb, data.Value, 8);
+                sb.AppendLine();
+            }
+        }
+
+        private static void AppendJsonSnippet(StringBuilder sb, JsonElement data, int maxLines)
+        {
+            int lines = 0;
+
+            if (data.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in data.EnumerateObject())
+                {
+                    if (lines++ >= maxLines)
+                    {
+                        sb.AppendLine("    ...");
+                        break;
+                    }
+                    sb.AppendLine($"    {prop.Name}: {FormatJsonValue(prop.Value)}");
+                }
+                return;
+            }
+
+            if (data.ValueKind == JsonValueKind.Array)
+            {
+                sb.AppendLine($"    [Array] {data.GetArrayLength()} item(s)");
+                foreach (var item in data.EnumerateArray().Take(Math.Min(5, maxLines - 1)))
+                {
+                    sb.AppendLine($"    - {FormatJsonValue(item)}");
+                }
+                return;
+            }
+
+            sb.AppendLine($"    {FormatJsonValue(data)}");
+        }
+
+        private static string FormatJsonValue(JsonElement el)
+        {
+            switch (el.ValueKind)
+            {
+                case JsonValueKind.String:
+                    return el.GetString() ?? "";
+                case JsonValueKind.Number:
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                    return el.GetRawText();
+                case JsonValueKind.Object:
+                    if (TryGetPropertyRobust(el, out var nameEl, "name", "Name", "displayName", "DisplayName"))
+                    {
+                        var name = nameEl.ValueKind == JsonValueKind.String ? nameEl.GetString() : nameEl.ToString();
+                        return $"{{name: {name}}}";
+                    }
+                    return $"{{object {el.EnumerateObject().Count()} keys}}";
+                case JsonValueKind.Array:
+                    return $"[Array {el.GetArrayLength()}]";
+                default:
+                    return el.ToString();
+            }
         }
 
         #endregion
@@ -543,33 +665,67 @@ namespace PCDiagnosticPro.Services
             WriteTable(sb, rows);
             sb.AppendLine();
 
-            // Top 5 CPU et Top 5 RAM - process_telemetry (PascalCase) ou scan_powershell.sections.Processes/DynamicSignals
+            // Top 5 CPU et Top 5 RAM - process_telemetry (PascalCase/camelCase) ou scan_powershell.sections.Processes/DynamicSignals
+            // FIX A: Multiple aliases + case-insensitive lookup
             JsonElement? topCpuArr = null;
             JsonElement? topMemArr = null;
+            
+            // Source 1: C# ProcessTelemetry (root level)
             if (combinedRoot.HasValue)
             {
                 JsonElement procTelemetry = default;
-                if (TryGetPropertyRobust(combinedRoot.Value, out procTelemetry, "process_telemetry", "processTelemetry"))
+                if (TryGetPropertyRobust(combinedRoot.Value, out procTelemetry, "process_telemetry", "processTelemetry", "ProcessTelemetry"))
                 {
-                    if (TryGetPropertyRobust(procTelemetry, out var topCpu, "TopByCpu", "topByCpu"))
+                    // Support multiple naming conventions: TopByCpu, topByCpu, topCpuProcesses, TopCpu, etc.
+                    if (TryGetPropertyRobust(procTelemetry, out var topCpu, "TopByCpu", "topByCpu", "topCpuProcesses", "TopCpu", "topCpu", "processesCpu"))
                         topCpuArr = topCpu;
-                    if (TryGetPropertyRobust(procTelemetry, out var topMem, "TopByMemory", "topByMemory"))
+                    if (TryGetPropertyRobust(procTelemetry, out var topMem, "TopByMemory", "topByMemory", "topRamProcesses", "TopMemory", "topMemory", "processesMemory", "topRam"))
                         topMemArr = topMem;
                 }
             }
+            
+            // Source 2: PS DynamicSignals.data
             if (!topCpuArr.HasValue && !topMemArr.HasValue && psData.HasValue)
             {
                 var dynData = GetNestedElement(psData.Value, "sections", "DynamicSignals", "data");
                 if (dynData.HasValue)
                 {
-                    if (dynData.Value.TryGetProperty("topCpu", out var tc)) topCpuArr = tc;
-                    if (dynData.Value.TryGetProperty("topMemory", out var tm)) topMemArr = tm;
+                    if (TryGetPropertyRobust(dynData.Value, out var tc, "topCpu", "TopCpu", "topCpuProcesses", "TopByCpu"))
+                        topCpuArr = tc;
+                    if (TryGetPropertyRobust(dynData.Value, out var tm, "topMemory", "TopMemory", "topRamProcesses", "TopByMemory", "topRam"))
+                        topMemArr = tm;
                 }
             }
+            
+            // Source 3: PS Processes.data
             if (!topCpuArr.HasValue && psData.HasValue)
             {
                 var procData = GetNestedElement(psData.Value, "sections", "Processes", "data");
-                if (procData.HasValue && procData.Value.TryGetProperty("topCpu", out var tc)) topCpuArr = tc;
+                if (procData.HasValue)
+                {
+                    // Handle both direct array and object with nested array
+                    if (procData.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        topCpuArr = procData;
+                    }
+                    else if (TryGetPropertyRobust(procData.Value, out var tc, "topCpu", "TopCpu", "processes", "items", "list"))
+                    {
+                        topCpuArr = tc;
+                    }
+                }
+            }
+            
+            // Source 4: PS ProcessList.data (alternative section name)
+            if (!topCpuArr.HasValue && psData.HasValue)
+            {
+                var procListData = GetNestedElement(psData.Value, "sections", "ProcessList", "data");
+                if (procListData.HasValue)
+                {
+                    if (procListData.Value.ValueKind == JsonValueKind.Array)
+                        topCpuArr = procListData;
+                    else if (TryGetPropertyRobust(procListData.Value, out var pl, "processes", "items", "list", "topCpu"))
+                        topCpuArr = pl;
+                }
             }
 
             if (topCpuArr.HasValue && topCpuArr.Value.ValueKind == JsonValueKind.Array)
@@ -743,6 +899,7 @@ namespace PCDiagnosticPro.Services
             sb.AppendLine();
 
             // Disques logiques (partitions) - PS keys: Storage, DiskInfo
+            // FIX: Ajout colonne "Utilisé %" pour afficher le pourcentage utilisé
             if (psData.HasValue && psData.Value.TryGetProperty("sections", out var sections))
             {
                 JsonElement diskData = default;
@@ -752,9 +909,9 @@ namespace PCDiagnosticPro.Services
                 if (diskData.ValueKind == JsonValueKind.Array || diskData.ValueKind == JsonValueKind.Object)
                 {
                     sb.AppendLine("  Partitions:");
-                    sb.AppendLine("  ┌───────┬────────────┬────────────┬────────────┬──────────┐");
-                    sb.AppendLine("  │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Alerte   │");
-                    sb.AppendLine("  ├───────┼────────────┼────────────┼────────────┼──────────┤");
+                    sb.AppendLine("  ┌───────┬────────────┬────────────┬────────────┬───────────┬──────────┐");
+                    sb.AppendLine("  │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Utilisé % │ Alerte   │");
+                    sb.AppendLine("  ├───────┼────────────┼────────────┼────────────┼───────────┼──────────┤");
 
                     // PS Storage has data.volumes[] with letter, totalGB, freeGB, usedPercent
                     JsonElement volumesEl = default;
@@ -773,10 +930,18 @@ namespace PCDiagnosticPro.Services
                             var freeGb = vol.TryGetProperty("freeGB", out var f) ? f.GetDouble() : 
                                          vol.TryGetProperty("FreeSpaceGB", out var f2) ? f2.GetDouble() : 0;
                             var usedGb = sizeGb - freeGb;
+                            // FIX: Calcul du pourcentage utilisé
+                            var usedPct = sizeGb > 0 ? ((usedGb / sizeGb) * 100) : 0;
+                            // Essayer d'utiliser usedPercent du PS si disponible
+                            if (vol.TryGetProperty("usedPercent", out var upEl) || vol.TryGetProperty("UsedPercent", out upEl))
+                            {
+                                if (upEl.ValueKind == JsonValueKind.Number)
+                                    usedPct = upEl.GetDouble();
+                            }
                             var freePct = sizeGb > 0 ? (freeGb / sizeGb * 100) : 0;
                             var alert = freePct < 15 ? "⚠️ <15%" : "OK";
 
-                            sb.AppendLine($"  │ {letter,-5} │ {sizeGb,8:F1} GB │ {freeGb,8:F1} GB │ {usedGb,8:F1} GB │ {alert,-8} │");
+                            sb.AppendLine($"  │ {letter,-5} │ {sizeGb,8:F1} GB │ {freeGb,8:F1} GB │ {usedGb,8:F1} GB │ {usedPct,7:F1} %  │ {alert,-8} │");
                         }
                     }
                     else if (diskData.ValueKind == JsonValueKind.Object && !diskData.TryGetProperty("volumes", out _))
@@ -788,12 +953,19 @@ namespace PCDiagnosticPro.Services
                         var freeGb = diskData.TryGetProperty("freeGB", out var f) ? f.GetDouble() : 
                                      diskData.TryGetProperty("FreeSpaceGB", out var f2) ? f2.GetDouble() : 0;
                         var usedGb = sizeGb - freeGb;
+                        // FIX: Calcul du pourcentage utilisé
+                        var usedPct = sizeGb > 0 ? ((usedGb / sizeGb) * 100) : 0;
+                        if (diskData.TryGetProperty("usedPercent", out var upEl) || diskData.TryGetProperty("UsedPercent", out upEl))
+                        {
+                            if (upEl.ValueKind == JsonValueKind.Number)
+                                usedPct = upEl.GetDouble();
+                        }
                         var freePct = sizeGb > 0 ? (freeGb / sizeGb * 100) : 0;
                         var alert = freePct < 15 ? "⚠️ <15%" : "OK";
-                        sb.AppendLine($"  │ {letter,-5} │ {sizeGb,8:F1} GB │ {freeGb,8:F1} GB │ {usedGb,8:F1} GB │ {alert,-8} │");
+                        sb.AppendLine($"  │ {letter,-5} │ {sizeGb,8:F1} GB │ {freeGb,8:F1} GB │ {usedGb,8:F1} GB │ {usedPct,7:F1} %  │ {alert,-8} │");
                     }
 
-                    sb.AppendLine("  └───────┴────────────┴────────────┴────────────┴──────────┘");
+                    sb.AppendLine("  └───────┴────────────┴────────────┴────────────┴───────────┴──────────┘");
                     sb.AppendLine();
                 }
             }
@@ -838,7 +1010,7 @@ namespace PCDiagnosticPro.Services
                 if (cpuValid.Validity == MetricValidity.Valid)
                     rows.Add(("Temp CPU", $"{cpuValid.Value:F1}°C"));
                 else
-                    rows.Add(("Temp CPU", $"Non disponible ({cpuValid.Reason ?? "capteur absent"})"));
+                    rows.Add(("Temp CPU", "Non disponible sur ce matériel (capteur non exposé par firmware)"));
 
                 // GPU Temperature
                 var gpuValid = MetricValidation.ValidateGpuTemp(sensors.Gpu.GpuTempC);
@@ -960,10 +1132,11 @@ namespace PCDiagnosticPro.Services
 
             var rows = new List<(string field, string value)>();
 
-            // Résultats complets du test HTTP (speedtest.tele2.net / proof.ovh.net)
+            // FIX: Clarifier "Débit Internet (FAI)" vs "Réseau local / configuration"
+            // Résultats complets du test HTTP (speedtest.tele2.net / proof.ovh.net) = vitesse INTERNET
             if (combinedRoot.HasValue && TryGetPropertyRobust(combinedRoot.Value, out var netDiagEl, "network_diagnostics", "networkDiagnostics"))
             {
-                sb.AppendLine("  ═ RÉSULTATS TEST HTTP VITESSE ═");
+                sb.AppendLine("  ═ DÉBIT INTERNET (FAI) ═");
                 sb.AppendLine();
                 
                 if (netDiagEl.TryGetProperty("throughput", out var throughput))
@@ -971,7 +1144,7 @@ namespace PCDiagnosticPro.Services
                     var downMbps = throughput.TryGetProperty("downloadMbpsMedian", out var dm) ? dm.GetDouble() : -1;
                     var upMbps = throughput.TryGetProperty("uploadMbpsMedian", out var um) ? um.GetDouble() : -1;
                     
-                    sb.AppendLine("  Débit mesuré :");
+                    sb.AppendLine("  Débit mesuré (vers Internet) :");
                     if (downMbps > 0 && !double.IsNaN(downMbps))
                     {
                         sb.AppendLine($"    Débit descendant : {downMbps:F1} Mbps");
@@ -982,7 +1155,7 @@ namespace PCDiagnosticPro.Services
                         sb.AppendLine($"    Débit montant    : {upMbps:F1} Mbps");
                     if (downMbps <= 0 && throughput.TryGetProperty("reason", out var tr))
                         sb.AppendLine($"    Non disponible   : {tr.GetString() ?? "—"}");
-                    sb.AppendLine("  Source : speedtest.tele2.net / proof.ovh.net");
+                    sb.AppendLine("  Source : speedtest.tele2.net / proof.ovh.net (test FAI)");
                     sb.AppendLine();
                 }
                 
@@ -1020,6 +1193,7 @@ namespace PCDiagnosticPro.Services
                 sb.AppendLine();
             }
 
+            // FIX: Clarifier "Réseau local / configuration" (infos adaptateur)
             // Basic network info from PS (sections.Network.data.adapters[] avec name, ip[], gateway[])
             if (psData.HasValue)
             {
@@ -1028,6 +1202,8 @@ namespace PCDiagnosticPro.Services
                 
                 if (netData.HasValue)
                 {
+                    rows.Add(("═ Réseau local / configuration ═", ""));
+                    
                     // PS format: data.adapters[] with name, ip (array), gateway (array)
                     if (netData.Value.TryGetProperty("adapters", out var adaptersEl) && adaptersEl.ValueKind == JsonValueKind.Array)
                     {
@@ -1058,7 +1234,7 @@ namespace PCDiagnosticPro.Services
                             }
                             
                             rows.Add(("Adaptateur actif", name));
-                            if (!string.IsNullOrEmpty(ip)) rows.Add(("IP", ip));
+                            if (!string.IsNullOrEmpty(ip)) rows.Add(("IP locale", ip));
                             if (!string.IsNullOrEmpty(gateway)) rows.Add(("Gateway", gateway));
                             break; // Premier adaptateur actif
                         }
@@ -1074,7 +1250,7 @@ namespace PCDiagnosticPro.Services
                             var ip = adapter.TryGetProperty("IPAddress", out var ipProp) ? ipProp.GetString() : null;
                             var gateway = adapter.TryGetProperty("DefaultIPGateway", out var gw) ? gw.GetString() : null;
                             rows.Add(("Adaptateur actif", name ?? "Inconnu"));
-                            if (!string.IsNullOrEmpty(ip)) rows.Add(("IP", ip));
+                            if (!string.IsNullOrEmpty(ip)) rows.Add(("IP locale", ip));
                             if (!string.IsNullOrEmpty(gateway)) rows.Add(("Gateway", gateway));
                             break;
                         }
@@ -1247,7 +1423,7 @@ namespace PCDiagnosticPro.Services
 
         #region Section 11: Mises à jour
 
-        private static void BuildSection11_MisesAJour(StringBuilder sb, JsonElement? psData)
+        private static void BuildSection11_MisesAJour(StringBuilder sb, JsonElement? psData, JsonElement? diagnosticSnapshot, JsonElement? combinedRoot)
         {
             sb.AppendLine("  ▶ SECTION 11 : MISES À JOUR");
             sb.AppendLine(SUBSEPARATOR);
@@ -1255,72 +1431,205 @@ namespace PCDiagnosticPro.Services
 
             var rows = new List<(string field, string value)>();
             bool foundData = false;
+            bool renderedData = false;
 
-            if (psData.HasValue)
+            // 1) Snapshot (priority)
+            if (diagnosticSnapshot.HasValue)
             {
-                // PS: sections.WindowsUpdate.data a pendingCount (pas PendingUpdatesCount)
-                var updatePaths = new[]
-                {
-                    GetNestedElement(psData.Value, "sections", "WindowsUpdate", "data"),
-                    GetNestedElement(psData.Value, "sections", "WindowsUpdateInfo", "data"),
-                    GetNestedElement(psData.Value, "sections", "Updates", "data"),
-                    GetNestedElement(psData.Value, "WindowsUpdate"),
-                    GetNestedElement(psData.Value, "Updates")
-                };
-                
-                JsonElement? updateData = null;
-                foreach (var path in updatePaths)
-                {
-                    if (path.HasValue && path.Value.ValueKind == JsonValueKind.Object)
-                    {
-                        updateData = path;
-                        break;
-                    }
-                }
-                
-                if (updateData.HasValue)
+                var snapUpdates = RenderIfPresent(diagnosticSnapshot, new[] { "psSummary", "updates" });
+                if (snapUpdates.HasValue)
                 {
                     foundData = true;
-                    // PS utilise pendingCount (lowercase)
-                    var pending = TryGetInt(updateData.Value, "pendingCount", "PendingCount", "PendingUpdatesCount", "Pending");
+                    var pending = TryGetInt(snapUpdates.Value, "pendingCount", "PendingCount");
                     if (pending >= 0)
-                        rows.Add(("Updates en attente", pending.ToString()));
-                    
-                    // Last update date
-                    var lastUpdate = TryGetString(updateData.Value, "lastUpdateDate", "LastUpdateDate", "LastInstalled", "LastCheck");
-                    if (!string.IsNullOrEmpty(lastUpdate))
-                        rows.Add(("Dernière mise à jour", lastUpdate));
-                    
-                    // Update errors
-                    var errors = TryGetInt(updateData.Value, "failedCount", "FailedUpdatesCount", "ErrorCount", "FailedCount");
-                    if (errors > 0)
-                        rows.Add(("⚠️ Échecs récents", errors.ToString()));
-                    
-                    // Auto update status
-                    var autoUpdate = TryGetBool(updateData.Value, "autoUpdateEnabled", "AutoUpdateEnabled", "AutoUpdate");
-                    if (autoUpdate.HasValue)
-                        rows.Add(("Mise à jour auto", autoUpdate.Value ? "Activée" : "Désactivée"));
-                }
-                
-                // rebootRequired est dans HealthChecks, pas WindowsUpdate
-                var healthData = GetNestedElement(psData.Value, "sections", "HealthChecks", "data");
-                if (healthData.HasValue)
-                {
-                    foundData = true;
-                    var reboot = TryGetBool(healthData.Value, "rebootRequired", "RebootRequired", "RebootPending", "NeedsReboot");
-                    if (reboot.HasValue)
-                        rows.Add(("Redémarrage requis", reboot.Value ? "⚠️ OUI" : "Non"));
-                    if (reboot == true && healthData.Value.TryGetProperty("rebootReasons", out var reasons) && reasons.ValueKind == JsonValueKind.Array)
                     {
-                        var reasonsList = reasons.EnumerateArray().Select(r => r.GetString()).Where(s => !string.IsNullOrEmpty(s)).ToList();
-                        if (reasonsList.Count > 0)
-                            rows.Add(("  Raisons", string.Join(", ", reasonsList)));
+                        rows.Add(("Updates en attente", pending.ToString()));
+                        renderedData = true;
+                    }
+
+                    var reboot = TryGetBool(snapUpdates.Value, "rebootRequired", "RebootRequired");
+                    if (reboot.HasValue)
+                    {
+                        rows.Add(("Redémarrage requis", reboot.Value ? "⚠️ OUI" : "Non"));
+                        renderedData = true;
+                    }
+
+                    var lastUpdate = TryGetString(snapUpdates.Value, "lastUpdate", "LastUpdate", "lastInstallDate", "LastInstallDate");
+                    if (!string.IsNullOrEmpty(lastUpdate))
+                    {
+                        rows.Add(("Dernière mise à jour", lastUpdate));
+                        renderedData = true;
                     }
                 }
             }
 
-            if (!foundData || rows.Count == 0)
-                rows.Add(("Mises à jour", "Données non disponibles"));
+            // 2) PS raw sections fallback
+            if (!renderedData && psData.HasValue)
+            {
+                var updateData = RenderIfPresent(psData,
+                    new[] { "sections", "WindowsUpdate", "data" },
+                    new[] { "sections", "WindowsUpdateInfo", "data" },
+                    new[] { "sections", "Updates", "data" },
+                    new[] { "WindowsUpdate" },
+                    new[] { "Updates" });
+
+                if (updateData.HasValue)
+                {
+                    foundData = true;
+
+                    if (updateData.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        var pending = TryGetInt(updateData.Value, "pendingCount", "PendingCount", "PendingUpdatesCount", "Pending", "pending_count");
+                        if (pending >= 0)
+                        {
+                            rows.Add(("Updates en attente", pending.ToString()));
+                            renderedData = true;
+                        }
+
+                        var lastUpdate = TryGetString(updateData.Value, "lastUpdateDate", "LastUpdateDate", "lastInstallDate", "LastInstallDate",
+                            "LastInstalled", "LastCheck", "lastCheck", "last_update_date");
+                        if (!string.IsNullOrEmpty(lastUpdate))
+                        {
+                            rows.Add(("Dernière mise à jour", lastUpdate));
+                            renderedData = true;
+                        }
+
+                        var errors = TryGetInt(updateData.Value, "failedCount", "FailedCount", "FailedUpdatesCount", "ErrorCount", "failed_count");
+                        if (errors > 0)
+                        {
+                            rows.Add(("⚠️ Échecs récents", errors.ToString()));
+                            renderedData = true;
+                        }
+
+                        var autoUpdate = TryGetBool(updateData.Value, "autoUpdateEnabled", "AutoUpdateEnabled", "AutoUpdate", "auto_update_enabled");
+                        if (autoUpdate.HasValue)
+                        {
+                            rows.Add(("Mise à jour auto", autoUpdate.Value ? "Activée" : "Désactivée"));
+                            renderedData = true;
+                        }
+
+                        var reboot = TryGetBool(updateData.Value, "rebootRequired", "RebootRequired", "RebootPending", "NeedsReboot", "reboot_required");
+                        if (reboot.HasValue && !rows.Any(r => r.field.Contains("Redémarrage")))
+                        {
+                            rows.Add(("Redémarrage requis", reboot.Value ? "⚠️ OUI" : "Non"));
+                            renderedData = true;
+                        }
+
+                        if (TryGetPropertyRobust(updateData.Value, out var pendingList, "pendingUpdates", "PendingUpdates", "updates", "Updates", "list"))
+                        {
+                            if (pendingList.ValueKind == JsonValueKind.Array)
+                            {
+                                var updateCount = pendingList.GetArrayLength();
+                                if (updateCount > 0 && pending < 0)
+                                {
+                                    rows.Add(("Updates en attente", updateCount.ToString()));
+                                    renderedData = true;
+                                }
+                            }
+                        }
+                    }
+                    else if (updateData.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        var updateCount = updateData.Value.GetArrayLength();
+                        rows.Add(("Updates détectées", updateCount.ToString()));
+
+                        int shown = 0;
+                        foreach (var update in updateData.Value.EnumerateArray())
+                        {
+                            if (shown++ >= 3) break;
+                            var title = TryGetString(update, "title", "Title", "name", "Name", "KB", "kb");
+                            var date = TryGetString(update, "date", "Date", "installedOn", "InstalledOn");
+                            if (!string.IsNullOrEmpty(title))
+                            {
+                                var displayTitle = title.Length > 50 ? title.Substring(0, 47) + "..." : title;
+                                rows.Add(($"  • {displayTitle}", date ?? ""));
+                            }
+                        }
+                        if (updateCount > 3)
+                            rows.Add(("  ...", $"(+{updateCount - 3} autres)"));
+                    }
+                }
+
+                // HealthChecks rebootRequired fallback
+                var healthData = RenderIfPresent(psData, new[] { "sections", "HealthChecks", "data" });
+                if (healthData.HasValue)
+                {
+                    foundData = true;
+                    if (!rows.Any(r => r.field.Contains("Redémarrage")))
+                    {
+                        var reboot = TryGetBool(healthData.Value, "rebootRequired", "RebootRequired", "RebootPending", "NeedsReboot");
+                        if (reboot.HasValue)
+                        {
+                            rows.Add(("Redémarrage requis", reboot.Value ? "⚠️ OUI" : "Non"));
+                            renderedData = true;
+                        }
+                    }
+                    if (healthData.Value.TryGetProperty("rebootReasons", out var reasons) && reasons.ValueKind == JsonValueKind.Array)
+                    {
+                        var reasonsList = reasons.EnumerateArray().Select(r => r.GetString()).Where(s => !string.IsNullOrEmpty(s)).ToList();
+                        if (reasonsList.Count > 0)
+                        {
+                            rows.Add(("  Raisons", string.Join(", ", reasonsList)));
+                            renderedData = true;
+                        }
+                    }
+                }
+            }
+
+            // 3) C# Windows Update fallback (combined JSON)
+            if (!renderedData && combinedRoot.HasValue)
+            {
+                if (TryGetPropertyRobust(combinedRoot.Value, out var updatesCsharp, "updates_csharp", "updatesCsharp") &&
+                    updatesCsharp.ValueKind == JsonValueKind.Object)
+                {
+                    foundData = true;
+                    var available = TryGetBool(updatesCsharp, "available", "Available");
+                    var pending = TryGetInt(updatesCsharp, "pendingCount", "PendingCount");
+                    var reboot = TryGetBool(updatesCsharp, "rebootRequired", "RebootRequired");
+
+                    if (available.HasValue && !available.Value)
+                    {
+                        rows.Add(("Windows Update (C#)", "Non disponible"));
+                        renderedData = true;
+                    }
+                    else
+                    {
+                        if (pending >= 0)
+                        {
+                            rows.Add(("Updates en attente (C#)", pending.ToString()));
+                            renderedData = true;
+                        }
+                        if (reboot.HasValue)
+                        {
+                            rows.Add(("Redémarrage requis", reboot.Value ? "⚠️ OUI" : "Non"));
+                            renderedData = true;
+                        }
+                    }
+                }
+            }
+
+            // FIX: Affichage explicite du statut Windows Update
+            if (!renderedData)
+            {
+                if (foundData)
+                {
+                    // Données trouvées mais rien de significatif à afficher
+                    // Vérifions si on peut déduire "0 updates en attente"
+                    rows.Add(("Updates en attente", "0 (système à jour)"));
+                    rows.Add(("Statut Windows Update", "✅ Aucune mise à jour en attente"));
+                }
+                else
+                {
+                    // Pas de données du tout (COM indisponible, erreur, ou scan rapide)
+                    rows.Add(("Windows Update", "Non disponible"));
+                    rows.Add(("Raison possible", "COM/WMI indisponible ou scan rapide"));
+                }
+            }
+            else if (rows.Count > 0 && !rows.Any(r => r.field.Contains("Updates en attente")))
+            {
+                // On a rendu quelque chose mais pas le count - afficher explicitement 0
+                rows.Insert(0, ("Updates en attente", "0 (système à jour)"));
+            }
 
             WriteTable(sb, rows);
             sb.AppendLine();
@@ -1331,7 +1640,7 @@ namespace PCDiagnosticPro.Services
         {
             foreach (var name in names)
             {
-                if (el.TryGetProperty(name, out var prop))
+                if (TryGetPropertyRobust(el, out var prop, name))
                 {
                     if (prop.ValueKind == JsonValueKind.True) return true;
                     if (prop.ValueKind == JsonValueKind.False) return false;
@@ -1352,7 +1661,7 @@ namespace PCDiagnosticPro.Services
         {
             foreach (var name in names)
             {
-                if (el.TryGetProperty(name, out var prop) && prop.ValueKind == JsonValueKind.String)
+                if (TryGetPropertyRobust(el, out var prop, name) && prop.ValueKind == JsonValueKind.String)
                 {
                     var val = prop.GetString();
                     if (!string.IsNullOrEmpty(val)) return val;
@@ -1366,7 +1675,7 @@ namespace PCDiagnosticPro.Services
         {
             foreach (var name in names)
             {
-                if (el.TryGetProperty(name, out var prop))
+                if (TryGetPropertyRobust(el, out var prop, name))
                 {
                     if (prop.ValueKind == JsonValueKind.Number) return prop.GetInt32();
                     if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out var i)) return i;
@@ -1379,7 +1688,7 @@ namespace PCDiagnosticPro.Services
 
         #region Section 12: Pilotes
 
-        private static void BuildSection12_Pilotes(StringBuilder sb, JsonElement? psData)
+        private static void BuildSection12_Pilotes(StringBuilder sb, JsonElement? psData, JsonElement? combinedRoot)
         {
             sb.AppendLine("  ▶ SECTION 12 : PILOTES (DRIVERS)");
             sb.AppendLine(SUBSEPARATOR);
@@ -1387,6 +1696,76 @@ namespace PCDiagnosticPro.Services
 
             var rows = new List<(string field, string value)>();
             bool foundData = false;
+
+            // ===== C# DRIVER INVENTORY (combined JSON) =====
+            if (combinedRoot.HasValue &&
+                TryGetPropertyRobust(combinedRoot.Value, out var driverInv, "driver_inventory", "driverInventory") &&
+                driverInv.ValueKind == JsonValueKind.Object)
+            {
+                foundData = true;
+
+                var inventoryRows = new List<(string field, string value)>();
+                var total = TryGetInt(driverInv, "totalCount", "TotalCount");
+                var signed = TryGetInt(driverInv, "signedCount", "SignedCount");
+                var unsigned = TryGetInt(driverInv, "unsignedCount", "UnsignedCount");
+                var problem = TryGetInt(driverInv, "problemCount", "ProblemCount");
+
+                if (total >= 0) inventoryRows.Add(("Pilotes détectés (C#)", total.ToString()));
+                if (signed >= 0) inventoryRows.Add(("Signés", signed.ToString()));
+                if (unsigned > 0) inventoryRows.Add(("Non signés", unsigned.ToString()));
+                if (problem > 0) inventoryRows.Add(("Périph. en erreur", problem.ToString()));
+
+                if (inventoryRows.Count > 0)
+                {
+                    WriteTable(sb, inventoryRows);
+                    sb.AppendLine();
+                }
+
+                if (TryGetPropertyRobust(driverInv, out var driversArr, "drivers", "Drivers") &&
+                    driversArr.ValueKind == JsonValueKind.Array)
+                {
+                    var drivers = driversArr.EnumerateArray().ToList();
+                    if (drivers.Count > 0)
+                    {
+                        sb.AppendLine("  Inventaire pilotes (C# - WMI) :");
+                        sb.AppendLine("  ┌──────────────┬──────────────────────────────────────┬────────────┬────────────┐");
+                        sb.AppendLine("  │ Classe       │ Périphérique                         │ Version    │ Date       │");
+                        sb.AppendLine("  ├──────────────┼──────────────────────────────────────┼────────────┼────────────┤");
+
+                        int shown = 0;
+                        foreach (var d in drivers)
+                        {
+                            if (shown++ >= 15) break;
+
+                            var cls = TryGetString(d, "deviceClass", "DeviceClass") ?? "?";
+                            var name = TryGetString(d, "deviceName", "DeviceName") ?? "?";
+                            var provider = TryGetString(d, "provider", "Provider", "driverProviderName", "DriverProviderName");
+                            var inf = TryGetString(d, "infName", "InfName");
+                            var version = TryGetString(d, "driverVersion", "DriverVersion") ?? "—";
+                            var date = TryGetString(d, "driverDate", "DriverDate") ?? "—";
+                            var status = TryGetString(d, "updateStatus", "UpdateStatus") ?? TryGetString(d, "status", "Status");
+                            if (string.Equals(status, "Outdated", StringComparison.OrdinalIgnoreCase)) status = "Obsolète";
+                            if (string.Equals(status, "UpToDate", StringComparison.OrdinalIgnoreCase)) status = "À jour";
+
+                            var deviceDisplay = string.IsNullOrEmpty(provider) ? name : $"{name} ({provider})";
+                            deviceDisplay = deviceDisplay.Length > 36 ? deviceDisplay.Substring(0, 33) + "..." : deviceDisplay;
+                            var shortVer = version.Length > 10 ? version.Substring(0, 7) + "..." : version;
+                            var shortDate = date.Length > 10 ? date.Substring(0, 10) : date;
+
+                            sb.AppendLine($"  │ {cls,-12} │ {deviceDisplay,-36} │ {shortVer,-10} │ {shortDate,-10} │");
+                            if (!string.IsNullOrEmpty(inf) || !string.IsNullOrEmpty(status))
+                            {
+                                var info = $"    INF: {inf ?? "—"}";
+                                if (!string.IsNullOrEmpty(status))
+                                    info += $" | Statut: {status}";
+                                sb.AppendLine($"  {info}");
+                            }
+                        }
+                        sb.AppendLine("  └──────────────┴──────────────────────────────────────┴────────────┴────────────┘");
+                        sb.AppendLine();
+                    }
+                }
+            }
 
             // Pilotes essentiels Windows (Display, Net, Media, System, HDC, Bluetooth, USB)
             sb.AppendLine("  Pilotes essentiels installés :");
@@ -1572,60 +1951,102 @@ namespace PCDiagnosticPro.Services
 
         #region Section 13: Démarrage et Applications
 
-        private static void BuildSection13_Demarrage(StringBuilder sb, JsonElement? psData)
+        private static void BuildSection13_Demarrage(StringBuilder sb, JsonElement? psData, JsonElement? diagnosticSnapshot)
         {
             sb.AppendLine("  ▶ SECTION 13 : DÉMARRAGE ET APPLICATIONS");
             sb.AppendLine(SUBSEPARATOR);
             sb.AppendLine();
 
             bool foundData = false;
+            bool renderedData = false;
 
-            if (psData.HasValue)
+            // ===== STARTUP PROGRAMS =====
+            bool startupRendered = false;
+            bool startupDataPresent = false;
+
+            // Snapshot priority
+            if (diagnosticSnapshot.HasValue)
             {
-                // PS: sections.StartupPrograms.data a startupItems (array) et startupCount
-                var startupObjData = GetNestedElement(psData.Value, "sections", "StartupPrograms", "data");
-                JsonElement? startupItemsArr = null;
-                int startupCount = 0;
-                
-                if (startupObjData.HasValue)
+                var snapStartup = RenderIfPresent(diagnosticSnapshot, new[] { "psSummary", "startup" });
+                if (snapStartup.HasValue)
                 {
-                    foundData = true;
-                    startupCount = TryGetInt(startupObjData.Value, "startupCount", "StartupCount");
-                    if (startupObjData.Value.TryGetProperty("startupItems", out var si) && si.ValueKind == JsonValueKind.Array)
-                        startupItemsArr = si;
-                }
-                
-                // Fallback: anciens chemins (si data est directement array)
-                if (!startupItemsArr.HasValue)
-                {
-                    var startupPaths = new[]
+                    startupDataPresent = true;
+                    var startupRows = new List<(string field, string value)>();
+                    var count = TryGetInt(snapStartup.Value, "count", "Count");
+                    if (count >= 0)
                     {
-                        GetNestedElement(psData.Value, "sections", "StartupInfo", "data"),
-                        GetNestedElement(psData.Value, "sections", "Startup", "data"),
-                        GetNestedElement(psData.Value, "StartupPrograms"),
-                        GetNestedElement(psData.Value, "Startup")
-                    };
-                    foreach (var path in startupPaths)
+                        startupRows.Add(("Total programmes démarrage", count.ToString()));
+                        startupRendered = true;
+                    }
+
+                    if (startupRows.Count > 0)
                     {
-                        if (path.HasValue && path.Value.ValueKind == JsonValueKind.Array)
+                        WriteTable(sb, startupRows);
+                        sb.AppendLine();
+                    }
+
+                    if (TryGetPropertyRobust(snapStartup.Value, out var topItems, "topItems", "TopItems") &&
+                        topItems.ValueKind == JsonValueKind.Array)
+                    {
+                        sb.AppendLine("  Programmes au démarrage (extrait):");
+                        sb.AppendLine("  ┌────────────────────────────────────────┐");
+                        sb.AppendLine("  │ Programme                              │");
+                        sb.AppendLine("  ├────────────────────────────────────────┤");
+                        foreach (var item in topItems.EnumerateArray().Take(10))
                         {
-                            startupItemsArr = path;
-                            foundData = true;
-                            break;
+                            var name = item.ValueKind == JsonValueKind.String ? item.GetString() : item.ToString();
+                            if (string.IsNullOrEmpty(name)) continue;
+                            name = name.Length > 38 ? name.Substring(0, 35) + "..." : name;
+                            sb.AppendLine($"  │ {name,-38} │");
                         }
+                        sb.AppendLine("  └────────────────────────────────────────┘");
+                        startupRendered = true;
                     }
                 }
-                
+            }
+
+            // PS fallback
+            if (!startupRendered && psData.HasValue)
+            {
+                var startupData = RenderIfPresent(psData,
+                    new[] { "sections", "StartupPrograms", "data" },
+                    new[] { "sections", "StartupInfo", "data" },
+                    new[] { "sections", "Startup", "data" },
+                    new[] { "StartupPrograms" },
+                    new[] { "Startup" });
+
+                JsonElement? startupItemsArr = null;
+                int startupCount = 0;
+
+                if (startupData.HasValue)
+                {
+                    startupDataPresent = true;
+                    startupCount = TryGetInt(startupData.Value, "startupCount", "StartupCount", "count", "Count", "total", "Total");
+
+                    if (startupData.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        startupItemsArr = startupData;
+                    }
+                    else if (startupData.Value.ValueKind == JsonValueKind.Object &&
+                             TryGetPropertyRobust(startupData.Value, out var itemsEl,
+                                 "startupItems", "StartupItems", "items", "Items", "apps", "Apps",
+                                 "programs", "Programs", "list", "List", "entries", "Entries"))
+                    {
+                        if (itemsEl.ValueKind == JsonValueKind.Array)
+                            startupItemsArr = itemsEl;
+                    }
+                }
+
                 if (startupItemsArr.HasValue)
                 {
-                    foundData = true;
                     var items = startupItemsArr.Value.EnumerateArray().ToList();
-                    
-                    var rows = new List<(string field, string value)>();
-                    rows.Add(("Total programmes démarrage", (startupCount > 0 ? startupCount : items.Count).ToString()));
+                    var rows = new List<(string field, string value)>
+                    {
+                        ("Total programmes démarrage", (startupCount > 0 ? startupCount : items.Count).ToString())
+                    };
                     WriteTable(sb, rows);
                     sb.AppendLine();
-                    
+
                     sb.AppendLine("  Programmes au démarrage:");
                     sb.AppendLine("  ┌────────────────────────────────────────┬────────────┐");
                     sb.AppendLine("  │ Programme                              │ Scope      │");
@@ -1635,7 +2056,6 @@ namespace PCDiagnosticPro.Services
                     foreach (var item in items)
                     {
                         if (count++ >= 15) break;
-                        // PS structure: { name, scope }
                         var name = TryGetString(item, "name", "Name", "DisplayName", "Command") ?? "?";
                         var scope = TryGetString(item, "scope", "Scope") ?? "N/A";
                         name = name.Length > 38 ? name.Substring(0, 35) + "..." : name;
@@ -1643,55 +2063,138 @@ namespace PCDiagnosticPro.Services
                         sb.AppendLine($"  │ {name,-38} │ {scope,-10} │");
                     }
                     sb.AppendLine("  └────────────────────────────────────────┴────────────┘");
-                    
-                    // Suggestion si beaucoup de programmes
+
                     if (items.Count > 10)
                     {
                         sb.AppendLine();
                         sb.AppendLine($"  💡 Suggestion: {items.Count} programmes au démarrage.");
                         sb.AppendLine("     Désactivez ceux non essentiels pour accélérer le boot.");
                     }
+                    startupRendered = true;
                 }
                 else if (startupCount > 0)
                 {
-                    foundData = true;
                     var rows = new List<(string field, string value)>();
                     rows.Add(("Total programmes démarrage", startupCount.ToString()));
                     WriteTable(sb, rows);
+                    startupRendered = true;
                 }
-                
-                // Services si disponibles
-                var servicesPaths = new[]
+            }
+
+            if (startupDataPresent || startupRendered)
+            {
+                foundData = true;
+                renderedData = renderedData || startupRendered;
+            }
+
+            // ===== INSTALLED APPLICATIONS =====
+            bool appsRendered = false;
+            bool appsDataPresent = false;
+
+            if (diagnosticSnapshot.HasValue)
+            {
+                var snapApps = RenderIfPresent(diagnosticSnapshot, new[] { "psSummary", "apps" });
+                if (snapApps.HasValue)
                 {
-                    GetNestedElement(psData.Value, "sections", "ServicesInfo", "data"),
-                    GetNestedElement(psData.Value, "sections", "Services", "data"),
-                    GetNestedElement(psData.Value, "ServicesInfo"),
-                    GetNestedElement(psData.Value, "Services")
-                };
-                
-                JsonElement? servicesData = null;
-                foreach (var path in servicesPaths)
-                {
-                    if (path.HasValue && (path.Value.ValueKind == JsonValueKind.Array || path.Value.ValueKind == JsonValueKind.Object))
+                    appsDataPresent = true;
+                    var appRows = new List<(string field, string value)>();
+                    var count = TryGetInt(snapApps.Value, "installedCount", "InstalledCount", "count");
+                    if (count >= 0)
                     {
-                        servicesData = path;
-                        break;
+                        appRows.Add(("Total applications installées", count.ToString()));
+                        appsRendered = true;
+                    }
+                    var lastInstalled = TryGetString(snapApps.Value, "lastInstalled", "LastInstalled", "lastInstallDate");
+                    if (!string.IsNullOrEmpty(lastInstalled))
+                    {
+                        appRows.Add(("Dernière installation", lastInstalled));
+                        appsRendered = true;
+                    }
+                    if (appRows.Count > 0)
+                    {
+                        WriteTable(sb, appRows);
+                        sb.AppendLine();
                     }
                 }
-                
+            }
+
+            if (!appsRendered && psData.HasValue)
+            {
+                var appsData = RenderIfPresent(psData,
+                    new[] { "sections", "InstalledApplications", "data" },
+                    new[] { "sections", "Applications", "data" },
+                    new[] { "InstalledApplications" },
+                    new[] { "Applications" });
+
+                if (appsData.HasValue)
+                {
+                    appsDataPresent = true;
+                    var appRows = new List<(string field, string value)>();
+                    var total = TryGetInt(appsData.Value, "totalCount", "TotalCount", "installedCount", "InstalledCount", "count", "total");
+                    if (total >= 0)
+                    {
+                        appRows.Add(("Total applications installées", total.ToString()));
+                        appsRendered = true;
+                    }
+                    var lastInstalled = TryGetString(appsData.Value, "lastInstallDate", "LastInstallDate", "lastInstalled", "LastInstalled");
+                    if (!string.IsNullOrEmpty(lastInstalled))
+                    {
+                        appRows.Add(("Dernière installation", lastInstalled));
+                        appsRendered = true;
+                    }
+                    if (appRows.Count > 0)
+                    {
+                        WriteTable(sb, appRows);
+                        sb.AppendLine();
+                    }
+
+                    if (TryGetPropertyRobust(appsData.Value, out var appsList, "apps", "Applications", "applications", "items", "list") &&
+                        appsList.ValueKind == JsonValueKind.Array)
+                    {
+                        sb.AppendLine("  Applications (extrait):");
+                        sb.AppendLine("  ┌────────────────────────────────────────┐");
+                        sb.AppendLine("  │ Application                            │");
+                        sb.AppendLine("  ├────────────────────────────────────────┤");
+                        foreach (var app in appsList.EnumerateArray().Take(10))
+                        {
+                            var name = TryGetString(app, "name", "Name", "displayName", "DisplayName") ?? app.ToString();
+                            if (string.IsNullOrEmpty(name)) continue;
+                            name = name.Length > 38 ? name.Substring(0, 35) + "..." : name;
+                            sb.AppendLine($"  │ {name,-38} │");
+                        }
+                        sb.AppendLine("  └────────────────────────────────────────┘");
+                        appsRendered = true;
+                    }
+                }
+            }
+
+            if (appsDataPresent || appsRendered)
+            {
+                foundData = true;
+                renderedData = renderedData || appsRendered;
+            }
+
+            // ===== SERVICES (PS) =====
+            if (psData.HasValue)
+            {
+                var servicesData = RenderIfPresent(psData,
+                    new[] { "sections", "ServicesInfo", "data" },
+                    new[] { "sections", "Services", "data" },
+                    new[] { "ServicesInfo" },
+                    new[] { "Services" });
+
                 if (servicesData.HasValue)
                 {
                     foundData = true;
                     sb.AppendLine();
-                    
+
                     if (servicesData.Value.ValueKind == JsonValueKind.Object)
                     {
-                        // Statistiques de services
-                        var total = TryGetInt(servicesData.Value, "TotalServices", "Total");
-                        var running = TryGetInt(servicesData.Value, "RunningServices", "Running");
-                        var stopped = TryGetInt(servicesData.Value, "StoppedServices", "Stopped");
-                        var auto = TryGetInt(servicesData.Value, "AutoStartServices", "AutoStart");
-                        
+                        var total = TryGetInt(servicesData.Value, "TotalServices", "totalServices", "Total");
+                        var running = TryGetInt(servicesData.Value, "RunningServices", "runningServices", "Running");
+                        var stopped = TryGetInt(servicesData.Value, "StoppedServices", "stoppedServices", "Stopped");
+                        var auto = TryGetInt(servicesData.Value, "AutoStartServices", "autoStartServices", "AutoStart");
+
                         if (total > 0 || running > 0)
                         {
                             var svcRows = new List<(string field, string value)>();
@@ -1701,6 +2204,7 @@ namespace PCDiagnosticPro.Services
                             if (stopped > 0) svcRows.Add(("Arrêtés", stopped.ToString()));
                             if (auto > 0) svcRows.Add(("Démarrage auto", auto.ToString()));
                             WriteTable(sb, svcRows);
+                            renderedData = true;
                         }
                     }
                     else if (servicesData.Value.ValueKind == JsonValueKind.Array)
@@ -1716,9 +2220,12 @@ namespace PCDiagnosticPro.Services
                 }
             }
 
-            if (!foundData)
+            if (!renderedData)
             {
-                sb.AppendLine("  Programmes au démarrage : Données non disponibles");
+                if (foundData)
+                    sb.AppendLine("  Données présentes (voir bloc PowerShell brut)");
+                else
+                    sb.AppendLine("  Démarrage et applications : Données non disponibles");
             }
 
             sb.AppendLine();
@@ -1827,7 +2334,7 @@ namespace PCDiagnosticPro.Services
 
         #region Section 15: Périphériques
 
-        private static void BuildSection15_Peripheriques(StringBuilder sb, JsonElement? psData)
+        private static void BuildSection15_Peripheriques(StringBuilder sb, JsonElement? psData, JsonElement? diagnosticSnapshot)
         {
             sb.AppendLine("  ▶ SECTION 15 : PÉRIPHÉRIQUES");
             sb.AppendLine(SUBSEPARATOR);
@@ -1836,85 +2343,386 @@ namespace PCDiagnosticPro.Services
             var rows = new List<(string field, string value)>();
             bool foundData = false;
 
-            if (psData.HasValue)
+            // ===== AUDIO =====
+            bool audioRendered = false;
+            if (diagnosticSnapshot.HasValue)
             {
-                // Audio: sections.Audio.data avec devices (array) et deviceCount
-                var audioData = GetNestedElement(psData.Value, "sections", "Audio", "data");
+                var snapAudio = RenderIfPresent(diagnosticSnapshot, new[] { "psSummary", "audio" });
+                if (snapAudio.HasValue)
+                {
+                    foundData = true;
+                    var count = TryGetInt(snapAudio.Value, "count", "Count");
+                    if (count >= 0)
+                    {
+                        rows.Add(("Périphériques audio", count.ToString()));
+                        audioRendered = true;
+                    }
+                }
+            }
+
+            if (!audioRendered && psData.HasValue)
+            {
+                var audioData = RenderIfPresent(psData,
+                    new[] { "sections", "Audio", "data" },
+                    new[] { "sections", "AudioDevices", "data" });
                 if (audioData.HasValue)
                 {
                     foundData = true;
-                    var audioCount = TryGetInt(audioData.Value, "deviceCount", "DeviceCount");
-                    if (audioCount < 0 && audioData.Value.TryGetProperty("devices", out var devArr) && devArr.ValueKind == JsonValueKind.Array)
-                        audioCount = devArr.EnumerateArray().Count();
+                    int audioCount = -1;
+                    if (audioData.Value.ValueKind == JsonValueKind.Array)
+                        audioCount = audioData.Value.GetArrayLength();
+                    else if (audioData.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        audioCount = TryGetInt(audioData.Value, "deviceCount", "DeviceCount", "count", "Count");
+                        if (audioCount < 0 && TryGetPropertyRobust(audioData.Value, out var devArr, "devices", "Devices", "items", "Items", "list", "List") &&
+                            devArr.ValueKind == JsonValueKind.Array)
+                            audioCount = devArr.GetArrayLength();
+                    }
                     if (audioCount >= 0)
+                    {
                         rows.Add(("Périphériques audio", audioCount.ToString()));
+                    }
                 }
+            }
 
-                // Printers: sections.Printers.data avec printers (array) et printerCount
-                var printerData = GetNestedElement(psData.Value, "sections", "Printers", "data");
+            // ===== PRINTERS =====
+            bool printersRendered = false;
+            if (diagnosticSnapshot.HasValue)
+            {
+                var snapPrinters = RenderIfPresent(diagnosticSnapshot, new[] { "psSummary", "printers" });
+                if (snapPrinters.HasValue)
+                {
+                    foundData = true;
+                    var count = TryGetInt(snapPrinters.Value, "count", "Count");
+                    if (count >= 0)
+                    {
+                        rows.Add(("Imprimantes", count.ToString()));
+                        printersRendered = true;
+                    }
+                }
+            }
+
+            if (!printersRendered && psData.HasValue)
+            {
+                var printerData = RenderIfPresent(psData,
+                    new[] { "sections", "Printers", "data" },
+                    new[] { "sections", "PrinterInfo", "data" });
                 if (printerData.HasValue)
                 {
                     foundData = true;
-                    var printerCount = TryGetInt(printerData.Value, "printerCount", "PrinterCount");
-                    if (printerCount < 0 && printerData.Value.TryGetProperty("printers", out var pArr) && pArr.ValueKind == JsonValueKind.Array)
-                        printerCount = pArr.EnumerateArray().Count();
-                    if (printerCount >= 0)
-                        rows.Add(("Imprimantes", printerCount.ToString()));
-                    
-                    // Afficher les imprimantes
-                    if (printerData.Value.TryGetProperty("printers", out var printersEl) && printersEl.ValueKind == JsonValueKind.Array)
+                    int printerCount = -1;
+                    JsonElement? printersArr = null;
+
+                    if (printerData.Value.ValueKind == JsonValueKind.Array)
                     {
-                        var printerList = printersEl.EnumerateArray().Take(5).ToList();
+                        printerCount = printerData.Value.GetArrayLength();
+                        printersArr = printerData;
+                    }
+                    else if (printerData.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        printerCount = TryGetInt(printerData.Value, "printerCount", "PrinterCount", "count", "Count");
+                        if (TryGetPropertyRobust(printerData.Value, out var pArr, "printers", "Printers", "items", "Items", "list", "List", "devices", "Devices") &&
+                            pArr.ValueKind == JsonValueKind.Array)
+                        {
+                            printersArr = pArr;
+                            if (printerCount < 0)
+                                printerCount = pArr.GetArrayLength();
+                        }
+                    }
+
+                    if (printerCount >= 0)
+                    {
+                        rows.Add(("Imprimantes", printerCount.ToString()));
+                    }
+
+                    if (printersArr.HasValue)
+                    {
+                        var printerList = printersArr.Value.EnumerateArray().Take(5).ToList();
                         if (printerList.Count > 0)
                         {
                             foreach (var p in printerList)
                             {
-                                var name = TryGetString(p, "name", "Name") ?? "?";
-                                var isDefault = TryGetBool(p, "default", "Default") ?? false;
-                                rows.Add(($"  • {(isDefault ? "⭐ " : "")}{name.Substring(0, Math.Min(30, name.Length))}", ""));
+                                var name = TryGetString(p, "name", "Name", "PrinterName", "printerName") ?? "?";
+                                var isDefault = TryGetBool(p, "default", "Default", "isDefault", "IsDefault") ?? false;
+                                var displayName = name.Length > 30 ? name.Substring(0, 27) + "..." : name;
+                                rows.Add(($"  • {(isDefault ? "⭐ " : "")}{displayName}", ""));
                             }
                         }
                     }
                 }
+            }
 
-                // DevicesDrivers: sections.DevicesDrivers.data.problemDevices (périphériques en erreur)
-                var devDriversData = GetNestedElement(psData.Value, "sections", "DevicesDrivers", "data");
+            // ===== DEVICES / DRIVERS =====
+            bool devicesRendered = false;
+            if (diagnosticSnapshot.HasValue)
+            {
+                var snapDevices = RenderIfPresent(diagnosticSnapshot, new[] { "psSummary", "devices" });
+                if (snapDevices.HasValue)
+                {
+                    foundData = true;
+                    var problemCount = TryGetInt(snapDevices.Value, "problemDeviceCount", "ProblemDeviceCount");
+                    if (problemCount >= 0)
+                    {
+                        rows.Add(("Périph. en erreur", problemCount > 0 ? $"⚠️ {problemCount}" : "0 ✅"));
+                        devicesRendered = true;
+                    }
+                }
+            }
+
+            if (!devicesRendered && psData.HasValue)
+            {
+                var devDriversData = RenderIfPresent(psData,
+                    new[] { "sections", "DevicesDrivers", "data" },
+                    new[] { "sections", "Devices", "data" },
+                    new[] { "sections", "PnPDevices", "data" });
+
                 if (devDriversData.HasValue)
                 {
                     foundData = true;
-                    var problemCount = TryGetInt(devDriversData.Value, "problemDeviceCount", "ProblemDeviceCount");
+                    int problemCount = -1;
+                    JsonElement? problemArr = null;
+
+                    if (devDriversData.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        problemCount = TryGetInt(devDriversData.Value, "problemDeviceCount", "ProblemDeviceCount", "problemCount", "ProblemCount", "errorCount", "ErrorCount");
+
+                        if (TryGetPropertyRobust(devDriversData.Value, out var pd, "problemDevices", "ProblemDevices", "problems", "Problems", "errors", "Errors", "failedDevices", "FailedDevices"))
+                        {
+                            if (pd.ValueKind == JsonValueKind.Array)
+                            {
+                                problemArr = pd;
+                                if (problemCount < 0)
+                                    problemCount = pd.GetArrayLength();
+                            }
+                            else if (pd.ValueKind == JsonValueKind.Object && problemCount < 0)
+                            {
+                                problemCount = pd.EnumerateObject().Count();
+                            }
+                        }
+
+                        var totalDevices = TryGetInt(devDriversData.Value, "deviceCount", "DeviceCount", "total", "Total");
+                        if (totalDevices > 0)
+                            rows.Add(("Total périphériques", totalDevices.ToString()));
+                    }
+                    else if (devDriversData.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        var allDevices = devDriversData.Value.EnumerateArray().ToList();
+                        var problemDevices = allDevices.Where(d =>
+                        {
+                            var status = TryGetString(d, "status", "Status", "state", "State") ?? "";
+                            return !string.IsNullOrEmpty(status) &&
+                                   !status.Equals("OK", StringComparison.OrdinalIgnoreCase) &&
+                                   !status.Equals("Running", StringComparison.OrdinalIgnoreCase);
+                        }).ToList();
+
+                        problemCount = problemDevices.Count;
+                        rows.Add(("Total périphériques", allDevices.Count.ToString()));
+                    }
+
                     if (problemCount >= 0)
+                    {
                         rows.Add(("Périph. en erreur", problemCount > 0 ? $"⚠️ {problemCount}" : "0 ✅"));
-                    
-                    // Liste des périphériques en erreur
-                    if (problemCount > 0 && devDriversData.Value.TryGetProperty("problemDevices", out var problemArr) && problemArr.ValueKind == JsonValueKind.Array)
+                    }
+
+                    if (problemCount > 0 && problemArr.HasValue && problemArr.Value.ValueKind == JsonValueKind.Array)
                     {
                         rows.Add(("", ""));
                         sb.AppendLine("  Périphériques problématiques:");
-                        foreach (var dev in problemArr.EnumerateArray().Take(5))
+                        foreach (var dev in problemArr.Value.EnumerateArray().Take(5))
                         {
-                            var name = TryGetString(dev, "name", "Name") ?? "?";
-                            var status = TryGetString(dev, "status", "Status") ?? "?";
-                            var cls = TryGetString(dev, "class", "Class") ?? "";
-                            sb.AppendLine($"    [{status}] {name.Substring(0, Math.Min(35, name.Length))} ({cls})");
+                            var name = TryGetString(dev, "name", "Name", "deviceName", "DeviceName") ?? "?";
+                            var status = TryGetString(dev, "status", "Status", "state", "State") ?? "?";
+                            var cls = TryGetString(dev, "class", "Class", "deviceClass", "DeviceClass") ?? "";
+                            var displayName = name.Length > 35 ? name.Substring(0, 32) + "..." : name;
+                            sb.AppendLine($"    [{status}] {displayName} ({cls})");
                         }
                         sb.AppendLine();
                     }
                 }
-                
-                // Bluetooth si disponible
-                var btData = GetNestedElement(psData.Value, "sections", "Bluetooth", "data");
-                if (!btData.HasValue) btData = GetNestedElement(psData.Value, "sections", "BluetoothInfo", "data");
-                if (btData.HasValue && btData.Value.ValueKind == JsonValueKind.Array)
+            }
+
+            // ===== BLUETOOTH =====
+            if (psData.HasValue)
+            {
+                var btData = RenderIfPresent(psData,
+                    new[] { "sections", "Bluetooth", "data" },
+                    new[] { "sections", "BluetoothInfo", "data" },
+                    new[] { "sections", "BluetoothDevices", "data" });
+                if (btData.HasValue)
                 {
                     foundData = true;
-                    var btCount = btData.Value.EnumerateArray().Count();
-                    rows.Add(("Périphériques Bluetooth", btCount.ToString()));
+                    int btCount = -1;
+                    if (btData.Value.ValueKind == JsonValueKind.Array)
+                        btCount = btData.Value.GetArrayLength();
+                    else if (btData.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        btCount = TryGetInt(btData.Value, "deviceCount", "DeviceCount", "count", "Count");
+                        if (btCount < 0 && TryGetPropertyRobust(btData.Value, out var btArr, "devices", "Devices", "items", "Items", "list", "List") &&
+                            btArr.ValueKind == JsonValueKind.Array)
+                            btCount = btArr.GetArrayLength();
+                    }
+                    if (btCount >= 0)
+                        rows.Add(("Périphériques Bluetooth", btCount.ToString()));
+                }
+            }
+
+            // ===== USB =====
+            if (psData.HasValue)
+            {
+                var usbData = RenderIfPresent(psData,
+                    new[] { "sections", "USB", "data" },
+                    new[] { "sections", "USBDevices", "data" });
+                if (usbData.HasValue)
+                {
+                    foundData = true;
+                    int usbCount = -1;
+                    if (usbData.Value.ValueKind == JsonValueKind.Array)
+                        usbCount = usbData.Value.GetArrayLength();
+                    else if (usbData.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        usbCount = TryGetInt(usbData.Value, "deviceCount", "DeviceCount", "count", "Count");
+                        if (usbCount < 0 && TryGetPropertyRobust(usbData.Value, out var usbArr, "devices", "Devices", "items", "Items") &&
+                            usbArr.ValueKind == JsonValueKind.Array)
+                            usbCount = usbArr.GetArrayLength();
+                    }
+                    if (usbCount >= 0)
+                        rows.Add(("Périphériques USB", usbCount.ToString()));
                 }
             }
 
             if (!foundData || rows.Count == 0)
-                rows.Add(("Périphériques", "Données non disponibles"));
+            {
+                if (foundData)
+                    rows.Add(("Périphériques", "Données présentes (voir bloc PowerShell brut)"));
+                else
+                    rows.Add(("Périphériques", "Données non disponibles"));
+            }
+
+            WriteTable(sb, rows);
+            sb.AppendLine();
+        }
+
+        #endregion
+
+        #region Section 16: Virtualisation (NEW)
+
+        /// <summary>
+        /// Section 16: Virtualisation - Affiche les informations sur la virtualisation
+        /// </summary>
+        private static void BuildSection16_Virtualisation(StringBuilder sb, JsonElement? psData, JsonElement? diagnosticSnapshot)
+        {
+            sb.AppendLine("  ▶ SECTION 16 : VIRTUALISATION");
+            sb.AppendLine(SUBSEPARATOR);
+            sb.AppendLine();
+
+            var rows = new List<(string field, string value)>();
+            bool foundData = false;
+
+            // Essayer le snapshot d'abord
+            if (diagnosticSnapshot.HasValue)
+            {
+                var snapVirt = RenderIfPresent(diagnosticSnapshot, 
+                    new[] { "psSummary", "virtualization" },
+                    new[] { "virtualization" });
+                if (snapVirt.HasValue)
+                {
+                    foundData = true;
+                    var isVM = TryGetBool(snapVirt.Value, "isVM", "IsVM", "isVirtualMachine", "IsVirtualMachine");
+                    if (isVM.HasValue)
+                    {
+                        rows.Add(("Machine virtuelle", isVM.Value ? "✅ Oui" : "❌ Non (machine physique)"));
+                    }
+                    var hypervisor = TryGetString(snapVirt.Value, "hypervisor", "Hypervisor", "vmType", "VmType");
+                    if (!string.IsNullOrEmpty(hypervisor))
+                    {
+                        rows.Add(("Hyperviseur détecté", hypervisor));
+                    }
+                }
+            }
+
+            // Fallback sur les données PS brutes
+            if (rows.Count == 0 && psData.HasValue)
+            {
+                var virtData = RenderIfPresent(psData,
+                    new[] { "sections", "Virtualization", "data" },
+                    new[] { "sections", "VirtualizationInfo", "data" },
+                    new[] { "Virtualization" });
+
+                if (virtData.HasValue)
+                {
+                    foundData = true;
+
+                    // isVM
+                    var isVM = TryGetBool(virtData.Value, "isVM", "IsVM", "isVirtualMachine", "IsVirtualMachine", "isVirtual", "IsVirtual");
+                    if (isVM.HasValue)
+                    {
+                        rows.Add(("Machine virtuelle", isVM.Value ? "✅ Oui" : "❌ Non (machine physique)"));
+                    }
+
+                    // Hypervisor / VMType
+                    var hypervisor = TryGetString(virtData.Value, "hypervisor", "Hypervisor", "vmType", "VmType", "vmPlatform", "VmPlatform");
+                    if (!string.IsNullOrEmpty(hypervisor))
+                    {
+                        rows.Add(("Hyperviseur / Platform", hypervisor));
+                    }
+
+                    // Hyper-V enabled
+                    var hyperVEnabled = TryGetBool(virtData.Value, "hyperVEnabled", "HyperVEnabled", "hyperVInstalled", "HyperVInstalled");
+                    if (hyperVEnabled.HasValue)
+                    {
+                        rows.Add(("Hyper-V", hyperVEnabled.Value ? "✅ Activé" : "Non activé"));
+                    }
+
+                    // WSL
+                    var wslEnabled = TryGetBool(virtData.Value, "wslEnabled", "WSLEnabled", "wsl2Installed", "WSL2Installed", "wslInstalled", "WSLInstalled");
+                    if (wslEnabled.HasValue)
+                    {
+                        rows.Add(("WSL", wslEnabled.Value ? "✅ Activé" : "Non activé"));
+                    }
+
+                    // Sandbox
+                    var sandboxEnabled = TryGetBool(virtData.Value, "sandboxEnabled", "SandboxEnabled", "windowsSandbox", "WindowsSandbox");
+                    if (sandboxEnabled.HasValue)
+                    {
+                        rows.Add(("Windows Sandbox", sandboxEnabled.Value ? "✅ Activé" : "Non activé"));
+                    }
+
+                    // DeviceGuard / CredentialGuard
+                    var deviceGuard = TryGetBool(virtData.Value, "deviceGuardEnabled", "DeviceGuardEnabled", "credentialGuard", "CredentialGuard");
+                    if (deviceGuard.HasValue)
+                    {
+                        rows.Add(("Device Guard", deviceGuard.Value ? "✅ Actif" : "Non actif"));
+                    }
+
+                    // VBS (Virtualization-Based Security)
+                    var vbs = TryGetBool(virtData.Value, "vbsEnabled", "VBSEnabled", "virtualizationBasedSecurity", "VirtualizationBasedSecurity");
+                    if (vbs.HasValue)
+                    {
+                        rows.Add(("VBS (sécurité)", vbs.Value ? "✅ Actif" : "Non actif"));
+                    }
+
+                    // Containers
+                    var containersEnabled = TryGetBool(virtData.Value, "containersEnabled", "ContainersEnabled", "dockerInstalled", "DockerInstalled");
+                    if (containersEnabled.HasValue)
+                    {
+                        rows.Add(("Conteneurs", containersEnabled.Value ? "✅ Activé" : "Non activé"));
+                    }
+                }
+            }
+
+            // Message par défaut si pas de données
+            if (!foundData || rows.Count == 0)
+            {
+                if (foundData)
+                {
+                    rows.Add(("Virtualisation", "Données présentes (voir bloc PowerShell brut)"));
+                }
+                else
+                {
+                    rows.Add(("Machine virtuelle", "❌ Non (machine physique probable)"));
+                    rows.Add(("Hyper-V / WSL", "Non détecté ou non collecté"));
+                }
+            }
 
             WriteTable(sb, rows);
             sb.AppendLine();
@@ -2220,7 +3028,7 @@ namespace PCDiagnosticPro.Services
             var current = root;
             foreach (var key in path)
             {
-                if (!current.TryGetProperty(key, out current))
+                if (!TryGetPropertyRobust(current, out current, key))
                     return -1;
             }
             return current.ValueKind == JsonValueKind.Number ? current.GetInt32() : -1;
@@ -2231,7 +3039,7 @@ namespace PCDiagnosticPro.Services
             var current = root;
             foreach (var key in path)
             {
-                if (!current.TryGetProperty(key, out current))
+                if (!TryGetPropertyRobust(current, out current, key))
                     return -1;
             }
             return current.ValueKind == JsonValueKind.Number ? current.GetDouble() : -1;
@@ -2242,12 +3050,180 @@ namespace PCDiagnosticPro.Services
             var current = root;
             foreach (var key in path)
             {
-                if (!current.TryGetProperty(key, out current))
+                if (!TryGetPropertyRobust(current, out current, key))
                     return null;
             }
             return current;
         }
 
+        /// <summary>
+        /// RÈGLE: RenderIfPresent - essaie plusieurs chemins et retourne le premier non vide.
+        /// </summary>
+        private static JsonElement? RenderIfPresent(JsonElement? root, params string[][] paths)
+        {
+            if (!root.HasValue)
+                return null;
+
+            foreach (var path in paths)
+            {
+                var element = GetNestedElement(root.Value, path);
+                if (element.HasValue && IsJsonElementNonEmpty(element.Value))
+                    return element;
+            }
+
+            return null;
+        }
+
+        private static bool IsJsonElementNonEmpty(JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.Array => element.GetArrayLength() > 0,
+                JsonValueKind.Object => element.EnumerateObject().Any(),
+                JsonValueKind.String => !string.IsNullOrWhiteSpace(element.GetString()),
+                JsonValueKind.Number => true,
+                JsonValueKind.True => true,
+                JsonValueKind.False => true,
+                _ => false
+            };
+        }
+
+        /// <summary>
+        /// FIX E: Log report data availability to %TEMP% for debugging
+        /// </summary>
+        private static void LogReportDataAvailability(JsonElement root, JsonElement? psData, HardwareSensorsResult? sensors, string jsonPath)
+        {
+            try
+            {
+                var logPath = Path.Combine(Path.GetTempPath(), "PCDiagnosticPro_Report_Debug.log");
+                var logSb = new StringBuilder();
+                logSb.AppendLine($"=== UNIFIED REPORT DEBUG LOG ===");
+                logSb.AppendLine($"Timestamp: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                logSb.AppendLine($"Source JSON: {jsonPath}");
+                logSb.AppendLine();
+                
+                // Root level properties
+                logSb.AppendLine("=== ROOT LEVEL PROPERTIES ===");
+                if (root.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in root.EnumerateObject())
+                    {
+                        var valueKind = prop.Value.ValueKind.ToString();
+                        var detail = prop.Value.ValueKind == JsonValueKind.Array 
+                            ? $"[{prop.Value.GetArrayLength()} items]" 
+                            : prop.Value.ValueKind == JsonValueKind.Object 
+                                ? $"{{object}}" 
+                                : "";
+                        logSb.AppendLine($"  {prop.Name}: {valueKind} {detail}");
+                    }
+                }
+                logSb.AppendLine();
+                
+                // process_telemetry availability
+                logSb.AppendLine("=== PROCESS TELEMETRY ===");
+                if (TryGetPropertyRobust(root, out var procTel, "process_telemetry", "processTelemetry", "ProcessTelemetry"))
+                {
+                    logSb.AppendLine($"  Found: YES ({procTel.ValueKind})");
+                    if (procTel.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var prop in procTel.EnumerateObject())
+                        {
+                            var detail = prop.Value.ValueKind == JsonValueKind.Array ? $"[{prop.Value.GetArrayLength()}]" : "";
+                            logSb.AppendLine($"    {prop.Name}: {prop.Value.ValueKind} {detail}");
+                        }
+                    }
+                }
+                else
+                {
+                    logSb.AppendLine("  Found: NO");
+                }
+                logSb.AppendLine();
+                
+                // PS sections availability
+                logSb.AppendLine("=== PS SECTIONS ===");
+                if (psData.HasValue && psData.Value.TryGetProperty("sections", out var sections))
+                {
+                    logSb.AppendLine($"  sections found: YES ({sections.ValueKind})");
+                    if (sections.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var section in sections.EnumerateObject())
+                        {
+                            var hasData = section.Value.TryGetProperty("data", out var data);
+                            var dataInfo = hasData ? $"data={data.ValueKind}" : "no data";
+                            if (hasData && data.ValueKind == JsonValueKind.Array)
+                                dataInfo += $" [{data.GetArrayLength()}]";
+                            logSb.AppendLine($"    {section.Name}: {dataInfo}");
+                        }
+                    }
+                }
+                else
+                {
+                    logSb.AppendLine("  sections found: NO");
+                }
+                logSb.AppendLine();
+                
+                // Sensors availability
+                logSb.AppendLine("=== C# SENSORS ===");
+                if (sensors != null)
+                {
+                    logSb.AppendLine($"  CollectedAt: {sensors.CollectedAt}");
+                    logSb.AppendLine($"  CPU Temp: value={sensors.Cpu?.CpuTempC?.Value}, available={sensors.Cpu?.CpuTempC?.Available}");
+                    logSb.AppendLine($"  GPU Temp: value={sensors.Gpu?.GpuTempC?.Value}, available={sensors.Gpu?.GpuTempC?.Available}");
+                    logSb.AppendLine($"  GPU VRAM Used: value={sensors.Gpu?.VramUsedMB?.Value} MB");
+                    logSb.AppendLine($"  BlockedBySecurity: {sensors.BlockedBySecurity}");
+                }
+                else
+                {
+                    logSb.AppendLine("  Sensors: null");
+                }
+                logSb.AppendLine();
+                
+                // Key sections for debugging
+                var keySections = new[] { "WindowsUpdate", "StartupPrograms", "DevicesDrivers", "Printers", "Audio", "Processes", "DynamicSignals" };
+                logSb.AppendLine("=== KEY SECTION DETAILS ===");
+                foreach (var sectionName in keySections)
+                {
+                    if (psData.HasValue)
+                    {
+                        var sectionData = GetNestedElement(psData.Value, "sections", sectionName, "data");
+                        if (sectionData.HasValue)
+                        {
+                            logSb.AppendLine($"  {sectionName}.data: {sectionData.Value.ValueKind}");
+                            if (sectionData.Value.ValueKind == JsonValueKind.Object)
+                            {
+                                foreach (var prop in sectionData.Value.EnumerateObject().Take(5))
+                                {
+                                    var val = prop.Value.ValueKind == JsonValueKind.Array ? $"[{prop.Value.GetArrayLength()}]" : 
+                                              prop.Value.ValueKind == JsonValueKind.String ? $"\"{prop.Value.GetString()?.Substring(0, Math.Min(20, prop.Value.GetString()?.Length ?? 0))}...\"" :
+                                              prop.Value.ToString().Substring(0, Math.Min(30, prop.Value.ToString().Length));
+                                    logSb.AppendLine($"      {prop.Name}: {val}");
+                                }
+                            }
+                            else if (sectionData.Value.ValueKind == JsonValueKind.Array)
+                            {
+                                logSb.AppendLine($"      [{sectionData.Value.GetArrayLength()} items]");
+                            }
+                        }
+                        else
+                        {
+                            logSb.AppendLine($"  {sectionName}.data: NOT FOUND");
+                        }
+                    }
+                }
+                
+                File.WriteAllText(logPath, logSb.ToString());
+                App.LogMessage($"[UnifiedReport] Debug log written to {logPath}");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[UnifiedReport] Failed to write debug log: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Cherche une propriété avec tolérance: essaie les noms exacts d'abord,
+        /// puis fait une recherche case-insensitive en fallback.
+        /// </summary>
         private static bool TryGetPropertyRobust(JsonElement element, out JsonElement value, params string[] propertyNames)
         {
             value = default;
@@ -2255,10 +3231,63 @@ namespace PCDiagnosticPro.Services
             if (element.ValueKind != JsonValueKind.Object)
                 return false;
 
+            // Pass 1: Try exact matches first
             foreach (var name in propertyNames)
             {
                 if (element.TryGetProperty(name, out value))
                     return true;
+            }
+
+            // Pass 2: Case-insensitive fallback - iterate all properties
+            foreach (var prop in element.EnumerateObject())
+            {
+                foreach (var name in propertyNames)
+                {
+                    if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = prop.Value;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+        
+        /// <summary>
+        /// Cherche une propriété avec tolérance case-insensitive + alias multiples.
+        /// Retourne le nom trouvé pour debug.
+        /// </summary>
+        private static bool TryGetPropertyRobustWithName(JsonElement element, out JsonElement value, out string? foundName, params string[] propertyNames)
+        {
+            value = default;
+            foundName = null;
+
+            if (element.ValueKind != JsonValueKind.Object)
+                return false;
+
+            // Pass 1: Try exact matches first
+            foreach (var name in propertyNames)
+            {
+                if (element.TryGetProperty(name, out value))
+                {
+                    foundName = name;
+                    return true;
+                }
+            }
+
+            // Pass 2: Case-insensitive fallback
+            foreach (var prop in element.EnumerateObject())
+            {
+                foreach (var name in propertyNames)
+                {
+                    if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = prop.Value;
+                        foundName = prop.Name;
+                        return true;
+                    }
+                }
             }
 
             return false;

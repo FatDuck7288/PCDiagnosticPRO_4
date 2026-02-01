@@ -43,6 +43,20 @@ namespace PCDiagnosticPro.Models
         [JsonPropertyName("network_diagnostics")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public NetworkDiagnosticsResult? NetworkDiagnostics { get; set; }
+
+        /// <summary>
+        /// Driver inventory collected via C# (WMI)
+        /// </summary>
+        [JsonPropertyName("driver_inventory")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DriverInventoryResult? DriverInventory { get; set; }
+
+        /// <summary>
+        /// Windows Update availability collected via C# (Windows Update Agent)
+        /// </summary>
+        [JsonPropertyName("updates_csharp")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public WindowsUpdateResult? UpdatesCsharp { get; set; }
         
         /// <summary>
         /// P0.2: WMI/CIM errors with full context (namespace, query, HRESULT, duration)

@@ -24,7 +24,7 @@ namespace PCDiagnosticPro.Models
     }
 
     /// <summary>
-    /// Domaines de diagnostic machine - 8 catégories principales
+    /// Domaines de diagnostic machine - Extended with Applications and Performance
     /// </summary>
     public enum HealthDomain
     {
@@ -35,7 +35,15 @@ namespace PCDiagnosticPro.Models
         Storage,
         Network,
         SystemStability,
-        Drivers
+        Drivers,
+        /// <summary>Applications: StartupPrograms, InstalledApplications, ScheduledTasks</summary>
+        Applications,
+        /// <summary>Performance: ProcessTelemetry, PerformanceCounters, real-time metrics</summary>
+        Performance,
+        /// <summary>Security: Antivirus, Firewall, UAC, SecureBoot, Bitlocker</summary>
+        Security,
+        /// <summary>Power: Battery, PowerSettings</summary>
+        Power
     }
 
     /// <summary>

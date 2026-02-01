@@ -27,7 +27,7 @@ namespace PCDiagnosticPro.Tests
             _successes.Clear();
 
             // 7.1 Schema version tests
-            Test_SchemaVersion_Is_2_0_0();
+            Test_SchemaVersion_Is_2_2_0();
             
             // 7.2 Sentinel tests
             Test_CpuTemp_Zero_Returns_Unavailable();
@@ -49,19 +49,19 @@ namespace PCDiagnosticPro.Tests
 
         #region 7.1 Schema Version Tests
 
-        private static void Test_SchemaVersion_Is_2_0_0()
+        private static void Test_SchemaVersion_Is_2_2_0()
         {
             try
             {
                 var snapshot = new DiagnosticSnapshot();
-                Assert(snapshot.SchemaVersion == "2.0.0", 
-                    "SchemaVersion should be 2.0.0", 
+                Assert(snapshot.SchemaVersion == "2.2.0", 
+                    "SchemaVersion should be 2.2.0", 
                     $"Got: {snapshot.SchemaVersion}");
-                Pass("Test_SchemaVersion_Is_2_0_0");
+                Pass("Test_SchemaVersion_Is_2_2_0");
             }
             catch (Exception ex)
             {
-                Fail("Test_SchemaVersion_Is_2_0_0", ex.Message);
+                Fail("Test_SchemaVersion_Is_2_2_0", ex.Message);
             }
         }
 
