@@ -43,6 +43,13 @@ namespace PCDiagnosticPro.Tests
             Test_DpcIsrCollector_Without_ETW_Returns_Unavailable();
             Test_Unavailable_Metric_Has_Reason();
             Test_Unavailable_Metric_Has_Zero_Confidence();
+            
+            // 7.5 UI evidence mapping tests
+            Test_UiEvidence_Memory_Minimum();
+            Test_UiEvidence_Storage_Volumes();
+            Test_UiEvidence_CPU_Minimum();
+            Test_UiEvidence_GPU_Minimum();
+            Test_UiEvidence_Network_Minimum();
 
             return (_successes.Count, _failures.Count, _failures.ToList());
         }
@@ -63,6 +70,120 @@ namespace PCDiagnosticPro.Tests
             {
                 Fail("Test_SchemaVersion_Is_2_2_0", ex.Message);
             }
+        }
+
+        #endregion
+
+        #region 7.5 UI Evidence Mapping Tests
+
+        private static void Test_UiEvidence_Memory_Minimum()
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(BuildSampleCombinedJson());
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.RAM, doc.RootElement);
+                Assert(ev.Count >= 3,
+                    "RAM evidence should have at least 3 rows",
+                    $"Rows: {string.Join(", ", ev.Keys)}");
+                Pass("Test_UiEvidence_Memory_Minimum");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_UiEvidence_Memory_Minimum", ex.Message);
+            }
+        }
+
+        private static void Test_UiEvidence_Storage_Volumes()
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(BuildSampleCombinedJson());
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.Storage, doc.RootElement);
+                Assert(ev.TryGetValue("Partitions", out var partitions),
+                    "Storage evidence should include Partitions",
+                    "Missing Partitions");
+                var count = partitions.Split('|', StringSplitOptions.RemoveEmptyEntries).Length;
+                Assert(count >= 2,
+                    "Storage evidence should include at least 2 partitions",
+                    $"Partitions: {partitions}");
+                Pass("Test_UiEvidence_Storage_Volumes");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_UiEvidence_Storage_Volumes", ex.Message);
+            }
+        }
+
+        private static void Test_UiEvidence_CPU_Minimum()
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(BuildSampleCombinedJson());
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.CPU, doc.RootElement);
+                Assert(ev.ContainsKey("Modèle"),
+                    "CPU evidence should include Modèle",
+                    $"Rows: {string.Join(", ", ev.Keys)}");
+                Pass("Test_UiEvidence_CPU_Minimum");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_UiEvidence_CPU_Minimum", ex.Message);
+            }
+        }
+
+        private static void Test_UiEvidence_GPU_Minimum()
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(BuildSampleCombinedJson());
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.GPU, doc.RootElement);
+                Assert(ev.ContainsKey("GPU"),
+                    "GPU evidence should include GPU name",
+                    $"Rows: {string.Join(", ", ev.Keys)}");
+                Pass("Test_UiEvidence_GPU_Minimum");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_UiEvidence_GPU_Minimum", ex.Message);
+            }
+        }
+
+        private static void Test_UiEvidence_Network_Minimum()
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(BuildSampleCombinedJson());
+                var ev = ComprehensiveEvidenceExtractor.Extract(HealthDomain.Network, doc.RootElement);
+                Assert(ev.ContainsKey("Adaptateur"),
+                    "Network evidence should include Adaptateur",
+                    $"Rows: {string.Join(", ", ev.Keys)}");
+                Assert(ev.ContainsKey("Adresse IP"),
+                    "Network evidence should include Adresse IP",
+                    $"Rows: {string.Join(", ", ev.Keys)}");
+                Pass("Test_UiEvidence_Network_Minimum");
+            }
+            catch (Exception ex)
+            {
+                Fail("Test_UiEvidence_Network_Minimum", ex.Message);
+            }
+        }
+
+        private static string BuildSampleCombinedJson()
+        {
+            return @"{
+  ""scan_powershell"": {
+    ""sections"": {
+      ""Memory"": { ""data"": { ""totalGB"": 16, ""freeGB"": 4, ""usedPercent"": 75, ""moduleCount"": 2 } },
+      ""Storage"": { ""data"": { ""volumes"": [
+        { ""letter"": ""C:"", ""totalGB"": 100, ""freeGB"": 20 },
+        { ""letter"": ""D:"", ""totalGB"": 200, ""freeGB"": 100 }
+      ], ""physicalDisks"": [ { ""model"": ""DiskA"", ""type"": ""SSD"", ""sizeGB"": 100 } ] } },
+      ""CPU"": { ""data"": { ""cpus"": { ""name"": ""Test CPU"", ""cores"": 4, ""threads"": 8, ""maxClockSpeed"": 3500, ""currentLoad"": 15 }, ""cpuCount"": 1 } },
+      ""GPU"": { ""data"": { ""gpuList"": { ""name"": ""Test GPU"", ""vendor"": ""NVIDIA"", ""driverVersion"": ""1.2"", ""resolution"": ""1920x1080"", ""vramTotalMB"": 8192 }, ""gpuCount"": 1 } },
+      ""Network"": { ""data"": { ""adapters"": [ { ""name"": ""Ethernet"", ""ip"": [ ""192.168.0.10"" ], ""gateway"": ""192.168.0.1"", ""dns"": [ ""1.1.1.1"" ], ""mac"": ""AA:BB:CC:DD:EE:FF"" } ] } }
+    }
+  }
+}";
         }
 
         #endregion

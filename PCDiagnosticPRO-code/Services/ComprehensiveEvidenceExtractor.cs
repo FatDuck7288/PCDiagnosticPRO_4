@@ -13,6 +13,9 @@ namespace PCDiagnosticPro.Services
     /// </summary>
     public static class ComprehensiveEvidenceExtractor
     {
+        public static bool DebugPathsEnabled { get; set; } =
+            Environment.GetEnvironmentVariable("PCDIAG_DEBUG_PATHS") == "1";
+
         /// <summary>
         /// Extrait toutes les données pertinentes pour un domaine de santé.
         /// Combine données PS, capteurs C#, et diagnostics actifs.
@@ -50,38 +53,57 @@ namespace PCDiagnosticPro.Services
             var osData = GetSectionData(root, "OS");
             if (osData.HasValue)
             {
-                AddIfNotEmpty(ev, "Version Windows", GetString(osData, "caption"));
-                AddIfNotEmpty(ev, "Build", GetString(osData, "buildNumber"));
-                AddIfNotEmpty(ev, "Architecture", GetString(osData, "architecture"));
+                AddIfNotEmpty(ev, "Version Windows", GetStringAny(osData, "caption", "osCaption"), "scan_powershell.sections.OS.data.caption");
+                AddIfNotEmpty(ev, "Build", GetStringAny(osData, "buildNumber", "build", "osBuild"), "scan_powershell.sections.OS.data.buildNumber");
+                AddIfNotEmpty(ev, "Architecture", GetStringAny(osData, "architecture", "osArchitecture"), "scan_powershell.sections.OS.data.architecture");
+                AddIfNotEmpty(ev, "Version affichage", GetString(osData, "displayVersion"), "scan_powershell.sections.OS.data.displayVersion");
                 
                 // Uptime
-                var lastBoot = GetString(osData, "lastBootUpTime");
+                var lastBoot = GetStringAny(osData, "lastBootUpTime", "lastBoot");
                 if (!string.IsNullOrEmpty(lastBoot) && DateTime.TryParse(lastBoot, out var bootDt))
                 {
                     var uptime = DateTime.Now - bootDt;
-                    ev["Uptime"] = uptime.TotalDays >= 1 
-                        ? $"{(int)uptime.TotalDays}j {uptime.Hours}h {uptime.Minutes}min"
-                        : $"{uptime.Hours}h {uptime.Minutes}min";
+                    ev["Uptime"] = AppendPath(
+                        uptime.TotalDays >= 1 ? $"{(int)uptime.TotalDays}j {uptime.Hours}h {uptime.Minutes}min" : $"{uptime.Hours}h {uptime.Minutes}min",
+                        "scan_powershell.sections.OS.data.lastBootUpTime");
                 }
+            }
+
+            var machineId = GetSectionData(root, "MachineIdentity");
+            if (machineId.HasValue)
+            {
+                AddIfNotEmpty(ev, "Nom machine", GetString(machineId, "computerName"), "scan_powershell.sections.MachineIdentity.data.computerName");
+                AddIfNotEmpty(ev, "Build", GetStringAny(machineId, "osBuild", "buildNumber"), "scan_powershell.sections.MachineIdentity.data.osBuild");
+                AddIfNotEmpty(ev, "Version Windows", GetStringAny(machineId, "osCaption", "osVersion"), "scan_powershell.sections.MachineIdentity.data.osCaption");
+
+                var lastBoot = GetString(machineId, "lastBoot");
+                if (!string.IsNullOrEmpty(lastBoot) && DateTime.TryParse(lastBoot, out var bootDt))
+                {
+                    var uptime = DateTime.Now - bootDt;
+                    ev["Uptime"] = AppendPath(
+                        uptime.TotalDays >= 1 ? $"{(int)uptime.TotalDays}j {uptime.Hours}h {uptime.Minutes}min" : $"{uptime.Hours}h {uptime.Minutes}min",
+                        "scan_powershell.sections.MachineIdentity.data.lastBoot");
+                }
+
+                var secureBoot = GetBool(machineId, "secureBoot");
+                if (secureBoot.HasValue)
+                    ev["Secure Boot"] = AppendPath(secureBoot.Value ? "✅ Activé" : "❌ Désactivé", "scan_powershell.sections.MachineIdentity.data.secureBoot");
             }
 
             // === PS: sections.Security - Secure Boot, BitLocker, Antivirus ===
             var secData = GetSectionData(root, "Security");
             if (secData.HasValue)
             {
-                var secureBoot = GetBool(secData, "secureBootEnabled");
-                ev["Secure Boot"] = secureBoot.HasValue ? (secureBoot.Value ? "✅ Activé" : "❌ Désactivé") : "—";
-                
-                var bitlocker = GetBool(secData, "bitlockerEnabled");
-                if (!bitlocker.HasValue) bitlocker = GetBool(secData, "bitLocker");
-                ev["BitLocker"] = bitlocker.HasValue ? (bitlocker.Value ? "✅ Actif" : "❌ Inactif") : "—";
+                var bitlocker = GetBoolAny(secData, "bitlockerEnabled", "bitLocker");
+                if (bitlocker.HasValue)
+                    ev["BitLocker"] = AppendPath(bitlocker.Value ? "✅ Actif" : "❌ Inactif", "scan_powershell.sections.Security.data.bitlockerEnabled");
                 
                 // Antivirus
-                var avName = GetString(secData, "antivirusName") ?? GetString(secData, "avName");
-                var avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus");
+                var avName = GetStringAny(secData, "antivirusName", "avName", "antivirusProducts");
+                var avStatus = GetStringAny(secData, "antivirusStatus", "avStatus");
                 if (!string.IsNullOrEmpty(avName))
                 {
-                    ev["Antivirus"] = string.IsNullOrEmpty(avStatus) ? avName : $"{avName} ({avStatus})";
+                    ev["Antivirus"] = AppendPath(string.IsNullOrEmpty(avStatus) ? avName : $"{avName} ({avStatus})", "scan_powershell.sections.Security.data.antivirusProducts");
                 }
             }
 
@@ -92,16 +114,16 @@ namespace PCDiagnosticPro.Services
             {
                 foreach (var vol in volumes.EnumerateArray())
                 {
-                    var letter = GetString(vol, "driveLetter")?.ToUpper();
+                    var letter = GetStringAny(vol, "driveLetter", "letter")?.ToUpper();
                     if (letter == "C")
                     {
-                        var freeGB = GetDouble(vol, "freeSpaceGB");
-                        var sizeGB = GetDouble(vol, "sizeGB");
+                        var freeGB = GetDoubleAny(vol, "freeSpaceGB", "freeGB");
+                        var sizeGB = GetDoubleAny(vol, "sizeGB", "totalGB");
                         if (freeGB.HasValue && sizeGB.HasValue && sizeGB > 0)
                         {
                             var pct = (freeGB.Value / sizeGB.Value) * 100;
                             var status = pct < 10 ? " ⚠️" : pct < 20 ? " ⚡" : "";
-                            ev["Espace C:"] = $"{freeGB.Value:F1} GB libre ({pct:F0}%){status}";
+                            ev["Espace C:"] = AppendPath($"{freeGB.Value:F1} GB libre ({pct:F0}%){status}", "scan_powershell.sections.Storage.data.volumes[letter=C].freeGB");
                         }
                         break;
                     }
@@ -112,17 +134,9 @@ namespace PCDiagnosticPro.Services
             var signals = GetDiagnosticSignals(root);
             if (signals.HasValue)
             {
-                var whea = GetSignalValue(signals.Value, "whea_errors", "count");
-                if (!string.IsNullOrEmpty(whea) && whea != "0")
-                    ev["Erreurs WHEA"] = $"⚠️ {whea} détectée(s)";
-                
-                var bsod = GetSignalValue(signals.Value, "bsod_minidump", "count");
-                if (!string.IsNullOrEmpty(bsod) && bsod != "0")
-                    ev["BSOD récents"] = $"⚠️ {bsod} crash(es)";
-                
-                var kernelPower = GetSignalValue(signals.Value, "kernel_power", "count");
-                if (!string.IsNullOrEmpty(kernelPower) && kernelPower != "0")
-                    ev["Kernel-Power"] = $"⚠️ {kernelPower} événement(s)";
+                var whea7d = GetSignalValueFromValue(signals.Value, "whea", "Last7dCount");
+                if (!string.IsNullOrEmpty(whea7d) && whea7d != "0")
+                    ev["Erreurs WHEA (7j)"] = AppendPath($"⚠️ {whea7d}", "diagnostic_signals.whea.value.Last7dCount");
             }
 
             // === PS: WindowsUpdate ===
@@ -131,7 +145,7 @@ namespace PCDiagnosticPro.Services
             {
                 var pending = GetInt(updateData, "pendingCount") ?? GetInt(updateData, "PendingCount");
                 if (pending.HasValue)
-                    ev["Updates en attente"] = pending.Value > 0 ? $"⚠️ {pending.Value}" : "✅ À jour";
+                    ev["Updates en attente"] = AppendPath(pending.Value > 0 ? $"⚠️ {pending.Value}" : "✅ À jour", "scan_powershell.sections.WindowsUpdate.data.pendingCount");
             }
 
             // === C# Updates ===
@@ -140,7 +154,7 @@ namespace PCDiagnosticPro.Services
             {
                 var pending = GetInt(csharpUpdates, "pendingCount");
                 if (pending.HasValue && !ev.ContainsKey("Updates en attente"))
-                    ev["Updates en attente"] = pending.Value > 0 ? $"⚠️ {pending.Value}" : "✅ À jour";
+                    ev["Updates en attente"] = AppendPath(pending.Value > 0 ? $"⚠️ {pending.Value}" : "✅ À jour", "updates_csharp.pendingCount");
             }
 
             return ev;
@@ -158,38 +172,48 @@ namespace PCDiagnosticPro.Services
             var cpuData = GetSectionData(root, "CPU");
             if (cpuData.HasValue)
             {
+                JsonElement? first = null;
                 var cpuArray = GetArray(cpuData, "cpus") ?? GetArray(cpuData, "cpuList");
                 if (cpuArray.HasValue)
                 {
-                    var first = cpuArray.Value.EnumerateArray().FirstOrDefault();
-                    if (first.ValueKind == JsonValueKind.Object)
-                    {
-                        AddIfNotEmpty(ev, "Modèle", GetString(first, "name")?.Trim());
-                        
-                        var cores = GetInt(first, "cores");
-                        var threads = GetInt(first, "threads");
-                        if (cores.HasValue && threads.HasValue)
-                            ev["Cœurs / Threads"] = $"{cores.Value} / {threads.Value}";
-                        else if (cores.HasValue)
-                            ev["Cœurs"] = cores.Value.ToString();
-                        
-                        var maxClock = GetDouble(first, "maxClockSpeed");
-                        if (maxClock.HasValue && maxClock > 0)
-                            ev["Fréquence max"] = $"{maxClock.Value:F0} MHz";
-                        
-                        var currentClock = GetDouble(first, "currentClockSpeed");
-                        if (currentClock.HasValue && currentClock > 0)
-                            ev["Fréquence actuelle"] = $"{currentClock.Value:F0} MHz";
-                        
-                        var load = GetDouble(first, "currentLoad") ?? GetDouble(first, "load");
-                        if (load.HasValue)
-                            ev["Charge (PS)"] = $"{load.Value:F0} %";
-                    }
+                    first = cpuArray.Value.EnumerateArray().FirstOrDefault();
+                }
+                else if (cpuData.Value.TryGetProperty("cpus", out var cpuObj) && cpuObj.ValueKind == JsonValueKind.Object)
+                {
+                    first = cpuObj;
+                }
+                else if (cpuData.Value.TryGetProperty("cpuList", out var cpuListObj) && cpuListObj.ValueKind == JsonValueKind.Object)
+                {
+                    first = cpuListObj;
+                }
+
+                if (first.HasValue && first.Value.ValueKind == JsonValueKind.Object)
+                {
+                    AddIfNotEmpty(ev, "Modèle", GetString(first, "name")?.Trim(), "scan_powershell.sections.CPU.data.cpus.name");
+                    
+                    var cores = GetInt(first, "cores");
+                    var threads = GetInt(first, "threads");
+                    if (cores.HasValue && threads.HasValue)
+                        ev["Cœurs / Threads"] = AppendPath($"{cores.Value} / {threads.Value}", "scan_powershell.sections.CPU.data.cpus.cores");
+                    else if (cores.HasValue)
+                        ev["Cœurs"] = AppendPath(cores.Value.ToString(), "scan_powershell.sections.CPU.data.cpus.cores");
+                    
+                    var maxClock = GetDouble(first, "maxClockSpeed");
+                    if (maxClock.HasValue && maxClock > 0)
+                        ev["Fréquence max"] = AppendPath($"{maxClock.Value:F0} MHz", "scan_powershell.sections.CPU.data.cpus.maxClockSpeed");
+                    
+                    var currentClock = GetDouble(first, "currentClockSpeed");
+                    if (currentClock.HasValue && currentClock > 0)
+                        ev["Fréquence actuelle"] = AppendPath($"{currentClock.Value:F0} MHz", "scan_powershell.sections.CPU.data.cpus.currentClockSpeed");
+                    
+                    var load = GetDouble(first, "currentLoad") ?? GetDouble(first, "load");
+                    if (load.HasValue)
+                        ev["Charge (PS)"] = AppendPath($"{load.Value:F0} %", "scan_powershell.sections.CPU.data.cpus.currentLoad");
                 }
                 
                 var cpuCount = GetInt(cpuData, "cpuCount");
                 if (cpuCount.HasValue && cpuCount > 1)
-                    ev["Nombre de CPU"] = cpuCount.Value.ToString();
+                    ev["Nombre de CPU"] = AppendPath(cpuCount.Value.ToString(), "scan_powershell.sections.CPU.data.cpuCount");
             }
 
             // === C# Sensors: Temperature ===
@@ -197,25 +221,27 @@ namespace PCDiagnosticPro.Services
             {
                 var temp = sensors.Cpu.CpuTempC.Value;
                 var status = temp > 85 ? " 🔥" : temp > 70 ? " ⚠️" : "";
-                ev["Température"] = $"{temp:F0}°C{status}";
+                ev["Température"] = AppendPath($"{temp:F0}°C{status}", "sensors_csharp.cpu.cpuTempC.value");
             }
 
             // === Diagnostic Signals: Throttling ===
             var signals = GetDiagnosticSignals(root);
             if (signals.HasValue)
             {
-                var throttle = GetSignalResult(signals.Value, "cpu_throttle");
-                if (throttle.HasValue)
+                var throttle7d = GetSignalValueFromValue(signals.Value, "cpuThrottle", "ThrottlingEventCount7d");
+                if (!string.IsNullOrEmpty(throttle7d))
                 {
-                    var detected = GetBool(throttle, "detected") ?? false;
-                    ev["Throttling"] = detected ? "⚠️ Oui" : "✅ Non";
-                    if (detected)
-                    {
-                        var reason = GetString(throttle, "reason");
-                        if (!string.IsNullOrEmpty(reason))
-                            ev["Raison throttle"] = reason;
-                    }
+                    var detected = throttle7d != "0";
+                    ev["Throttling (7j)"] = AppendPath(detected ? $"⚠️ {throttle7d} év." : "✅ Aucun", "diagnostic_signals.cpuThrottle.value.ThrottlingEventCount7d");
                 }
+
+                var thermal = GetSignalValueFromValue(signals.Value, "cpuThrottle", "ThermalThrottleCount");
+                if (!string.IsNullOrEmpty(thermal) && thermal != "0")
+                    ev["Throttle thermique"] = AppendPath($"⚠️ {thermal}", "diagnostic_signals.cpuThrottle.value.ThermalThrottleCount");
+
+                var powerLimit = GetSignalValueFromValue(signals.Value, "cpuThrottle", "PowerLimitCount");
+                if (!string.IsNullOrEmpty(powerLimit) && powerLimit != "0")
+                    ev["Power limit"] = AppendPath($"⚠️ {powerLimit}", "diagnostic_signals.cpuThrottle.value.PowerLimitCount");
             }
 
             return ev;
@@ -233,49 +259,60 @@ namespace PCDiagnosticPro.Services
             var gpuData = GetSectionData(root, "GPU");
             if (gpuData.HasValue)
             {
+                JsonElement? first = null;
                 var gpuArray = GetArray(gpuData, "gpuList") ?? GetArray(gpuData, "gpus");
                 if (gpuArray.HasValue)
                 {
-                    var first = gpuArray.Value.EnumerateArray().FirstOrDefault();
-                    if (first.ValueKind == JsonValueKind.Object)
+                    first = gpuArray.Value.EnumerateArray().FirstOrDefault();
+                }
+                else if (gpuData.Value.TryGetProperty("gpuList", out var gpuObj) && gpuObj.ValueKind == JsonValueKind.Object)
+                {
+                    first = gpuObj;
+                }
+                else if (gpuData.Value.TryGetProperty("gpus", out var gpusObj) && gpusObj.ValueKind == JsonValueKind.Object)
+                {
+                    first = gpusObj;
+                }
+
+                if (first.HasValue && first.Value.ValueKind == JsonValueKind.Object)
+                {
+                    AddIfNotEmpty(ev, "GPU", GetString(first, "name")?.Trim(), "scan_powershell.sections.GPU.data.gpuList.name");
+                    AddIfNotEmpty(ev, "Fabricant", GetString(first, "vendor"), "scan_powershell.sections.GPU.data.gpuList.vendor");
+                    AddIfNotEmpty(ev, "Résolution", GetString(first, "resolution"), "scan_powershell.sections.GPU.data.gpuList.resolution");
+                    
+                    var driverVer = GetString(first, "driverVersion");
+                    if (!string.IsNullOrEmpty(driverVer))
+                        ev["Version pilote"] = AppendPath(driverVer, "scan_powershell.sections.GPU.data.gpuList.driverVersion");
+                    
+                    // Date pilote (nested or direct)
+                    string? driverDate = null;
+                    if (first.Value.TryGetProperty("driverDate", out var dd))
                     {
-                        AddIfNotEmpty(ev, "GPU", GetString(first, "name")?.Trim());
-                        AddIfNotEmpty(ev, "Fabricant", GetString(first, "vendor"));
-                        AddIfNotEmpty(ev, "Résolution", GetString(first, "resolution"));
-                        
-                        var driverVer = GetString(first, "driverVersion");
-                        if (!string.IsNullOrEmpty(driverVer))
-                            ev["Version pilote"] = driverVer;
-                        
-                        // Date pilote (nested or direct)
-                        string? driverDate = null;
-                        if (first.TryGetProperty("driverDate", out var dd))
-                        {
-                            if (dd.ValueKind == JsonValueKind.Object && dd.TryGetProperty("DateTime", out var ddt))
-                                driverDate = ddt.GetString();
-                            else if (dd.ValueKind == JsonValueKind.String)
-                                driverDate = dd.GetString();
-                        }
-                        AddIfNotEmpty(ev, "Date pilote", driverDate);
-                        
-                        // VRAM from PS (often null with note)
-                        var vramMB = GetDouble(first, "vramTotalMB");
-                        if (vramMB.HasValue && vramMB > 0)
-                        {
-                            ev["VRAM (PS)"] = vramMB >= 1024 ? $"{vramMB / 1024:F1} GB" : $"{vramMB:F0} MB";
-                        }
-                        else
-                        {
-                            var note = GetString(first, "vramNote");
-                            if (!string.IsNullOrEmpty(note))
-                                ev["VRAM (PS)"] = note;
-                        }
+                        if (dd.ValueKind == JsonValueKind.Object && dd.TryGetProperty("DateTime", out var ddt))
+                            driverDate = ddt.GetString();
+                        else if (dd.ValueKind == JsonValueKind.String)
+                            driverDate = dd.GetString();
+                    }
+                    AddIfNotEmpty(ev, "Date pilote", driverDate, "scan_powershell.sections.GPU.data.gpuList.driverDate.DateTime");
+                    
+                    // VRAM from PS (often null with note)
+                    var vramMB = GetDouble(first, "vramTotalMB");
+                    if (vramMB.HasValue && vramMB > 0)
+                    {
+                        ev["VRAM (PS)"] = AppendPath(vramMB >= 1024 ? $"{vramMB / 1024:F1} GB" : $"{vramMB:F0} MB",
+                            "scan_powershell.sections.GPU.data.gpuList.vramTotalMB");
+                    }
+                    else
+                    {
+                        var note = GetString(first, "vramNote");
+                        if (!string.IsNullOrEmpty(note))
+                            ev["VRAM (PS)"] = AppendPath(note, "scan_powershell.sections.GPU.data.gpuList.vramNote");
                     }
                 }
                 
                 var gpuCount = GetInt(gpuData, "gpuCount");
                 if (gpuCount.HasValue && gpuCount > 1)
-                    ev["Nombre de GPU"] = gpuCount.Value.ToString();
+                    ev["Nombre de GPU"] = AppendPath(gpuCount.Value.ToString(), "scan_powershell.sections.GPU.data.gpuCount");
             }
 
             // === C# Sensors ===
@@ -285,18 +322,18 @@ namespace PCDiagnosticPro.Services
                 {
                     var temp = sensors.Gpu.GpuTempC.Value;
                     var status = temp > 85 ? " 🔥" : temp > 75 ? " ⚠️" : "";
-                    ev["Température GPU"] = $"{temp:F0}°C{status}";
+                    ev["Température GPU"] = AppendPath($"{temp:F0}°C{status}", "sensors_csharp.gpu.gpuTempC.value");
                 }
                 
                 if (sensors.Gpu.GpuLoadPercent.Available)
-                    ev["Charge GPU"] = $"{sensors.Gpu.GpuLoadPercent.Value:F0} %";
+                    ev["Charge GPU"] = AppendPath($"{sensors.Gpu.GpuLoadPercent.Value:F0} %", "sensors_csharp.gpu.gpuLoadPercent.value");
                 
                 if (sensors.Gpu.VramTotalMB.Available && sensors.Gpu.VramUsedMB.Available)
                 {
                     var total = sensors.Gpu.VramTotalMB.Value;
                     var used = sensors.Gpu.VramUsedMB.Value;
                     var pct = total > 0 ? (used / total * 100) : 0;
-                    ev["VRAM utilisée"] = $"{used:F0} MB / {total:F0} MB ({pct:F0}%)";
+                    ev["VRAM utilisée"] = AppendPath($"{used:F0} MB / {total:F0} MB ({pct:F0}%)", "sensors_csharp.gpu.vramUsedMB.value");
                 }
             }
 
@@ -304,9 +341,9 @@ namespace PCDiagnosticPro.Services
             var signals = GetDiagnosticSignals(root);
             if (signals.HasValue)
             {
-                var tdr = GetSignalValue(signals.Value, "tdr_video", "count");
-                if (!string.IsNullOrEmpty(tdr) && tdr != "0")
-                    ev["TDR (crashes GPU)"] = $"⚠️ {tdr} détecté(s)";
+                var tdr7d = GetSignalValueFromValue(signals.Value, "gpuRootCause", "TdrCount7d");
+                if (!string.IsNullOrEmpty(tdr7d) && tdr7d != "0")
+                    ev["TDR (7j)"] = AppendPath($"⚠️ {tdr7d} détecté(s)", "diagnostic_signals.gpuRootCause.value.TdrCount7d");
             }
 
             return ev;
@@ -325,44 +362,67 @@ namespace PCDiagnosticPro.Services
             if (memData.HasValue)
             {
                 var totalGB = GetDouble(memData, "totalGB");
-                var availGB = GetDouble(memData, "availableGB");
+                var availGB = GetDoubleAny(memData, "availableGB", "freeGB");
                 
                 if (totalGB.HasValue && totalGB > 0)
                 {
-                    ev["RAM totale"] = $"{totalGB.Value:F1} GB";
+                    ev["RAM totale"] = AppendPath($"{totalGB.Value:F1} GB", "scan_powershell.sections.Memory.data.totalGB");
                     
                     if (availGB.HasValue)
                     {
                         var usedGB = totalGB.Value - availGB.Value;
                         var pct = (usedGB / totalGB.Value) * 100;
                         var status = pct > 90 ? " ⚠️" : pct > 80 ? " ⚡" : "";
-                        ev["RAM utilisée"] = $"{usedGB:F1} GB ({pct:F0}%){status}";
-                        ev["RAM disponible"] = $"{availGB.Value:F1} GB";
+                        ev["RAM utilisée"] = AppendPath($"{usedGB:F1} GB ({pct:F0}%){status}", "scan_powershell.sections.Memory.data.usedPercent");
+                        ev["RAM disponible"] = AppendPath($"{availGB.Value:F1} GB", "scan_powershell.sections.Memory.data.freeGB");
                     }
                 }
                 
                 // Virtual memory
-                var virtualTotal = GetDouble(memData, "virtualTotalGB") ?? GetDouble(memData, "commitLimitGB");
-                var virtualUsed = GetDouble(memData, "virtualUsedGB") ?? GetDouble(memData, "commitUsedGB");
+                var virtualTotal = GetDoubleAny(memData, "virtualTotalGB", "commitLimitGB");
+                var virtualUsed = GetDoubleAny(memData, "virtualUsedGB", "commitUsedGB");
                 if (virtualTotal.HasValue && virtualUsed.HasValue)
-                    ev["Mémoire virtuelle"] = $"{virtualUsed.Value:F1} / {virtualTotal.Value:F1} GB";
+                    ev["Mémoire virtuelle"] = AppendPath($"{virtualUsed.Value:F1} / {virtualTotal.Value:F1} GB", "scan_powershell.sections.Memory.data.commitUsedGB");
                 
                 // Page file
                 var pageSize = GetDouble(memData, "pageFileSizeGB");
                 var pageUsed = GetDouble(memData, "pageFileUsedGB");
                 if (pageSize.HasValue && pageUsed.HasValue)
-                    ev["Fichier d'échange"] = $"{pageUsed.Value:F1} / {pageSize.Value:F1} GB";
+                    ev["Fichier d'échange"] = AppendPath($"{pageUsed.Value:F1} / {pageSize.Value:F1} GB", "scan_powershell.sections.Memory.data.pageFileSizeGB");
                 
                 // Module count
                 var modCount = GetInt(memData, "moduleCount");
                 if (modCount.HasValue && modCount > 0)
-                    ev["Barrettes"] = modCount.Value.ToString();
+                    ev["Barrettes"] = AppendPath(modCount.Value.ToString(), "scan_powershell.sections.Memory.data.moduleCount");
+
+                if (memData.Value.TryGetProperty("modules", out var modules) && modules.ValueKind == JsonValueKind.Array)
+                {
+                    var moduleList = modules.EnumerateArray()
+                        .Select(m =>
+                        {
+                            var slot = GetString(m, "slot");
+                            var capacity = GetString(m, "capacityGB");
+                            var type = GetString(m, "type");
+                            var speed = GetDouble(m, "speedMHz");
+                            var parts = new List<string>();
+                            if (!string.IsNullOrEmpty(capacity)) parts.Add($"{capacity} GB");
+                            if (!string.IsNullOrEmpty(type)) parts.Add(type);
+                            if (speed.HasValue) parts.Add($"{speed.Value:F0} MHz");
+                            var detail = string.Join(" ", parts);
+                            return string.IsNullOrEmpty(slot) ? detail : $"{slot}: {detail}";
+                        })
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .Take(4)
+                        .ToList();
+                    if (moduleList.Count > 0)
+                        ev["Modules RAM"] = AppendPath(string.Join(" | ", moduleList), "scan_powershell.sections.Memory.data.modules");
+                }
             }
 
             // === Process Telemetry: Top RAM ===
             var topRam = GetTopProcesses(root, "memory", 5);
             if (topRam.Count > 0)
-                ev["Top processus RAM"] = string.Join(", ", topRam);
+                ev["Top processus RAM"] = AppendPath(string.Join(", ", topRam), "process_telemetry.topByMemory");
 
             return ev;
         }
@@ -383,7 +443,7 @@ namespace PCDiagnosticPro.Services
                 if (storageData.Value.TryGetProperty("disks", out var disks) && disks.ValueKind == JsonValueKind.Array)
                 {
                     var diskList = disks.EnumerateArray().ToList();
-                    ev["Disques physiques"] = diskList.Count.ToString();
+                    ev["Disques physiques"] = AppendPath(diskList.Count.ToString(), "scan_powershell.sections.Storage.data.disks");
                     
                     // List each disk with type
                     int i = 1;
@@ -406,7 +466,33 @@ namespace PCDiagnosticPro.Services
                         var info = !string.IsNullOrEmpty(typeStr) ? $"{typeStr}" : "";
                         if (sizeGB.HasValue) info += $" {sizeGB.Value:F0} GB";
                         
-                        ev[$"Disque {i}"] = $"{model.Trim()} ({info.Trim()})";
+                        ev[$"Disque {i}"] = AppendPath($"{model.Trim()} ({info.Trim()})", "scan_powershell.sections.Storage.data.disks");
+                        i++;
+                    }
+                }
+                else if (storageData.Value.TryGetProperty("physicalDisks", out var physicalDisks) && physicalDisks.ValueKind == JsonValueKind.Array)
+                {
+                    var diskList = physicalDisks.EnumerateArray().ToList();
+                    ev["Disques physiques"] = AppendPath(diskList.Count.ToString(), "scan_powershell.sections.Storage.data.physicalDisks");
+
+                    int i = 1;
+                    foreach (var disk in diskList.Take(4))
+                    {
+                        var model = GetStringAny(disk, "model", "friendlyName") ?? $"Disque {i}";
+                        var mediaType = GetStringAny(disk, "type", "mediaType") ?? "";
+                        var sizeGB = GetDoubleAny(disk, "sizeGB", "totalGB");
+                        var typeStr = mediaType.ToUpper() switch
+                        {
+                            "SSD" => "SSD",
+                            "HDD" => "HDD",
+                            "NVME" => "NVMe",
+                            _ when model.Contains("NVMe", StringComparison.OrdinalIgnoreCase) => "NVMe",
+                            _ when model.Contains("SSD", StringComparison.OrdinalIgnoreCase) => "SSD",
+                            _ => ""
+                        };
+                        var info = !string.IsNullOrEmpty(typeStr) ? $"{typeStr}" : "";
+                        if (sizeGB.HasValue) info += $" {sizeGB.Value:F0} GB";
+                        ev[$"Disque {i}"] = AppendPath($"{model.Trim()} ({info.Trim()})", "scan_powershell.sections.Storage.data.physicalDisks");
                         i++;
                     }
                 }
@@ -417,9 +503,9 @@ namespace PCDiagnosticPro.Services
                     var volList = new List<string>();
                     foreach (var vol in volumes.EnumerateArray())
                     {
-                        var letter = GetString(vol, "driveLetter") ?? "";
-                        var freeGB = GetDouble(vol, "freeSpaceGB");
-                        var sizeGB = GetDouble(vol, "sizeGB");
+                        var letter = GetStringAny(vol, "driveLetter", "letter") ?? "";
+                        var freeGB = GetDoubleAny(vol, "freeSpaceGB", "freeGB");
+                        var sizeGB = GetDoubleAny(vol, "sizeGB", "totalGB");
                         
                         if (!string.IsNullOrEmpty(letter) && freeGB.HasValue && sizeGB.HasValue && sizeGB > 0)
                         {
@@ -429,7 +515,7 @@ namespace PCDiagnosticPro.Services
                         }
                     }
                     if (volList.Count > 0)
-                        ev["Partitions"] = string.Join(" | ", volList.Take(4));
+                        ev["Partitions"] = AppendPath(string.Join(" | ", volList.Take(4)), "scan_powershell.sections.Storage.data.volumes");
                 }
             }
 
@@ -446,7 +532,7 @@ namespace PCDiagnosticPro.Services
                         "caution" or "warning" => "⚠️",
                         _ => "❓"
                     };
-                    ev["Santé SMART"] = $"{icon} {healthStatus}";
+                    ev["Santé SMART"] = AppendPath($"{icon} {healthStatus}", "scan_powershell.sections.SmartDetails.data.overallHealth");
                 }
             }
 
@@ -459,13 +545,13 @@ namespace PCDiagnosticPro.Services
                     .Take(3);
                 var tempsStr = string.Join(", ", temps);
                 if (!string.IsNullOrEmpty(tempsStr))
-                    ev["Températures disques"] = tempsStr;
+                    ev["Températures disques"] = AppendPath(tempsStr, "sensors_csharp.storage.diskTemps");
             }
 
             // === Process Telemetry: Top IO ===
             var topIO = GetTopProcesses(root, "io", 3);
             if (topIO.Count > 0)
-                ev["Top processus IO"] = string.Join(", ", topIO);
+                ev["Top processus IO"] = AppendPath(string.Join(", ", topIO), "process_telemetry.topByIo");
 
             return ev;
         }
@@ -486,20 +572,39 @@ namespace PCDiagnosticPro.Services
                 var first = adapters.EnumerateArray().FirstOrDefault();
                 if (first.ValueKind == JsonValueKind.Object)
                 {
-                    AddIfNotEmpty(ev, "Adaptateur", GetString(first, "name"));
-                    AddIfNotEmpty(ev, "Vitesse lien", GetString(first, "speed") ?? 
-                        (GetDouble(first, "speedMbps").HasValue ? $"{GetDouble(first, "speedMbps"):F0} Mbps" : null));
-                    AddIfNotEmpty(ev, "Adresse IP", GetString(first, "ipv4"));
-                    AddIfNotEmpty(ev, "Passerelle", GetString(first, "gateway"));
-                    AddIfNotEmpty(ev, "DNS", GetString(first, "dns"));
-                    AddIfNotEmpty(ev, "MAC", GetString(first, "macAddress"));
+                    AddIfNotEmpty(ev, "Adaptateur", GetString(first, "name"), "scan_powershell.sections.Network.data.adapters[0].name");
+                    var speed = GetString(first, "speed");
+                    if (string.IsNullOrEmpty(speed))
+                    {
+                        var speedMbps = GetDouble(first, "speedMbps");
+                        speed = speedMbps.HasValue ? $"{speedMbps:F0} Mbps" : null;
+                    }
+                    AddIfNotEmpty(ev, "Vitesse lien", speed, "scan_powershell.sections.Network.data.adapters[0].speed");
+
+                    string? ipAddress = null;
+                    if (first.TryGetProperty("ip", out var ipArray) && ipArray.ValueKind == JsonValueKind.Array)
+                        ipAddress = string.Join(", ", ipArray.EnumerateArray().Select(v => v.GetString()).Where(v => !string.IsNullOrEmpty(v)));
+                    ipAddress ??= GetStringAny(first, "ipv4", "ipAddress");
+                    AddIfNotEmpty(ev, "Adresse IP", ipAddress, "scan_powershell.sections.Network.data.adapters[0].ip");
+
+                    var gateway = GetString(first, "gateway");
+                    if (string.IsNullOrEmpty(gateway) && first.TryGetProperty("gateway", out var gatewayEl) && gatewayEl.ValueKind == JsonValueKind.Array)
+                        gateway = string.Join(", ", gatewayEl.EnumerateArray().Select(v => v.GetString()).Where(v => !string.IsNullOrEmpty(v)));
+                    AddIfNotEmpty(ev, "Passerelle", gateway, "scan_powershell.sections.Network.data.adapters[0].gateway");
+
+                    var dns = GetString(first, "dns");
+                    if (string.IsNullOrEmpty(dns) && first.TryGetProperty("dns", out var dnsEl) && dnsEl.ValueKind == JsonValueKind.Array)
+                        dns = string.Join(", ", dnsEl.EnumerateArray().Select(v => v.GetString()).Where(v => !string.IsNullOrEmpty(v)));
+                    AddIfNotEmpty(ev, "DNS", dns, "scan_powershell.sections.Network.data.adapters[0].dns");
+
+                    AddIfNotEmpty(ev, "MAC", GetStringAny(first, "macAddress", "mac"), "scan_powershell.sections.Network.data.adapters[0].mac");
                     
                     // WiFi specific
                     var rssi = GetInt(first, "rssi") ?? GetInt(first, "signalStrength");
                     if (rssi.HasValue)
                     {
                         var quality = rssi.Value > -50 ? "Excellent" : rssi.Value > -60 ? "Bon" : rssi.Value > -70 ? "Moyen" : "Faible";
-                        ev["WiFi Signal"] = $"{rssi.Value} dBm ({quality})";
+                        ev["WiFi Signal"] = AppendPath($"{rssi.Value} dBm ({quality})", "scan_powershell.sections.Network.data.adapters[0].rssi");
                     }
                 }
             }
@@ -512,30 +617,30 @@ namespace PCDiagnosticPro.Services
                 if (latency.HasValue)
                 {
                     var status = latency > 100 ? " ⚠️" : latency > 50 ? " ⚡" : "";
-                    ev["Latence (ping)"] = $"{latency.Value:F0} ms{status}";
+                    ev["Latence (ping)"] = AppendPath($"{latency.Value:F0} ms{status}", "network_diagnostics.latencyMs");
                 }
                 
                 var jitter = GetDouble(netDiag, "jitterMs");
                 if (jitter.HasValue)
-                    ev["Gigue"] = $"{jitter.Value:F1} ms";
+                    ev["Gigue"] = AppendPath($"{jitter.Value:F1} ms", "network_diagnostics.jitterMs");
                 
                 var loss = GetDouble(netDiag, "packetLossPercent");
                 if (loss.HasValue)
                 {
                     var status = loss > 1 ? " ⚠️" : "";
-                    ev["Perte paquets"] = $"{loss.Value:F1}%{status}";
+                    ev["Perte paquets"] = AppendPath($"{loss.Value:F1}%{status}", "network_diagnostics.packetLossPercent");
                 }
                 
                 var download = GetDouble(netDiag, "downloadMbps");
                 var upload = GetDouble(netDiag, "uploadMbps");
                 if (download.HasValue && upload.HasValue)
-                    ev["Débit FAI"] = $"↓{download.Value:F1} / ↑{upload.Value:F1} Mbps";
+                    ev["Débit FAI"] = AppendPath($"↓{download.Value:F1} / ↑{upload.Value:F1} Mbps", "network_diagnostics.downloadMbps");
                 else if (download.HasValue)
-                    ev["Download"] = $"{download.Value:F1} Mbps";
+                    ev["Download"] = AppendPath($"{download.Value:F1} Mbps", "network_diagnostics.downloadMbps");
                 
                 var vpn = GetBool(netDiag, "vpnDetected");
                 if (vpn.HasValue)
-                    ev["VPN/Proxy"] = vpn.Value ? "⚠️ Détecté" : "Non";
+                    ev["VPN/Proxy"] = AppendPath(vpn.Value ? "⚠️ Détecté" : "Non", "network_diagnostics.vpnDetected");
             }
 
             return ev;
@@ -553,26 +658,28 @@ namespace PCDiagnosticPro.Services
             var signals = GetDiagnosticSignals(root);
             if (signals.HasValue)
             {
-                // BSOD
-                var bsodCount = GetSignalValue(signals.Value, "bsod_minidump", "count");
-                if (!string.IsNullOrEmpty(bsodCount))
-                {
-                    ev["BSOD récents"] = bsodCount == "0" ? "✅ Aucun" : $"⚠️ {bsodCount} crash(es)";
-                }
-                
-                var bsodCodes = GetSignalValue(signals.Value, "bsod_minidump", "codes");
-                if (!string.IsNullOrEmpty(bsodCodes) && bsodCodes != "[]")
-                    ev["Codes BSOD"] = bsodCodes;
-                
                 // WHEA
-                var wheaCount = GetSignalValue(signals.Value, "whea_errors", "count");
+                var wheaCount = GetSignalValueFromValue(signals.Value, "whea", "Last30dCount");
                 if (!string.IsNullOrEmpty(wheaCount))
-                    ev["Erreurs WHEA"] = wheaCount == "0" ? "✅ Aucune" : $"⚠️ {wheaCount}";
-                
-                // Kernel-Power
-                var kpCount = GetSignalValue(signals.Value, "kernel_power", "count");
+                    ev["Erreurs WHEA"] = AppendPath(wheaCount == "0" ? "✅ Aucune" : $"⚠️ {wheaCount}", "diagnostic_signals.whea.value.Last30dCount");
+
+                // Driver stability / kernel power
+                var kpCount = GetSignalValueFromValue(signals.Value, "driverStability", "KernelPower41Count30d");
                 if (!string.IsNullOrEmpty(kpCount))
-                    ev["Kernel-Power"] = kpCount == "0" ? "✅ Aucun" : $"⚠️ {kpCount} événement(s)";
+                    ev["Kernel-Power (30j)"] = AppendPath(kpCount == "0" ? "✅ Aucun" : $"⚠️ {kpCount}", "diagnostic_signals.driverStability.value.KernelPower41Count30d");
+
+                var bugcheck = GetSignalValueFromValue(signals.Value, "driverStability", "BugcheckCount30d");
+                if (!string.IsNullOrEmpty(bugcheck))
+                    ev["BSOD (30j)"] = AppendPath(bugcheck == "0" ? "✅ Aucun" : $"⚠️ {bugcheck}", "diagnostic_signals.driverStability.value.BugcheckCount30d");
+            }
+
+            // === PS: MinidumpAnalysis ===
+            var miniData = GetSectionData(root, "MinidumpAnalysis");
+            if (miniData.HasValue)
+            {
+                var minidumps = GetInt(miniData, "minidumpCount");
+                if (minidumps.HasValue)
+                    ev["BSOD (minidumps)"] = AppendPath(minidumps == 0 ? "✅ Aucun" : $"⚠️ {minidumps.Value}", "scan_powershell.sections.MinidumpAnalysis.data.minidumpCount");
             }
 
             // === PS: ReliabilityHistory ===
@@ -720,7 +827,7 @@ namespace PCDiagnosticPro.Services
             var appData = GetSectionData(root, "InstalledApplications");
             if (appData.HasValue)
             {
-                var appCount = GetInt(appData, "applicationCount") ?? GetInt(appData, "count");
+                var appCount = GetIntAny(appData, "applicationCount", "count", "totalCount");
                 if (appCount.HasValue)
                     ev["Apps installées"] = appCount.Value.ToString();
                 
@@ -741,7 +848,7 @@ namespace PCDiagnosticPro.Services
             var startupData = GetSectionData(root, "StartupPrograms");
             if (startupData.HasValue)
             {
-                var startupCount = GetInt(startupData, "programCount") ?? GetInt(startupData, "count");
+                var startupCount = GetIntAny(startupData, "programCount", "count", "startupCount");
                 if (startupCount.HasValue)
                     ev["Programmes démarrage"] = startupCount.Value.ToString();
                 
@@ -782,10 +889,23 @@ namespace PCDiagnosticPro.Services
             var cpuData = GetSectionData(root, "CPU");
             if (cpuData.HasValue)
             {
+                JsonElement? first = null;
                 var cpuArray = GetArray(cpuData, "cpus") ?? GetArray(cpuData, "cpuList");
                 if (cpuArray.HasValue)
                 {
-                    var first = cpuArray.Value.EnumerateArray().FirstOrDefault();
+                    first = cpuArray.Value.EnumerateArray().FirstOrDefault();
+                }
+                else if (cpuData.Value.TryGetProperty("cpus", out var cpuObj) && cpuObj.ValueKind == JsonValueKind.Object)
+                {
+                    first = cpuObj;
+                }
+                else if (cpuData.Value.TryGetProperty("cpuList", out var cpuListObj) && cpuListObj.ValueKind == JsonValueKind.Object)
+                {
+                    first = cpuListObj;
+                }
+
+                if (first.HasValue)
+                {
                     var load = GetDouble(first, "currentLoad") ?? GetDouble(first, "load");
                     if (load.HasValue)
                     {
@@ -799,7 +919,7 @@ namespace PCDiagnosticPro.Services
             if (memData.HasValue)
             {
                 var totalGB = GetDouble(memData, "totalGB");
-                var availGB = GetDouble(memData, "availableGB");
+                var availGB = GetDoubleAny(memData, "availableGB", "freeGB");
                 if (totalGB.HasValue && availGB.HasValue && totalGB > 0)
                 {
                     var pct = ((totalGB.Value - availGB.Value) / totalGB.Value) * 100;
@@ -879,48 +999,58 @@ namespace PCDiagnosticPro.Services
             if (secData.HasValue)
             {
                 // Antivirus
-                var avName = GetString(secData, "antivirusName") ?? GetString(secData, "avName");
-                var avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus");
+                var avName = GetStringAny(secData, "antivirusName", "avName", "antivirusProducts");
                 if (!string.IsNullOrEmpty(avName))
+                    ev["Antivirus"] = AppendPath(avName, "scan_powershell.sections.Security.data.antivirusProducts");
+
+                // Defender status
+                var defenderEnabled = GetBoolAny(secData, "defenderEnabled", "defenderRTP");
+                if (defenderEnabled.HasValue)
+                    ev["Windows Defender"] = AppendPath(defenderEnabled.Value ? "✅ Actif" : "⚠️ Inactif", "scan_powershell.sections.Security.data.defenderEnabled");
+
+                var sigAge = GetInt(secData, "defenderSignatureAge");
+                if (sigAge.HasValue)
+                    ev["Signatures (jours)"] = AppendPath(sigAge.Value.ToString(), "scan_powershell.sections.Security.data.defenderSignatureAge");
+
+                // Firewall - derive from object
+                if (secData.Value.TryGetProperty("firewall", out var fw) && fw.ValueKind == JsonValueKind.Object)
                 {
-                    var icon = avStatus?.ToLower() switch
+                    bool? GetFirewallState(string name)
                     {
-                        "enabled" or "on" or "actif" => "✅",
-                        "disabled" or "off" => "⚠️",
-                        _ => ""
-                    };
-                    ev["Antivirus"] = $"{icon} {avName}";
+                        if (fw.TryGetProperty(name, out var state))
+                        {
+                            if (state.ValueKind == JsonValueKind.True) return true;
+                            if (state.ValueKind == JsonValueKind.False) return false;
+                            if (state.ValueKind == JsonValueKind.Number) return state.GetInt32() > 0;
+                            if (state.ValueKind == JsonValueKind.Object && state.TryGetProperty("value__", out var val) && val.ValueKind == JsonValueKind.Number)
+                                return val.GetInt32() > 0;
+                        }
+                        return null;
+                    }
+
+                    var domain = GetFirewallState("Domain");
+                    var priv = GetFirewallState("Private");
+                    var pub = GetFirewallState("Public");
+                    var states = new List<string>();
+                    if (domain.HasValue) states.Add($"Domain {(domain.Value ? "✅" : "❌")}");
+                    if (priv.HasValue) states.Add($"Private {(priv.Value ? "✅" : "❌")}");
+                    if (pub.HasValue) states.Add($"Public {(pub.Value ? "✅" : "❌")}");
+                    if (states.Count > 0)
+                        ev["Pare-feu"] = AppendPath(string.Join(" | ", states), "scan_powershell.sections.Security.data.firewall");
                 }
-                
-                // Firewall
-                var fwStatus = GetBool(secData, "firewallEnabled") ?? GetBool(secData, "firewall");
-                if (fwStatus.HasValue)
-                    ev["Pare-feu"] = fwStatus.Value ? "✅ Activé" : "⚠️ Désactivé";
-                
-                // Secure Boot
-                var secureBoot = GetBool(secData, "secureBootEnabled");
-                if (secureBoot.HasValue)
-                    ev["Secure Boot"] = secureBoot.Value ? "✅ Activé" : "⚠️ Désactivé";
-                
-                // BitLocker
-                var bitlocker = GetBool(secData, "bitlockerEnabled") ?? GetBool(secData, "bitLocker");
-                if (bitlocker.HasValue)
-                    ev["Chiffrement disque"] = bitlocker.Value ? "✅ BitLocker actif" : "❌ Non chiffré";
-                
+
                 // UAC
                 var uac = GetBool(secData, "uacEnabled");
                 if (uac.HasValue)
-                    ev["UAC"] = uac.Value ? "✅ Activé" : "⚠️ Désactivé";
-                
-                // RDP
-                var rdp = GetBool(secData, "rdpEnabled");
-                if (rdp.HasValue && rdp.Value)
-                    ev["RDP"] = "⚠️ Activé";
-                
-                // SMBv1
-                var smb1 = GetBool(secData, "smbV1Enabled");
-                if (smb1.HasValue && smb1.Value)
-                    ev["SMBv1"] = "⚠️ Activé (risque)";
+                    ev["UAC"] = AppendPath(uac.Value ? "✅ Activé" : "⚠️ Désactivé", "scan_powershell.sections.Security.data.uacEnabled");
+            }
+
+            var machineId = GetSectionData(root, "MachineIdentity");
+            if (machineId.HasValue)
+            {
+                var secureBoot = GetBool(machineId, "secureBoot");
+                if (secureBoot.HasValue)
+                    ev["Secure Boot"] = AppendPath(secureBoot.Value ? "✅ Activé" : "⚠️ Désactivé", "scan_powershell.sections.MachineIdentity.data.secureBoot");
             }
 
             // === PS: WindowsUpdate - Last patch ===
@@ -1094,11 +1224,30 @@ namespace PCDiagnosticPro.Services
             return null;
         }
 
+        private static string? GetSignalValueFromValue(JsonElement signals, string signalName, string valueName)
+        {
+            var signal = GetSignalResult(signals, signalName);
+            if (signal.HasValue && signal.Value.ValueKind == JsonValueKind.Object &&
+                signal.Value.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Object)
+            {
+                var str = GetString(value, valueName);
+                if (!string.IsNullOrWhiteSpace(str)) return str;
+                var number = GetDouble(value, valueName);
+                if (number.HasValue) return number.Value.ToString("0.##");
+            }
+            return null;
+        }
+
         private static string? GetString(JsonElement? element, string propName)
         {
             if (!element.HasValue || element.Value.ValueKind != JsonValueKind.Object) return null;
             if (element.Value.TryGetProperty(propName, out var prop))
                 return prop.ValueKind == JsonValueKind.String ? prop.GetString() : prop.ToString();
+            foreach (var p in element.Value.EnumerateObject())
+            {
+                if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase))
+                    return p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString() : p.Value.ToString();
+            }
             return null;
         }
 
@@ -1110,6 +1259,14 @@ namespace PCDiagnosticPro.Services
                 if (prop.ValueKind == JsonValueKind.Number) return prop.GetInt32();
                 if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out var i)) return i;
             }
+            foreach (var p in element.Value.EnumerateObject())
+            {
+                if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (p.Value.ValueKind == JsonValueKind.Number) return p.Value.GetInt32();
+                    if (p.Value.ValueKind == JsonValueKind.String && int.TryParse(p.Value.GetString(), out var i)) return i;
+                }
+            }
             return null;
         }
 
@@ -1120,6 +1277,14 @@ namespace PCDiagnosticPro.Services
             {
                 if (prop.ValueKind == JsonValueKind.Number) return prop.GetDouble();
                 if (prop.ValueKind == JsonValueKind.String && double.TryParse(prop.GetString(), out var d)) return d;
+            }
+            foreach (var p in element.Value.EnumerateObject())
+            {
+                if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (p.Value.ValueKind == JsonValueKind.Number) return p.Value.GetDouble();
+                    if (p.Value.ValueKind == JsonValueKind.String && double.TryParse(p.Value.GetString(), out var d)) return d;
+                }
             }
             return null;
         }
@@ -1138,6 +1303,20 @@ namespace PCDiagnosticPro.Services
                     if (s == "false" || s == "no" || s == "0") return false;
                 }
             }
+            foreach (var p in element.Value.EnumerateObject())
+            {
+                if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (p.Value.ValueKind == JsonValueKind.True) return true;
+                    if (p.Value.ValueKind == JsonValueKind.False) return false;
+                    if (p.Value.ValueKind == JsonValueKind.String)
+                    {
+                        var s = p.Value.GetString()?.ToLower();
+                        if (s == "true" || s == "yes" || s == "1") return true;
+                        if (s == "false" || s == "no" || s == "0") return false;
+                    }
+                }
+            }
             return null;
         }
 
@@ -1149,10 +1328,59 @@ namespace PCDiagnosticPro.Services
             return null;
         }
 
-        private static void AddIfNotEmpty(Dictionary<string, string> dict, string key, string? value)
+        private static void AddIfNotEmpty(Dictionary<string, string> dict, string key, string? value, string? jsonPath = null)
         {
             if (!string.IsNullOrEmpty(value))
-                dict[key] = value;
+                dict[key] = AppendPath(value, jsonPath);
+        }
+
+        private static string AppendPath(string value, string? jsonPath)
+        {
+            if (DebugPathsEnabled && !string.IsNullOrWhiteSpace(jsonPath))
+            {
+                return $"{value} 📍[{jsonPath}]";
+            }
+            return value;
+        }
+
+        private static string? GetStringAny(JsonElement? element, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                var val = GetString(element, name);
+                if (!string.IsNullOrWhiteSpace(val)) return val;
+            }
+            return null;
+        }
+
+        private static int? GetIntAny(JsonElement? element, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                var val = GetInt(element, name);
+                if (val.HasValue) return val;
+            }
+            return null;
+        }
+
+        private static double? GetDoubleAny(JsonElement? element, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                var val = GetDouble(element, name);
+                if (val.HasValue) return val;
+            }
+            return null;
+        }
+
+        private static bool? GetBoolAny(JsonElement? element, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                var val = GetBool(element, name);
+                if (val.HasValue) return val;
+            }
+            return null;
         }
 
         private static List<string> GetTopProcesses(JsonElement root, string metric, int count)
