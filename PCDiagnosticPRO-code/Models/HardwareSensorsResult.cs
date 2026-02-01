@@ -33,6 +33,13 @@ namespace PCDiagnosticPro.Models
 
         [JsonPropertyName("gpuTempC")]
         public MetricValue<double> GpuTempC { get; set; } = new MetricValue<double>();
+        
+        /// <summary>
+        /// Source of GPU temperature sensor (GPU Core, Hot Spot, etc.)
+        /// Useful for debugging Task Manager vs app discrepancies.
+        /// </summary>
+        [JsonPropertyName("gpuTempSource")]
+        public string GpuTempSource { get; set; } = "N/A";
     }
 
     public class CpuMetrics

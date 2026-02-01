@@ -167,27 +167,83 @@ namespace PCDiagnosticPro.Services
             }
 
             // 4. Secure Boot (Oui/Non, PAS "—")
+            // FIX: Check MachineIdentity.secureBoot as primary source, Security as fallback
             var secData = GetSectionData(root, "Security");
-            var secureBoot = GetBool(secData, "secureBootEnabled") ?? GetBool(secData, "SecureBootEnabled");
-            AddYesNo(ev, "Secure Boot", secureBoot, "scan_powershell.sections.Security.data.secureBootEnabled");
+            var machineIdData = GetSectionData(root, "MachineIdentity");
+            
+            // FIX: Priority order: MachineIdentity.secureBoot (most reliable) > Security.secureBootEnabled
+            var secureBoot = GetBool(machineIdData, "secureBoot") ?? 
+                             GetBool(secData, "secureBootEnabled") ?? 
+                             GetBool(secData, "SecureBootEnabled");
+            
+            string secureBootSource = machineIdData.HasValue && GetBool(machineIdData, "secureBoot").HasValue 
+                ? "MachineIdentity.secureBoot" 
+                : "Security.secureBootEnabled";
+            AddYesNo(ev, "Secure Boot", secureBoot, secureBootSource);
 
             // 5. Antivirus actif + état
-            var avName = GetString(secData, "antivirusName") ?? GetString(secData, "avName") ?? GetString(secData, "AntivirusName");
-            var avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus") ?? GetString(secData, "AntivirusStatus");
+            // FIX: Handle antivirusProducts as string OR array
+            string? avName = null;
+            string? avStatus = null;
+            
+            if (secData.HasValue && secData.Value.TryGetProperty("antivirusProducts", out var avProductsProp))
+            {
+                // Case 1: String (actual PS output for single AV)
+                if (avProductsProp.ValueKind == JsonValueKind.String)
+                {
+                    avName = avProductsProp.GetString();
+                }
+                // Case 2: Array (multiple AV products)
+                else if (avProductsProp.ValueKind == JsonValueKind.Array)
+                {
+                    var firstAv = avProductsProp.EnumerateArray().FirstOrDefault();
+                    if (firstAv.ValueKind == JsonValueKind.Object)
+                    {
+                        avName = GetString(firstAv, "displayName") ?? GetString(firstAv, "name");
+                        avStatus = GetString(firstAv, "productState") ?? GetString(firstAv, "status");
+                    }
+                    else if (firstAv.ValueKind == JsonValueKind.String)
+                    {
+                        avName = firstAv.GetString();
+                    }
+                }
+            }
+            
+            // Fallback to direct properties
+            if (string.IsNullOrEmpty(avName))
+            {
+                avName = GetString(secData, "antivirusName") ?? GetString(secData, "avName") ?? GetString(secData, "AntivirusName");
+            }
+            if (string.IsNullOrEmpty(avStatus))
+            {
+                avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus") ?? GetString(secData, "AntivirusStatus");
+            }
+            
+            // FIX: Check defenderEnabled/defenderRTP as status indicators
+            if (string.IsNullOrEmpty(avStatus) && secData.HasValue)
+            {
+                var defenderEnabled = GetBool(secData, "defenderEnabled");
+                var defenderRTP = GetBool(secData, "defenderRTP");
+                if (defenderEnabled == true || defenderRTP == true)
+                {
+                    avStatus = "Actif";
+                }
+                else if (defenderEnabled == false)
+                {
+                    avStatus = "Désactivé";
+                }
+            }
+            
             if (!string.IsNullOrEmpty(avName))
             {
-                var avInfo = avName;
-                if (!string.IsNullOrEmpty(avStatus))
+                var icon = avStatus?.ToLower() switch
                 {
-                    var icon = avStatus.ToLower() switch
-                    {
-                        "enabled" or "on" or "actif" or "à jour" => "✅",
-                        "disabled" or "off" or "inactif" => "⚠️",
-                        _ => ""
-                    };
-                    avInfo = $"{icon} {avName} ({avStatus})";
-                }
-                Add(ev, "Antivirus", avInfo, "scan_powershell.sections.Security.data.antivirusName");
+                    "enabled" or "on" or "actif" or "à jour" => "✅",
+                    "disabled" or "off" or "inactif" or "désactivé" => "⚠️",
+                    _ => "✅" // Default to OK if AV is present
+                };
+                var avInfo = !string.IsNullOrEmpty(avStatus) ? $"{icon} {avName} ({avStatus})" : $"{icon} {avName}";
+                Add(ev, "Antivirus", avInfo, "scan_powershell.sections.Security.data.antivirusProducts");
             }
             else
             {
@@ -195,6 +251,8 @@ namespace PCDiagnosticPro.Services
             }
 
             // 6. Espace libre C: (total / libre / %)
+            // FIX: Support both "letter" (PS actual) and "driveLetter" (legacy)
+            // FIX: Support both "freeGB"/"totalGB" (PS actual) and "freeSpaceGB"/"sizeGB" (legacy)
             var storageData = GetSectionData(root, "Storage");
             bool foundC = false;
             if (storageData.HasValue && storageData.Value.TryGetProperty("volumes", out var volumes) && 
@@ -202,11 +260,16 @@ namespace PCDiagnosticPro.Services
             {
                 foreach (var vol in volumes.EnumerateArray())
                 {
-                    var letter = GetString(vol, "driveLetter")?.ToUpper();
-                    if (letter == "C")
+                    // FIX: Support both "letter" (actual PS output) and "driveLetter" (expected)
+                    var letter = GetString(vol, "letter") ?? GetString(vol, "driveLetter");
+                    var letterUpper = letter?.ToUpper().TrimEnd(':');
+                    
+                    if (letterUpper == "C")
                     {
-                        var freeGB = GetDouble(vol, "freeSpaceGB");
-                        var sizeGB = GetDouble(vol, "sizeGB");
+                        // FIX: Support both freeGB/totalGB (actual) and freeSpaceGB/sizeGB (legacy)
+                        var freeGB = GetDouble(vol, "freeGB") ?? GetDouble(vol, "freeSpaceGB");
+                        var sizeGB = GetDouble(vol, "totalGB") ?? GetDouble(vol, "sizeGB");
+                        
                         if (freeGB.HasValue && sizeGB.HasValue && sizeGB > 0)
                         {
                             var pct = (freeGB.Value / sizeGB.Value) * 100;
@@ -297,19 +360,11 @@ namespace PCDiagnosticPro.Services
             
             if (cpuData.HasValue)
             {
-                var cpuArray = GetArray(cpuData, "cpus") ?? GetArray(cpuData, "cpuList");
+                // FIX: Support both array AND object for cpus/cpuList (PS script may return object for single CPU)
+                firstCpu = GetFirstItemFromArrayOrObject(cpuData, "cpus") ?? GetFirstItemFromArrayOrObject(cpuData, "cpuList");
+                
                 // #region agent log
-                DebugLog("A", "ExtractCPU:array", "GetArray result", new { cpuArrayHasValue = cpuArray.HasValue });
-                // #endregion
-                if (cpuArray.HasValue)
-                    firstCpu = cpuArray.Value.EnumerateArray().FirstOrDefault();
-                // #region agent log
-                // If cpuArray is null but cpus/cpuList exists as object, try to get first item directly
-                if (!cpuArray.HasValue && cpuData.Value.TryGetProperty("cpus", out var cpusObj) && cpusObj.ValueKind == JsonValueKind.Object)
-                {
-                    firstCpu = cpusObj;
-                    DebugLog("A", "ExtractCPU:objectFallback", "cpus is object, using directly", new { firstCpuKind = firstCpu?.ValueKind.ToString() });
-                }
+                DebugLog("A", "ExtractCPU:result", "firstCpu resolved", new { hasCpu = firstCpu.HasValue, kind = firstCpu?.ValueKind.ToString() });
                 // #endregion
             }
 
@@ -440,9 +495,12 @@ namespace PCDiagnosticPro.Services
             
             if (gpuData.HasValue)
             {
-                var gpuArray = GetArray(gpuData, "gpuList") ?? GetArray(gpuData, "gpus");
-                if (gpuArray.HasValue)
-                    firstGpu = gpuArray.Value.EnumerateArray().FirstOrDefault();
+                // FIX: Support both array AND object for gpuList/gpus (PS script may return object for single GPU)
+                firstGpu = GetFirstItemFromArrayOrObject(gpuData, "gpuList") ?? GetFirstItemFromArrayOrObject(gpuData, "gpus");
+                
+                // #region agent log
+                DebugLog("A", "ExtractGPU:result", "firstGpu resolved", new { hasGpu = firstGpu.HasValue, kind = firstGpu?.ValueKind.ToString() });
+                // #endregion
             }
 
             // 1. Nom GPU
@@ -655,19 +713,38 @@ namespace PCDiagnosticPro.Services
             var storageData = GetSectionData(root, "Storage");
             
             // 1 & 2. Disques physiques avec type
-            if (storageData.HasValue && storageData.Value.TryGetProperty("disks", out var disks) && 
-                disks.ValueKind == JsonValueKind.Array)
+            // FIX: Support both "physicalDisks" (actual PS output) and "disks" (legacy)
+            JsonElement? disksElement = null;
+            string diskSource = "physicalDisks";
+            
+            if (storageData.HasValue)
             {
-                var diskList = disks.EnumerateArray().ToList();
-                Add(ev, "Disques physiques", diskList.Count.ToString(), "scan_powershell.sections.Storage.data.disks.length");
+                if (storageData.Value.TryGetProperty("physicalDisks", out var pDisks) && pDisks.ValueKind == JsonValueKind.Array)
+                {
+                    disksElement = pDisks;
+                    diskSource = "physicalDisks";
+                }
+                else if (storageData.Value.TryGetProperty("disks", out var legacyDisks) && legacyDisks.ValueKind == JsonValueKind.Array)
+                {
+                    disksElement = legacyDisks;
+                    diskSource = "disks";
+                }
+            }
+            
+            if (disksElement.HasValue)
+            {
+                var diskList = disksElement.Value.EnumerateArray().ToList();
+                Add(ev, "Disques physiques", diskList.Count.ToString(), $"scan_powershell.sections.Storage.data.{diskSource}.length");
                 
                 int i = 1;
-                foreach (var disk in diskList.Take(4))
+                foreach (var disk in diskList)
                 {
                     var model = GetString(disk, "model") ?? GetString(disk, "friendlyName") ?? $"Disque {i}";
-                    var mediaType = GetString(disk, "mediaType") ?? "";
+                    var mediaType = GetString(disk, "type") ?? GetString(disk, "mediaType") ?? "";
                     var sizeGB = GetDouble(disk, "sizeGB");
+                    var interfaceType = GetString(disk, "interface") ?? "";
                     
+                    // Determine type from multiple sources
                     var typeStr = mediaType.ToUpper() switch
                     {
                         "SSD" => "SSD",
@@ -675,72 +752,139 @@ namespace PCDiagnosticPro.Services
                         "NVME" => "NVMe",
                         _ when model.Contains("NVMe", StringComparison.OrdinalIgnoreCase) => "NVMe",
                         _ when model.Contains("SSD", StringComparison.OrdinalIgnoreCase) => "SSD",
-                        _ => "HDD"
+                        _ when interfaceType.Contains("SCSI", StringComparison.OrdinalIgnoreCase) && 
+                               (model.Contains("Micron", StringComparison.OrdinalIgnoreCase) || 
+                                model.Contains("Samsung", StringComparison.OrdinalIgnoreCase)) => "SSD",
+                        _ => mediaType.ToUpper() == "HDD" ? "HDD" : "Disque"
                     };
                     
+                    // FIX: Display temperature with emoji if available from sensors
+                    string? tempInfo = null;
+                    if (sensors?.Disks != null)
+                    {
+                        var matchingDisk = sensors.Disks.FirstOrDefault(d => 
+                            d.Name?.Available == true && 
+                            model.Contains(d.Name.Value?.Split('_')[0] ?? "###", StringComparison.OrdinalIgnoreCase));
+                        
+                        if (matchingDisk?.TempC?.Available == true)
+                        {
+                            var temp = matchingDisk.TempC.Value;
+                            var emoji = temp < 45 ? "✅" : temp < 55 ? "⚡" : "⚠️";
+                            tempInfo = $" {emoji}{temp:F0}°C";
+                        }
+                    }
+                    
                     var info = sizeGB.HasValue ? $"{typeStr} {sizeGB.Value:F0} GB" : typeStr;
-                    Add(ev, $"Disque {i}", $"{model.Trim()} ({info})", $"scan_powershell.sections.Storage.data.disks[{i-1}]");
+                    Add(ev, $"Disque {i}", $"{model.Trim()} ({info}){tempInfo ?? ""}", 
+                        $"scan_powershell.sections.Storage.data.{diskSource}[{i-1}]");
                     i++;
                 }
             }
             else
             {
-                AddUnknown(ev, "Disques physiques", "Storage.data.disks absent");
+                AddUnknown(ev, "Disques physiques", "Storage.data.physicalDisks/disks absent");
             }
 
-            // 3. Températures disques (capteurs C#)
+            // 3. Températures disques (capteurs C#) - affichage individuel avec emoji
             if (sensors?.Disks?.Count > 0)
             {
-                var temps = sensors.Disks
+                var tempsWithEmoji = sensors.Disks
                     .Where(d => d.TempC?.Available == true)
                     .Select(d => {
                         var temp = d.TempC.Value;
-                        var status = temp > 50 ? "⚠️" : "";
-                        return $"{d.Name?.Value ?? "Disk"}: {temp:F0}°C{status}";
+                        var emoji = temp < 45 ? "✅" : temp < 55 ? "⚡" : "⚠️";
+                        var shortName = d.Name?.Value?.Split('_')[0] ?? "Disk";
+                        if (shortName.Length > 15) shortName = shortName.Substring(0, 15) + "..";
+                        return $"{shortName}: {emoji}{temp:F0}°C";
                     })
-                    .Take(4);
-                var tempsStr = string.Join(", ", temps);
+                    .Take(5);
+                var tempsStr = string.Join(" | ", tempsWithEmoji);
                 if (!string.IsNullOrEmpty(tempsStr))
                     Add(ev, "Températures disques", tempsStr, "sensors_csharp.disks[*].tempC");
-            }
-            // Optionnel
-
-            // 4. Santé SMART
-            var smartData = GetSectionData(root, "SmartDetails");
-            if (smartData.HasValue)
-            {
-                var healthStatus = GetString(smartData, "overallHealth") ?? GetString(smartData, "status") ?? GetString(smartData, "health");
-                if (!string.IsNullOrEmpty(healthStatus))
+                
+                // Also show max temperature
+                var maxTemp = sensors.Disks
+                    .Where(d => d.TempC?.Available == true)
+                    .Select(d => d.TempC.Value)
+                    .DefaultIfEmpty(0)
+                    .Max();
+                if (maxTemp > 0)
                 {
-                    var icon = healthStatus.ToLower() switch
-                    {
-                        "ok" or "healthy" or "good" or "passed" => "✅",
-                        "caution" or "warning" => "⚠️",
-                        "bad" or "failed" or "failing" => "❌",
-                        _ => "❓"
-                    };
-                    Add(ev, "Santé SMART", $"{icon} {healthStatus}", "scan_powershell.sections.SmartDetails.data.overallHealth");
+                    var emoji = maxTemp < 45 ? "✅" : maxTemp < 55 ? "⚡" : "⚠️";
+                    Add(ev, "TempMax Disques", $"{emoji} {maxTemp:F0}°C", "sensors_csharp.disks (max)");
                 }
             }
-            else if (sensors?.Disks?.Count > 0)
+
+            // 4. Santé SMART - check both SmartDetails and Storage.smart
+            var smartData = GetSectionData(root, "SmartDetails");
+            bool smartFound = false;
+            
+            if (smartData.HasValue)
             {
-                Add(ev, "Santé SMART", "Capteurs C# détectés", "sensors_csharp.disks");
+                // Check for disks property that may contain health info
+                if (smartData.Value.TryGetProperty("disks", out var smartDisks))
+                {
+                    var predictFailure = GetBool(smartDisks, "predictFailure");
+                    if (predictFailure.HasValue)
+                    {
+                        var icon = predictFailure.Value ? "⚠️ Défaillance prédite" : "✅ OK";
+                        Add(ev, "Santé SMART", icon, "scan_powershell.sections.SmartDetails.data.disks.predictFailure");
+                        smartFound = true;
+                    }
+                }
+                
+                if (!smartFound)
+                {
+                    var healthStatus = GetString(smartData, "overallHealth") ?? GetString(smartData, "status") ?? GetString(smartData, "health");
+                    if (!string.IsNullOrEmpty(healthStatus))
+                    {
+                        var icon = healthStatus.ToLower() switch
+                        {
+                            "ok" or "healthy" or "good" or "passed" => "✅",
+                            "caution" or "warning" => "⚠️",
+                            "bad" or "failed" or "failing" => "❌",
+                            _ => "❓"
+                        };
+                        Add(ev, "Santé SMART", $"{icon} {healthStatus}", "scan_powershell.sections.SmartDetails.data.overallHealth");
+                        smartFound = true;
+                    }
+                }
             }
-            else
+            
+            // Fallback: check Storage.smart
+            if (!smartFound && storageData.HasValue && storageData.Value.TryGetProperty("smart", out var storageSmart))
             {
-                AddUnknown(ev, "Santé SMART", "SmartDetails absent");
+                var predictFailure = GetBool(storageSmart, "predictFailure");
+                if (predictFailure.HasValue)
+                {
+                    var icon = predictFailure.Value ? "⚠️ Défaillance prédite" : "✅ OK";
+                    Add(ev, "Santé SMART", icon, "scan_powershell.sections.Storage.data.smart.predictFailure");
+                    smartFound = true;
+                }
+            }
+            
+            if (!smartFound)
+            {
+                if (sensors?.Disks?.Count > 0)
+                    Add(ev, "Santé SMART", "✅ Capteurs C# détectés", "sensors_csharp.disks");
+                else
+                    AddUnknown(ev, "Santé SMART", "SmartDetails absent");
             }
 
             // 5. TOUTES les partitions (obligatoire selon cahier des charges)
+            // FIX: Support both "letter" (actual) and "driveLetter" (legacy)
+            // FIX: Support both "freeGB"/"totalGB" (actual) and "freeSpaceGB"/"sizeGB" (legacy)
             if (storageData.HasValue && storageData.Value.TryGetProperty("volumes", out var volumes) && 
                 volumes.ValueKind == JsonValueKind.Array)
             {
                 var volList = new List<string>();
                 foreach (var vol in volumes.EnumerateArray())
                 {
-                    var letter = GetString(vol, "driveLetter") ?? "";
-                    var freeGB = GetDouble(vol, "freeSpaceGB");
-                    var sizeGB = GetDouble(vol, "sizeGB");
+                    var letter = GetString(vol, "letter") ?? GetString(vol, "driveLetter") ?? "";
+                    letter = letter.TrimEnd(':'); // Normalize: "C:" -> "C"
+                    
+                    var freeGB = GetDouble(vol, "freeGB") ?? GetDouble(vol, "freeSpaceGB");
+                    var sizeGB = GetDouble(vol, "totalGB") ?? GetDouble(vol, "sizeGB");
                     
                     if (!string.IsNullOrEmpty(letter) && sizeGB.HasValue && sizeGB > 0)
                     {
@@ -780,34 +924,51 @@ namespace PCDiagnosticPro.Services
             var netData = GetSectionData(root, "Network");
             JsonElement? activeAdapter = null;
             
-            // CORRECTION: Sélectionner l'adaptateur actif RÉEL (ignorer VMware/Hyper-V)
+            // CORRECTION: Sélectionner l'adaptateur actif RÉEL (ignorer VMware/Hyper-V/VirtualBox)
             if (netData.HasValue && netData.Value.TryGetProperty("adapters", out var adapters) && 
                 adapters.ValueKind == JsonValueKind.Array)
             {
-                var excludePatterns = new[] { "vmware", "hyper-v", "virtual", "vmnet", "vethernet", "loopback" };
+                var excludePatterns = new[] { "vmware", "hyper-v", "virtual", "vmnet", "vethernet", "loopback", "virtualbox" };
                 
                 foreach (var adapter in adapters.EnumerateArray())
                 {
                     var name = GetString(adapter, "name")?.ToLower() ?? "";
                     var status = GetString(adapter, "status")?.ToLower() ?? "";
-                    var ip = GetString(adapter, "ipv4") ?? "";
+                    
+                    // FIX: Extract IPv4 from ip[] array OR ipv4 string
+                    var ipv4 = ExtractIPv4FromAdapter(adapter);
                     
                     // Ignorer les adaptateurs virtuels
                     if (excludePatterns.Any(p => name.Contains(p))) continue;
                     
-                    // Préférer un adaptateur Up avec une IP
-                    if ((status == "up" || status == "connected") && !string.IsNullOrEmpty(ip) && !ip.StartsWith("169.254"))
+                    // Préférer un adaptateur avec une IP non-APIPA et gateway
+                    var gateway = GetGatewayFromAdapter(adapter);
+                    if (!string.IsNullOrEmpty(ipv4) && !ipv4.StartsWith("169.254") && !string.IsNullOrEmpty(gateway))
                     {
                         activeAdapter = adapter;
                         break;
                     }
                     
-                    // Fallback: premier adaptateur non-virtuel
-                    if (!activeAdapter.HasValue)
+                    // Second priority: adapter with valid IP
+                    if (!activeAdapter.HasValue && !string.IsNullOrEmpty(ipv4) && !ipv4.StartsWith("169.254"))
                         activeAdapter = adapter;
                 }
                 
-                // Si aucun trouvé, prendre le premier
+                // Fallback: first non-virtual adapter
+                if (!activeAdapter.HasValue)
+                {
+                    foreach (var adapter in adapters.EnumerateArray())
+                    {
+                        var name = GetString(adapter, "name")?.ToLower() ?? "";
+                        if (!excludePatterns.Any(p => name.Contains(p)))
+                        {
+                            activeAdapter = adapter;
+                            break;
+                        }
+                    }
+                }
+                
+                // Final fallback: first adapter
                 if (!activeAdapter.HasValue)
                     activeAdapter = adapters.EnumerateArray().FirstOrDefault();
             }
@@ -824,38 +985,41 @@ namespace PCDiagnosticPro.Services
                 if (!string.IsNullOrEmpty(speed))
                     Add(ev, "Vitesse lien", speed, "scan_powershell.sections.Network.data.adapters[active].speed");
 
-                // 3. IP
-                var ip = GetString(activeAdapter, "ipv4");
-                if (!string.IsNullOrEmpty(ip))
-                    Add(ev, "Adresse IP", ip, "scan_powershell.sections.Network.data.adapters[active].ipv4");
+                // 3. IP - FIX: Extract from ip[] array OR ipv4 string
+                var ipv4 = ExtractIPv4FromAdapter(activeAdapter.Value);
+                if (!string.IsNullOrEmpty(ipv4))
+                    Add(ev, "Adresse IP", ipv4, "scan_powershell.sections.Network.data.adapters[active].ip[]");
                 else
-                    AddUnknown(ev, "Adresse IP", "ipv4 absent");
+                    AddUnknown(ev, "Adresse IP", "ip/ipv4 absent");
 
-                // 4. Passerelle
-                var gateway = GetString(activeAdapter, "gateway");
+                // 4. Passerelle - FIX: Handle gateway as string or object
+                var gateway = GetGatewayFromAdapter(activeAdapter.Value);
                 if (!string.IsNullOrEmpty(gateway))
                     Add(ev, "Passerelle", gateway, "scan_powershell.sections.Network.data.adapters[active].gateway");
 
-                // 5. DNS
-                var dns = GetString(activeAdapter, "dns");
-                if (activeAdapter.Value.TryGetProperty("dns", out var dnsEl) && dnsEl.ValueKind == JsonValueKind.Array)
+                // 5. DNS - Handle as array or object
+                string? dnsServers = null;
+                if (activeAdapter.Value.TryGetProperty("dns", out var dnsEl))
                 {
-                    var dnsServers = string.Join(", ", dnsEl.EnumerateArray()
-                        .Select(d => d.GetString())
-                        .Where(s => !string.IsNullOrEmpty(s))
-                        .Take(2));
-                    if (!string.IsNullOrEmpty(dnsServers))
-                        Add(ev, "DNS", dnsServers, "scan_powershell.sections.Network.data.adapters[active].dns");
+                    if (dnsEl.ValueKind == JsonValueKind.Array)
+                    {
+                        dnsServers = string.Join(", ", dnsEl.EnumerateArray()
+                            .Select(d => d.ValueKind == JsonValueKind.String ? d.GetString() : null)
+                            .Where(s => !string.IsNullOrEmpty(s))
+                            .Take(2));
+                    }
+                    else if (dnsEl.ValueKind == JsonValueKind.String)
+                    {
+                        dnsServers = dnsEl.GetString();
+                    }
                 }
-                else if (!string.IsNullOrEmpty(dns))
-                {
-                    Add(ev, "DNS", dns, "scan_powershell.sections.Network.data.adapters[active].dns");
-                }
+                if (!string.IsNullOrEmpty(dnsServers))
+                    Add(ev, "DNS", dnsServers, "scan_powershell.sections.Network.data.adapters[active].dns");
 
                 // 6. MAC
-                var mac = GetString(activeAdapter, "macAddress");
+                var mac = GetString(activeAdapter, "mac") ?? GetString(activeAdapter, "macAddress");
                 if (!string.IsNullOrEmpty(mac))
-                    Add(ev, "MAC", mac, "scan_powershell.sections.Network.data.adapters[active].macAddress");
+                    Add(ev, "MAC", mac, "scan_powershell.sections.Network.data.adapters[active].mac");
 
                 // 7. WiFi RSSI
                 var rssi = GetInt(activeAdapter, "rssi") ?? GetInt(activeAdapter, "signalStrength");
@@ -864,6 +1028,11 @@ namespace PCDiagnosticPro.Services
                     var quality = rssi.Value > -50 ? "Excellent" : rssi.Value > -60 ? "Bon" : rssi.Value > -70 ? "Moyen" : "Faible";
                     Add(ev, "WiFi Signal", $"{rssi.Value} dBm ({quality})", "scan_powershell.sections.Network.data.adapters[active].rssi");
                 }
+                
+                // 7b. DHCP
+                var dhcp = GetBool(activeAdapter, "dhcp");
+                if (dhcp.HasValue)
+                    Add(ev, "DHCP", dhcp.Value ? "Oui" : "Non", "scan_powershell.sections.Network.data.adapters[active].dhcp");
             }
             else
             {
@@ -872,6 +1041,12 @@ namespace PCDiagnosticPro.Services
 
             // === C#: network_diagnostics ===
             var netDiag = GetNestedElement(root, "network_diagnostics");
+            // Also try diagnostic_signals.networkQuality as fallback
+            var netQuality = GetSignalResult(GetDiagnosticSignals(root) ?? default, "networkQuality");
+            JsonElement? netQualityValue = null;
+            if (netQuality.HasValue && netQuality.Value.TryGetProperty("value", out var nqv))
+                netQualityValue = nqv;
+            
             // #region agent log
             if (netDiag.HasValue)
             {
@@ -884,47 +1059,82 @@ namespace PCDiagnosticPro.Services
                 DebugLog("B", "ExtractNetwork:netDiag", "network_diagnostics is NULL", null);
             }
             // #endregion
-            if (netDiag.HasValue)
+            
+            bool hasNetDiagData = false;
+            
+            if (netDiag.HasValue || netQualityValue.HasValue)
             {
-                // 8. Latence - try multiple property name variations
+                // 8. Latence - FIX: try multiple property name variations (PascalCase from C#)
                 var latency = GetDouble(netDiag, "latencyMs") 
                     ?? GetDouble(netDiag, "pingMs")
+                    ?? GetDouble(netDiag, "LatencyMsP50")
                     ?? GetDouble(netDiag, "OverallLatencyMsP50")
-                    ?? GetDouble(netDiag, "overallLatencyMsP50");
+                    ?? GetDouble(netQualityValue, "LatencyMsP50")
+                    ?? GetDouble(netQualityValue, "LatencyMsP95");
                 if (latency.HasValue)
                 {
                     var status = latency > 100 ? " ⚠️ Élevée" : latency > 50 ? " ⚡" : " ✅";
-                    Add(ev, "Latence (ping)", $"{latency.Value:F0} ms{status}", "network_diagnostics.latencyMs");
+                    Add(ev, "Latence (ping)", $"{latency.Value:F0} ms{status}", "network_diagnostics.LatencyMsP50");
+                    hasNetDiagData = true;
                 }
 
-                // 9. Jitter
-                var jitter = GetDouble(netDiag, "jitterMs");
+                // 9. Jitter - FIX: Support PascalCase
+                var jitter = GetDouble(netDiag, "jitterMs") 
+                    ?? GetDouble(netDiag, "JitterMsP95")
+                    ?? GetDouble(netQualityValue, "JitterMsP95");
                 if (jitter.HasValue)
-                    Add(ev, "Gigue", $"{jitter.Value:F1} ms", "network_diagnostics.jitterMs");
+                {
+                    Add(ev, "Gigue", $"{jitter.Value:F1} ms", "network_diagnostics.JitterMsP95");
+                    hasNetDiagData = true;
+                }
 
-                // 10. Perte paquets
-                var loss = GetDouble(netDiag, "packetLossPercent");
+                // 10. Perte paquets - FIX: Support PascalCase
+                var loss = GetDouble(netDiag, "packetLossPercent") 
+                    ?? GetDouble(netDiag, "PacketLossPercent")
+                    ?? GetDouble(netQualityValue, "PacketLossPercent");
                 if (loss.HasValue)
                 {
                     var status = loss > 1 ? " ⚠️" : " ✅";
-                    Add(ev, "Perte paquets", $"{loss.Value:F1}%{status}", "network_diagnostics.packetLossPercent");
+                    Add(ev, "Perte paquets", $"{loss.Value:F1}%{status}", "network_diagnostics.PacketLossPercent");
+                    hasNetDiagData = true;
                 }
 
-                // 11. Débit FAI
-                var download = GetDouble(netDiag, "downloadMbps");
-                var upload = GetDouble(netDiag, "uploadMbps");
+                // 11. Débit FAI - FIX: Support PascalCase
+                var download = GetDouble(netDiag, "downloadMbps") ?? GetDouble(netDiag, "DownloadMbps");
+                var upload = GetDouble(netDiag, "uploadMbps") ?? GetDouble(netDiag, "UploadMbps");
                 if (download.HasValue || upload.HasValue)
                 {
                     var dlStr = download.HasValue ? $"↓{download.Value:F1}" : "?";
                     var ulStr = upload.HasValue ? $"↑{upload.Value:F1}" : "?";
                     Add(ev, "Débit FAI", $"{dlStr} / {ulStr} Mbps", "network_diagnostics.downloadMbps/uploadMbps");
+                    hasNetDiagData = true;
                 }
 
                 // 12. VPN détecté
-                var vpn = GetBool(netDiag, "vpnDetected");
-                AddYesNo(ev, "VPN détecté", vpn, "network_diagnostics.vpnDetected");
+                var vpn = GetBool(netDiag, "vpnDetected") ?? GetBool(netDiag, "VpnDetected");
+                if (vpn.HasValue)
+                {
+                    AddYesNo(ev, "VPN détecté", vpn, "network_diagnostics.vpnDetected");
+                    hasNetDiagData = true;
+                }
+                
+                // 13. Connection verdict from networkQuality signal
+                var verdict = GetString(netQualityValue, "ConnectionVerdict");
+                if (!string.IsNullOrEmpty(verdict))
+                {
+                    var icon = verdict.ToLower() switch
+                    {
+                        "excellent" => "✅",
+                        "good" or "bon" => "👍",
+                        "fair" or "moyen" => "⚡",
+                        _ => "⚠️"
+                    };
+                    Add(ev, "Qualité connexion", $"{icon} {verdict}", "diagnostic_signals.networkQuality.ConnectionVerdict");
+                    hasNetDiagData = true;
+                }
             }
-            else
+            
+            if (!hasNetDiagData)
             {
                 AddUnknown(ev, "Diagnostics réseau", "network_diagnostics absent");
             }
@@ -1389,13 +1599,15 @@ namespace PCDiagnosticPro.Services
             int expected = 9;
             
             var secData = GetSectionData(root, "Security");
+            var machineIdData = GetSectionData(root, "MachineIdentity");
+            
             // #region agent log
             if (secData.HasValue)
             {
                 var secProps = new List<string>();
                 foreach (var prop in secData.Value.EnumerateObject()) secProps.Add(prop.Name);
                 DebugLog("C", "ExtractSecurity:entry", "Security section properties", new { secProps });
-                // Check for antivirusProducts array
+                // Check for antivirusProducts
                 if (secData.Value.TryGetProperty("antivirusProducts", out var avProducts))
                 {
                     DebugLog("C", "ExtractSecurity:av", "antivirusProducts found", new { kind = avProducts.ValueKind.ToString() });
@@ -1419,34 +1631,68 @@ namespace PCDiagnosticPro.Services
             // #endregion
             
             // 1. Antivirus - try multiple sources
+            // FIX: Handle antivirusProducts as string OR array
             string? avName = null;
             string? avStatus = null;
-            // Try antivirusProducts array first
-            if (secData.HasValue && secData.Value.TryGetProperty("antivirusProducts", out var avProductsArr) && avProductsArr.ValueKind == JsonValueKind.Array)
+            
+            if (secData.HasValue && secData.Value.TryGetProperty("antivirusProducts", out var avProductsProp))
             {
-                var firstAv = avProductsArr.EnumerateArray().FirstOrDefault();
-                if (firstAv.ValueKind == JsonValueKind.Object)
+                // Case 1: String (actual PS output for single AV like "Windows Defender")
+                if (avProductsProp.ValueKind == JsonValueKind.String)
                 {
-                    avName = GetString(firstAv, "displayName") ?? GetString(firstAv, "name");
-                    avStatus = GetString(firstAv, "productState") ?? GetString(firstAv, "status");
+                    avName = avProductsProp.GetString();
+                }
+                // Case 2: Array (multiple AV products)
+                else if (avProductsProp.ValueKind == JsonValueKind.Array)
+                {
+                    var firstAv = avProductsProp.EnumerateArray().FirstOrDefault();
+                    if (firstAv.ValueKind == JsonValueKind.Object)
+                    {
+                        avName = GetString(firstAv, "displayName") ?? GetString(firstAv, "name");
+                        avStatus = GetString(firstAv, "productState") ?? GetString(firstAv, "status");
+                    }
+                    else if (firstAv.ValueKind == JsonValueKind.String)
+                    {
+                        avName = firstAv.GetString();
+                    }
                 }
             }
+            
             // Fallback to direct properties
             if (string.IsNullOrEmpty(avName))
             {
                 avName = GetString(secData, "antivirusName") ?? GetString(secData, "avName");
+            }
+            if (string.IsNullOrEmpty(avStatus))
+            {
                 avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus");
             }
+            
+            // FIX: Check defenderEnabled/defenderRTP as status indicators
+            if (string.IsNullOrEmpty(avStatus) && secData.HasValue)
+            {
+                var defenderEnabled = GetBool(secData, "defenderEnabled");
+                var defenderRTP = GetBool(secData, "defenderRTP");
+                if (defenderEnabled == true || defenderRTP == true)
+                {
+                    avStatus = "Actif";
+                }
+                else if (defenderEnabled == false)
+                {
+                    avStatus = "Désactivé";
+                }
+            }
+            
             if (!string.IsNullOrEmpty(avName))
             {
                 var icon = avStatus?.ToLower() switch
                 {
                     "enabled" or "on" or "actif" or "à jour" => "✅",
-                    "disabled" or "off" => "⚠️",
-                    _ => ""
+                    "disabled" or "off" or "désactivé" => "⚠️",
+                    _ => "✅" // Default to OK if AV is present
                 };
-                Add(ev, "Antivirus", $"{icon} {avName}" + (!string.IsNullOrEmpty(avStatus) ? $" ({avStatus})" : ""), 
-                    "scan_powershell.sections.Security.data.antivirusName");
+                var avInfo = !string.IsNullOrEmpty(avStatus) ? $"{icon} {avName} ({avStatus})" : $"{icon} {avName}";
+                Add(ev, "Antivirus", avInfo, "scan_powershell.sections.Security.data.antivirusProducts");
             }
             else
             {
@@ -1454,38 +1700,102 @@ namespace PCDiagnosticPro.Services
             }
 
             // 2. Pare-feu - handle multiple structures
-            bool? fwEnabled = GetBool(secData, "firewallEnabled") ?? GetBool(secData, "firewall");
-            var fwProfiles = GetString(secData, "firewallProfiles");
-            // Handle firewall object with value__ property (1=enabled, 0=disabled)
+            // FIX: Handle firewall as object with profiles (Private/Domain/Public) with value__ property
+            bool? fwEnabled = GetBool(secData, "firewallEnabled");
+            string fwProfiles = "";
+            
             if (!fwEnabled.HasValue && secData.HasValue && secData.Value.TryGetProperty("firewall", out var fwObj))
             {
-                if (fwObj.ValueKind == JsonValueKind.Object && fwObj.TryGetProperty("value__", out var fwVal))
+                if (fwObj.ValueKind == JsonValueKind.Object)
                 {
-                    fwEnabled = fwVal.ValueKind == JsonValueKind.Number ? fwVal.GetInt32() == 1 : null;
+                    // FIX: Parse firewall object with profile sub-objects containing value__
+                    // Structure: { "Private": { "value__": 1 }, "Domain": { "value__": 1 }, "Public": { "value__": 1 } }
+                    var enabledProfiles = new List<string>();
+                    var disabledProfiles = new List<string>();
+                    
+                    foreach (var profile in fwObj.EnumerateObject())
+                    {
+                        bool? profileEnabled = null;
+                        
+                        if (profile.Value.ValueKind == JsonValueKind.Object && 
+                            profile.Value.TryGetProperty("value__", out var valProp))
+                        {
+                            profileEnabled = valProp.ValueKind == JsonValueKind.Number ? valProp.GetInt32() == 1 : null;
+                        }
+                        else if (profile.Value.ValueKind == JsonValueKind.Number)
+                        {
+                            profileEnabled = profile.Value.GetInt32() == 1;
+                        }
+                        else if (profile.Value.ValueKind == JsonValueKind.True)
+                        {
+                            profileEnabled = true;
+                        }
+                        else if (profile.Value.ValueKind == JsonValueKind.False)
+                        {
+                            profileEnabled = false;
+                        }
+                        
+                        if (profileEnabled == true)
+                            enabledProfiles.Add(profile.Name);
+                        else if (profileEnabled == false)
+                            disabledProfiles.Add(profile.Name);
+                    }
+                    
+                    // Firewall is enabled if at least one profile is enabled
+                    fwEnabled = enabledProfiles.Count > 0;
+                    
+                    if (enabledProfiles.Count > 0 && enabledProfiles.Count < 3)
+                        fwProfiles = string.Join("+", enabledProfiles);
+                    else if (enabledProfiles.Count == 3)
+                        fwProfiles = "Tous profils";
+                    
+                    if (disabledProfiles.Count > 0 && disabledProfiles.Count < 3)
+                        fwProfiles += (fwProfiles.Length > 0 ? " | " : "") + $"Désactivé: {string.Join(",", disabledProfiles)}";
                 }
                 else if (fwObj.ValueKind == JsonValueKind.Number)
                 {
                     fwEnabled = fwObj.GetInt32() == 1;
                 }
+                else if (fwObj.ValueKind == JsonValueKind.True || fwObj.ValueKind == JsonValueKind.False)
+                {
+                    fwEnabled = fwObj.GetBoolean();
+                }
             }
+            
             if (fwEnabled.HasValue)
             {
                 var status = fwEnabled.Value ? "✅ Activé" : "⚠️ Désactivé";
                 if (!string.IsNullOrEmpty(fwProfiles)) status += $" ({fwProfiles})";
-                Add(ev, "Pare-feu", status, "scan_powershell.sections.Security.data.firewallEnabled");
+                Add(ev, "Pare-feu", status, "scan_powershell.sections.Security.data.firewall");
             }
             else
             {
-                AddUnknown(ev, "Pare-feu", "firewallEnabled absent");
+                AddUnknown(ev, "Pare-feu", "firewall absent");
             }
 
-            // 3. Secure Boot (Oui/Non)
-            var secureBoot = GetBool(secData, "secureBootEnabled");
-            AddYesNo(ev, "Secure Boot", secureBoot, "scan_powershell.sections.Security.data.secureBootEnabled");
+            // 3. Secure Boot (Oui/Non) - FIX: Check MachineIdentity first
+            var secureBoot = GetBool(machineIdData, "secureBoot") ?? 
+                             GetBool(secData, "secureBootEnabled") ?? 
+                             GetBool(secData, "SecureBootEnabled");
+            
+            string secureBootSource = machineIdData.HasValue && GetBool(machineIdData, "secureBoot").HasValue 
+                ? "MachineIdentity.secureBoot" 
+                : "Security.secureBootEnabled";
+            AddYesNo(ev, "Secure Boot", secureBoot, secureBootSource);
 
             // 4. BitLocker (OUI/NON - OBLIGATOIRE, pas "—")
+            // FIX: If no data found, show "Non détectable" with debug reason
             var bitlocker = GetBool(secData, "bitlockerEnabled") ?? GetBool(secData, "bitLocker") ?? GetBool(secData, "BitLocker");
-            AddYesNo(ev, "BitLocker", bitlocker, "scan_powershell.sections.Security.data.bitlockerEnabled");
+            if (bitlocker.HasValue)
+            {
+                AddYesNo(ev, "BitLocker", bitlocker, "scan_powershell.sections.Security.data.bitlockerEnabled");
+            }
+            else
+            {
+                // Not "Inconnu" but "Non détectable" with reason
+                Add(ev, "BitLocker", DebugPathsEnabled ? "Non détectable (collecte non implémentée) 📍[n/a]" : "Non détectable", 
+                    "n/a");
+            }
 
             // 5. UAC
             var uac = GetBool(secData, "uacEnabled") ?? GetBool(secData, "UAC");
@@ -1727,21 +2037,133 @@ namespace PCDiagnosticPro.Services
         private static JsonElement? GetDiagnosticSignals(JsonElement root) =>
             root.TryGetProperty("diagnostic_signals", out var signals) ? signals : null;
 
-        private static JsonElement? GetSignalResult(JsonElement signals, string signalName) =>
-            signals.TryGetProperty(signalName, out var signal) ? signal : null;
+        /// <summary>
+        /// FIX: Map snake_case signal names to actual camelCase names in diagnostic_signals.
+        /// UI code uses: whea_errors, cpu_throttle, bsod_minidump, kernel_power, tdr_video
+        /// JSON has:    whea, cpuThrottle, driverStability (contains BSOD + kernel power), gpuRootCause
+        /// </summary>
+        private static readonly Dictionary<string, string[]> SignalNameAliases = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "whea_errors", new[] { "whea", "whea_errors" } },
+            { "cpu_throttle", new[] { "cpuThrottle", "cpu_throttle", "CpuThrottle" } },
+            { "bsod_minidump", new[] { "driverStability", "bsod_minidump" } },
+            { "kernel_power", new[] { "driverStability", "kernel_power" } },
+            { "tdr_video", new[] { "gpuRootCause", "tdr_video", "gpuRootCause" } },
+            { "ram_pressure", new[] { "memoryPressure", "ram_pressure" } },
+            { "disk_saturation", new[] { "storageLatency", "disk_saturation" } },
+            { "network_saturation", new[] { "networkQuality", "network_saturation" } },
+            { "power_throttle", new[] { "powerLimits", "power_throttle" } }
+        };
 
+        private static JsonElement? GetSignalResult(JsonElement signals, string signalName)
+        {
+            // Try exact name first
+            if (signals.TryGetProperty(signalName, out var signal))
+                return signal;
+            
+            // FIX: Try aliases
+            if (SignalNameAliases.TryGetValue(signalName, out var aliases))
+            {
+                foreach (var alias in aliases)
+                {
+                    if (signals.TryGetProperty(alias, out var aliasedSignal))
+                        return aliasedSignal;
+                }
+            }
+            
+            // Case-insensitive fallback
+            foreach (var prop in signals.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, signalName, StringComparison.OrdinalIgnoreCase))
+                    return prop.Value;
+            }
+            
+            return null;
+        }
+
+        /// <summary>
+        /// FIX: Get int value from signal, supporting nested value object.
+        /// JSON structure: { "signalName": { "value": { "Count30d": 0 }, "available": true } }
+        /// </summary>
         private static int? GetSignalInt(JsonElement? signals, string signalName, string valueName)
         {
             if (!signals.HasValue) return null;
             var signal = GetSignalResult(signals.Value, signalName);
-            return signal.HasValue ? GetInt(signal, valueName) : null;
+            if (!signal.HasValue) return null;
+            
+            // FIX: Handle nested value object structure
+            JsonElement valueContainer = signal.Value;
+            if (signal.Value.TryGetProperty("value", out var valueObj) && valueObj.ValueKind == JsonValueKind.Object)
+            {
+                valueContainer = valueObj;
+            }
+            
+            // FIX: Map value names for different signal structures
+            var mappedValueNames = MapSignalValueName(signalName, valueName);
+            
+            foreach (var name in mappedValueNames)
+            {
+                var result = GetInt(valueContainer, name);
+                if (result.HasValue) return result;
+            }
+            
+            // Fallback to direct property
+            return GetInt(signal, valueName);
         }
 
         private static string? GetSignalString(JsonElement? signals, string signalName, string valueName)
         {
             if (!signals.HasValue) return null;
             var signal = GetSignalResult(signals.Value, signalName);
-            return signal.HasValue ? GetString(signal, valueName) : null;
+            if (!signal.HasValue) return null;
+            
+            // FIX: Handle nested value object structure
+            JsonElement valueContainer = signal.Value;
+            if (signal.Value.TryGetProperty("value", out var valueObj) && valueObj.ValueKind == JsonValueKind.Object)
+            {
+                valueContainer = valueObj;
+            }
+            
+            var mappedValueNames = MapSignalValueName(signalName, valueName);
+            
+            foreach (var name in mappedValueNames)
+            {
+                var result = GetString(valueContainer, name);
+                if (!string.IsNullOrEmpty(result)) return result;
+            }
+            
+            return GetString(signal, valueName);
+        }
+        
+        /// <summary>
+        /// FIX: Map expected value names to actual JSON property names.
+        /// </summary>
+        private static string[] MapSignalValueName(string signalName, string valueName)
+        {
+            // Map "count" to actual property names based on signal type
+            if (valueName.Equals("count", StringComparison.OrdinalIgnoreCase))
+            {
+                return signalName.ToLower() switch
+                {
+                    "whea_errors" or "whea" => new[] { "Last30dCount", "Last7dCount", "FatalCount", "count" },
+                    "bsod_minidump" or "driverstability" => new[] { "BugcheckCount30d", "count" },
+                    "kernel_power" or "driverstability" => new[] { "KernelPower41Count30d", "count" },
+                    "tdr_video" or "gpurootcause" => new[] { "TdrCount30d", "TdrCount7d", "count" },
+                    _ => new[] { valueName, "count", "Count" }
+                };
+            }
+            
+            if (valueName.Equals("detected", StringComparison.OrdinalIgnoreCase))
+            {
+                return signalName.ToLower() switch
+                {
+                    "cpu_throttle" or "cputhrottle" => new[] { "ThrottleSuspected", "detected", "Detected" },
+                    "ram_pressure" or "memorypressure" => new[] { "PressureDetected", "detected" },
+                    _ => new[] { valueName, "detected", "Detected" }
+                };
+            }
+            
+            return new[] { valueName };
         }
 
         private static string? GetString(JsonElement? element, string propName)
@@ -1799,10 +2221,103 @@ namespace PCDiagnosticPro.Services
             return null;
         }
 
+        /// <summary>
+        /// FIX: Get first item from a property that can be either Array or Object.
+        /// PowerShell may return an object for single-item collections (cpus, gpuList).
+        /// </summary>
+        private static JsonElement? GetFirstItemFromArrayOrObject(JsonElement? element, string propName)
+        {
+            if (!element.HasValue || element.Value.ValueKind != JsonValueKind.Object) return null;
+            
+            if (!element.Value.TryGetProperty(propName, out var prop)) return null;
+            
+            // Case 1: Array - return first element
+            if (prop.ValueKind == JsonValueKind.Array)
+            {
+                var first = prop.EnumerateArray().FirstOrDefault();
+                return first.ValueKind != JsonValueKind.Undefined ? first : (JsonElement?)null;
+            }
+            
+            // Case 2: Object - return the object itself (single-item case)
+            if (prop.ValueKind == JsonValueKind.Object)
+            {
+                return prop;
+            }
+            
+            return null;
+        }
+
+        /// <summary>
+        /// FIX: Extract IPv4 address from adapter's ip[] array OR ipv4 string.
+        /// PS script returns ip as array: ["192.168.x.x", "fe80::xxxx"]
+        /// </summary>
+        private static string? ExtractIPv4FromAdapter(JsonElement adapter)
+        {
+            // Try ipv4 direct property first (legacy)
+            var ipv4Direct = GetString(adapter, "ipv4");
+            if (!string.IsNullOrEmpty(ipv4Direct))
+                return ipv4Direct;
+            
+            // FIX: Try ip[] array (actual PS output)
+            if (adapter.TryGetProperty("ip", out var ipEl))
+            {
+                if (ipEl.ValueKind == JsonValueKind.Array)
+                {
+                    // Find IPv4 (not IPv6) - IPv4 doesn't contain ':'
+                    foreach (var ip in ipEl.EnumerateArray())
+                    {
+                        var ipStr = ip.ValueKind == JsonValueKind.String ? ip.GetString() : null;
+                        if (!string.IsNullOrEmpty(ipStr) && !ipStr.Contains(":"))
+                            return ipStr;
+                    }
+                    // Fallback: return first IP if no pure IPv4 found
+                    var first = ipEl.EnumerateArray().FirstOrDefault();
+                    if (first.ValueKind == JsonValueKind.String)
+                        return first.GetString();
+                }
+                else if (ipEl.ValueKind == JsonValueKind.String)
+                {
+                    return ipEl.GetString();
+                }
+            }
+            
+            return null;
+        }
+        
+        /// <summary>
+        /// FIX: Extract gateway from adapter's gateway property (can be string or empty object {}).
+        /// </summary>
+        private static string? GetGatewayFromAdapter(JsonElement adapter)
+        {
+            if (!adapter.TryGetProperty("gateway", out var gwEl))
+                return null;
+            
+            if (gwEl.ValueKind == JsonValueKind.String)
+            {
+                var gw = gwEl.GetString();
+                return string.IsNullOrEmpty(gw) ? null : gw;
+            }
+            
+            // Empty object {} means no gateway
+            if (gwEl.ValueKind == JsonValueKind.Object)
+            {
+                // Check if it has any properties (some PS versions put gateway in object)
+                foreach (var prop in gwEl.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.String)
+                        return prop.Value.GetString();
+                }
+                return null;
+            }
+            
+            return null;
+        }
+
         private static List<string> GetTopProcesses(JsonElement root, string metric, int count)
         {
             var result = new List<string>();
             
+            // Source 1: process_telemetry (C# collector) - HIGHEST PRIORITY
             var telemetry = GetNestedElement(root, "process_telemetry");
             // #region agent log
             if (telemetry.HasValue)
@@ -1816,44 +2331,80 @@ namespace PCDiagnosticPro.Services
                 DebugLog("B", "GetTopProcesses:entry", "process_telemetry is NULL", new { metric });
             }
             // #endregion
+            
             if (telemetry.HasValue)
             {
-                // Extended case variations including TopByXxx pattern
-                var arrayName = metric switch
-                {
-                    "cpu" => "topCpu",
-                    "memory" => "topMemory",
-                    "io" => "topIo",
-                    "network" => "topNetwork",
-                    _ => $"top{char.ToUpper(metric[0])}{metric.Substring(1)}"
-                };
+                // FIX: Support multiple naming conventions including PascalCase "TopByXxx" (actual C# output)
+                var metricCapitalized = char.ToUpper(metric[0]) + metric.Substring(1).ToLower();
                 
-                // Try multiple case variations including PascalCase "TopByXxx" pattern
                 var names = new[] { 
-                    arrayName, 
-                    arrayName.ToLower(), 
-                    $"Top{metric}",
-                    $"TopBy{char.ToUpper(metric[0])}{metric.Substring(1)}",  // TopByCpu, TopByMemory
-                    $"topBy{char.ToUpper(metric[0])}{metric.Substring(1)}"   // topByCpu, topByMemory
-                };
-                foreach (var name in names)
+                    // PascalCase variants (actual C# output): TopByMemory, TopByCpu
+                    $"TopBy{metricCapitalized}",
+                    $"TopBy{metric.ToUpper()}",
+                    // camelCase variants: topByMemory, topByCpu  
+                    $"topBy{metricCapitalized}",
+                    // Simple variants: TopMemory, topMemory, TopCpu, topCpu
+                    $"Top{metricCapitalized}",
+                    $"top{metricCapitalized}",
+                    // Lowercase: topmemory, topcpu
+                    $"top{metric.ToLower()}",
+                    // io special cases
+                    metric.ToLower() == "io" ? "TopByIo" : null,
+                    metric.ToLower() == "io" ? "topIo" : null
+                }.Where(n => n != null).ToArray();
+                
+                foreach (var name in names!)
                 {
                     if (telemetry.Value.TryGetProperty(name, out var arr) && arr.ValueKind == JsonValueKind.Array)
                     {
                         result = arr.EnumerateArray()
-                            .Select(p => GetString(p, "name") ?? GetString(p, "processName") ?? GetString(p, "Name") ?? "")
+                            .Select(p => GetString(p, "Name") ?? GetString(p, "name") ?? GetString(p, "processName") ?? "")
                             .Where(n => !string.IsNullOrEmpty(n))
                             .Take(count)
                             .ToList();
                         // #region agent log
-                        DebugLog("B", "GetTopProcesses:found", $"Found data at {name}", new { resultCount = result.Count });
+                        DebugLog("B", "GetTopProcesses:found", $"Found data at process_telemetry.{name}", new { resultCount = result.Count });
                         // #endregion
                         if (result.Count > 0) break;
                     }
                 }
             }
             
-            // Fallback PS Processes
+            // Source 2: DynamicSignals from PS (fallback)
+            if (result.Count == 0)
+            {
+                var dynamicSignals = GetSectionData(root, "DynamicSignals");
+                if (dynamicSignals.HasValue)
+                {
+                    // PS script uses topCpu, topMemory arrays
+                    var psNames = metric.ToLower() switch
+                    {
+                        "memory" => new[] { "topMemory", "TopMemory" },
+                        "cpu" => new[] { "topCpu", "TopCpu" },
+                        _ => new[] { $"top{char.ToUpper(metric[0])}{metric.Substring(1)}" }
+                    };
+                    
+                    foreach (var name in psNames)
+                    {
+                        if (dynamicSignals.Value.TryGetProperty(name, out var arr) && arr.ValueKind == JsonValueKind.Array)
+                        {
+                            result = arr.EnumerateArray()
+                                .Select(p => GetString(p, "name") ?? GetString(p, "Name") ?? "")
+                                .Where(n => !string.IsNullOrEmpty(n))
+                                .Take(count)
+                                .ToList();
+                            
+                            if (result.Count > 0)
+                            {
+                                DebugLog("B", "GetTopProcesses:fallback", $"Found data at DynamicSignals.{name}", new { resultCount = result.Count });
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Source 3: Processes section from PS (last fallback)
             if (result.Count == 0)
             {
                 var processes = GetSectionData(root, "Processes");

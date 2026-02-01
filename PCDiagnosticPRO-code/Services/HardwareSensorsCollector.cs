@@ -275,17 +275,85 @@ namespace PCDiagnosticPro.Services
                 // Debug: Log all GPU memory sensors found for verification
                 LogGpuMemorySensors(sensors, vramTotal, vramUsed);
 
-                var gpuLoad = FindSensorValue(sensors, "GPU Core", "GPU", "Core");
+                // GPU Load - look for "GPU Core" load sensor (percentage)
+                var gpuLoad = FindSensorValueByType(sensors, SensorType.Load, "GPU Core", "D3D 3D", "Core");
                 if (gpuLoad.HasValue)
                     result.Gpu.GpuLoadPercent = Available(gpuLoad.Value);
                 else
                     result.Gpu.GpuLoadPercent = UnavailableDouble("Charge GPU indisponible");
 
-                var gpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "GPU", "Core");
+                // === FIX: GPU Temperature - PRIORITIZED SELECTION ===
+                // Task Manager typically shows "GPU Core" or "GPU Temperature" (edge temperature)
+                // Hot Spot is usually 10-15°C higher and is NOT what Task Manager shows
+                // Priorities:
+                // 1. "GPU Core" - main die temperature (matches most monitoring tools)
+                // 2. "GPU Temperature" - generic/edge temperature  
+                // 3. "Core" - fallback
+                // 4. "Hot Spot" - only if nothing else (labeled differently)
+                
+                // Log ALL GPU temperature sensors for debugging
+                LogAllGpuTempSensors(sensors);
+                
+                double? gpuTemp = null;
+                string gpuTempSource = "N/A";
+                
+                // Priority 1: "GPU Core" - matches HWiNFO/GPU-Z/Task Manager
+                gpuTemp = FindSensorValueByTypeExact(sensors, SensorType.Temperature, "GPU Core");
                 if (gpuTemp.HasValue)
+                {
+                    gpuTempSource = "GPU Core";
+                }
+                
+                // Priority 2: "GPU Temperature" - some drivers report this
+                if (!gpuTemp.HasValue)
+                {
+                    gpuTemp = FindSensorValueByTypeExact(sensors, SensorType.Temperature, "GPU Temperature");
+                    if (gpuTemp.HasValue) gpuTempSource = "GPU Temperature";
+                }
+                
+                // Priority 3: Any sensor containing "Core" but not "Hot"
+                if (!gpuTemp.HasValue)
+                {
+                    gpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Core");
+                    var maybeHotSpot = sensors.FirstOrDefault(s => 
+                        s.SensorType == SensorType.Temperature && 
+                        s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase) &&
+                        !s.Name.Contains("Hot", StringComparison.OrdinalIgnoreCase));
+                    if (maybeHotSpot?.Value.HasValue == true)
+                    {
+                        gpuTemp = maybeHotSpot.Value;
+                        gpuTempSource = maybeHotSpot.Name;
+                    }
+                }
+                
+                // Priority 4: "GPU" generic
+                if (!gpuTemp.HasValue)
+                {
+                    gpuTemp = FindSensorValueByTypeExact(sensors, SensorType.Temperature, "GPU");
+                    if (gpuTemp.HasValue) gpuTempSource = "GPU";
+                }
+                
+                // Priority 5 (last resort): "Hot Spot" - warn user this is typically higher
+                if (!gpuTemp.HasValue)
+                {
+                    gpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Hot Spot", "Hotspot");
+                    if (gpuTemp.HasValue) gpuTempSource = "Hot Spot (note: typically 10-15°C higher than core)";
+                }
+                
+                // Validation
+                bool validTemp = gpuTemp.HasValue && gpuTemp.Value > 0 && gpuTemp.Value < 115;
+                
+                if (validTemp)
+                {
                     result.Gpu.GpuTempC = Available(gpuTemp.Value);
+                    result.Gpu.GpuTempSource = gpuTempSource;
+                    App.LogMessage($"[Sensors→GPU] Temperature: {gpuTemp.Value:F1}°C from sensor '{gpuTempSource}'");
+                }
                 else
+                {
                     result.Gpu.GpuTempC = UnavailableDouble("Temperature GPU indisponible");
+                    result.Gpu.GpuTempSource = "N/A";
+                }
             }
             catch (Exception ex)
             {
@@ -571,6 +639,71 @@ namespace PCDiagnosticPro.Services
                 }
             }
             return null;
+        }
+        
+        /// <summary>
+        /// Find sensor by EXACT name match (not substring).
+        /// Used for precise GPU temperature selection.
+        /// </summary>
+        private static double? FindSensorValueByTypeExact(List<ISensor> sensors, SensorType sensorType, string exactName)
+        {
+            foreach (var sensor in sensors)
+            {
+                if (sensor.SensorType == sensorType && sensor.Value.HasValue)
+                {
+                    if (string.Equals(sensor.Name, exactName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return sensor.Value.Value;
+                    }
+                }
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// Log ALL GPU temperature sensors for debugging discrepancies.
+        /// Helps diagnose Task Manager vs app temperature differences.
+        /// </summary>
+        private static void LogAllGpuTempSensors(List<ISensor> sensors)
+        {
+            try
+            {
+                var tempSensors = sensors.Where(s => s.SensorType == SensorType.Temperature).ToList();
+                
+                if (tempSensors.Count == 0)
+                {
+                    App.LogMessage("[GPU Temp Debug] No temperature sensors found");
+                    return;
+                }
+                
+                var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "PCDiagnosticPro_GPU_Temp_Debug.log");
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"=== GPU Temperature Sensors - {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+                sb.AppendLine($"Total temperature sensors: {tempSensors.Count}");
+                sb.AppendLine();
+                
+                foreach (var sensor in tempSensors.OrderBy(s => s.Name))
+                {
+                    var valueStr = sensor.Value.HasValue ? $"{sensor.Value.Value:F1}°C" : "null";
+                    sb.AppendLine($"  [{sensor.Name}] = {valueStr}");
+                }
+                
+                sb.AppendLine();
+                sb.AppendLine("Priority order for selection:");
+                sb.AppendLine("  1. 'GPU Core' (matches Task Manager)");
+                sb.AppendLine("  2. 'GPU Temperature'");
+                sb.AppendLine("  3. Any 'Core' (not Hot Spot)");
+                sb.AppendLine("  4. 'GPU' generic");
+                sb.AppendLine("  5. 'Hot Spot' (typically 10-15°C higher)");
+                sb.AppendLine();
+                
+                System.IO.File.AppendAllText(logPath, sb.ToString());
+                App.LogMessage($"[GPU Temp Debug] Found {tempSensors.Count} sensors. See {logPath} for details.");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[GPU Temp Debug] Logging error: {ex.Message}");
+            }
         }
 
         private static MetricValue<string> Available(string value)
