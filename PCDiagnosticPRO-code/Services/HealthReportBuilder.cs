@@ -242,36 +242,56 @@ namespace PCDiagnosticPro.Services
             var storageSection = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.Storage);
 
             // Injection CPU
-            if (cpuSection != null && sensors.Cpu.CpuTempC.Available)
+            // FIX: Avoid duplicating temperature if already present from ComprehensiveEvidenceExtractor
+            if (cpuSection != null && sensors.Cpu.CpuTempC.Available &&
+                !cpuSection.EvidenceData.ContainsKey("Temperature") &&
+                !cpuSection.EvidenceData.ContainsKey("Température CPU"))
             {
-                cpuSection.EvidenceData["Temperature"] = $"{sensors.Cpu.CpuTempC.Value:F1}°C";
+                var sourceInfo = !string.IsNullOrEmpty(sensors.Cpu.CpuTempSource) && sensors.Cpu.CpuTempSource != "N/A"
+                    ? $" ({sensors.Cpu.CpuTempSource})"
+                    : "";
+                cpuSection.EvidenceData["Température CPU"] = $"{sensors.Cpu.CpuTempC.Value:F1}°C{sourceInfo}";
                 cpuSection.HasData = true;
-                App.LogMessage($"[Sensors→CPU] Température injectée: {sensors.Cpu.CpuTempC.Value:F1}°C");
+                App.LogMessage($"[Sensors→CPU] Température injectée: {sensors.Cpu.CpuTempC.Value:F1}°C from {sensors.Cpu.CpuTempSource}");
             }
 
             // Injection GPU
+            // FIX: Avoid duplicating "Temperature" and "Température GPU" - only inject if not already present
             if (gpuSection != null)
             {
-                if (sensors.Gpu.Name.Available)
+                if (sensors.Gpu.Name.Available && !gpuSection.EvidenceData.ContainsKey("GPU"))
                     gpuSection.EvidenceData["GPU"] = sensors.Gpu.Name.Value ?? "N/A";
                 
-                if (sensors.Gpu.GpuTempC.Available)
+                // FIX: Only inject temperature if not already present from ComprehensiveEvidenceExtractor
+                // Check for both "Temperature" and "Température GPU" keys to avoid duplicates
+                if (sensors.Gpu.GpuTempC.Available && 
+                    !gpuSection.EvidenceData.ContainsKey("Temperature") && 
+                    !gpuSection.EvidenceData.ContainsKey("Température GPU"))
                 {
-                    gpuSection.EvidenceData["Temperature"] = $"{sensors.Gpu.GpuTempC.Value:F1}°C";
-                    App.LogMessage($"[Sensors→GPU] Température injectée: {sensors.Gpu.GpuTempC.Value:F1}°C");
+                    // Include source info for debugging GPU temp discrepancies
+                    var sourceInfo = !string.IsNullOrEmpty(sensors.Gpu.GpuTempSource) && sensors.Gpu.GpuTempSource != "N/A"
+                        ? $" (source: {sensors.Gpu.GpuTempSource})"
+                        : "";
+                    gpuSection.EvidenceData["Température GPU"] = $"{sensors.Gpu.GpuTempC.Value:F1}°C{sourceInfo}";
+                    App.LogMessage($"[Sensors→GPU] Température injectée: {sensors.Gpu.GpuTempC.Value:F1}°C from {sensors.Gpu.GpuTempSource}");
                 }
                 
-                if (sensors.Gpu.GpuLoadPercent.Available)
+                // FIX: Only inject if not already present
+                if (sensors.Gpu.GpuLoadPercent.Available && 
+                    !gpuSection.EvidenceData.ContainsKey("Load") &&
+                    !gpuSection.EvidenceData.ContainsKey("Charge GPU"))
                 {
-                    gpuSection.EvidenceData["Load"] = $"{sensors.Gpu.GpuLoadPercent.Value:F0}%";
+                    gpuSection.EvidenceData["Charge GPU"] = $"{sensors.Gpu.GpuLoadPercent.Value:F0}%";
                     App.LogMessage($"[Sensors→GPU] Charge injectée: {sensors.Gpu.GpuLoadPercent.Value:F0}%");
                 }
                 
-                if (sensors.Gpu.VramTotalMB.Available && sensors.Gpu.VramUsedMB.Available)
+                // FIX: Only inject VRAM if not already present
+                if (sensors.Gpu.VramTotalMB.Available && sensors.Gpu.VramUsedMB.Available &&
+                    !gpuSection.EvidenceData.ContainsKey("VRAM") &&
+                    !gpuSection.EvidenceData.ContainsKey("VRAM totale"))
                 {
                     var vramUsedPct = (sensors.Gpu.VramUsedMB.Value / sensors.Gpu.VramTotalMB.Value) * 100;
-                    gpuSection.EvidenceData["VRAM Total"] = $"{sensors.Gpu.VramTotalMB.Value:F0} MB";
-                    gpuSection.EvidenceData["VRAM Utilisée"] = $"{sensors.Gpu.VramUsedMB.Value:F0} MB ({vramUsedPct:F0}%)";
+                    gpuSection.EvidenceData["VRAM"] = $"{sensors.Gpu.VramUsedMB.Value:F0} MB / {sensors.Gpu.VramTotalMB.Value:F0} MB ({vramUsedPct:F0}%)";
                 }
                 
                 gpuSection.HasData = true;
