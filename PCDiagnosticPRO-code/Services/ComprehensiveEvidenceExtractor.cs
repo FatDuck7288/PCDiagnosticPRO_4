@@ -27,6 +27,27 @@ namespace PCDiagnosticPro.Services
         public static bool DebugPathsEnabled { get; set; } = 
             Environment.GetEnvironmentVariable("PCDIAG_DEBUG_PATHS") == "1";
 
+        // #region agent log
+        private static readonly string DebugLogPath = @"d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\.cursor\debug.log";
+        private static void DebugLog(string hypothesisId, string location, string message, object? data = null)
+        {
+            try
+            {
+                var entry = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    sessionId = "debug-session",
+                    hypothesisId,
+                    location,
+                    message,
+                    data
+                });
+                System.IO.File.AppendAllText(DebugLogPath, entry + "\n");
+            }
+            catch { /* ignore logging errors */ }
+        }
+        // #endregion
+
         /// <summary>
         /// Résultat d'extraction avec score de couverture
         /// </summary>
@@ -122,6 +143,16 @@ namespace PCDiagnosticPro.Services
 
             // 3. Uptime
             var lastBoot = GetString(osData, "lastBootUpTime");
+            // #region agent log
+            DebugLog("C", "ExtractOS:uptime", "lastBootUpTime from OS.data", new { lastBoot });
+            // Fallback to MachineIdentity.data.lastBoot
+            if (string.IsNullOrEmpty(lastBoot))
+            {
+                var machineId = GetSectionData(root, "MachineIdentity");
+                lastBoot = GetString(machineId, "lastBoot") ?? GetString(machineId, "LastBoot");
+                DebugLog("C", "ExtractOS:uptime", "fallback to MachineIdentity.lastBoot", new { lastBoot });
+            }
+            // #endregion
             if (!string.IsNullOrEmpty(lastBoot) && DateTime.TryParse(lastBoot, out var bootDt))
             {
                 var uptime = DateTime.Now - bootDt;
@@ -253,11 +284,33 @@ namespace PCDiagnosticPro.Services
             var cpuData = GetSectionData(root, "CPU");
             JsonElement? firstCpu = null;
             
+            // #region agent log
+            DebugLog("A", "ExtractCPU:entry", "cpuData exists", new { hasCpuData = cpuData.HasValue });
+            if (cpuData.HasValue)
+            {
+                // Log the actual structure of cpus/cpuList
+                var cpusKind = cpuData.Value.TryGetProperty("cpus", out var cpusEl) ? cpusEl.ValueKind.ToString() : "NotFound";
+                var cpuListKind = cpuData.Value.TryGetProperty("cpuList", out var cpuListEl) ? cpuListEl.ValueKind.ToString() : "NotFound";
+                DebugLog("A", "ExtractCPU:structure", "cpus/cpuList structure", new { cpusKind, cpuListKind });
+            }
+            // #endregion
+            
             if (cpuData.HasValue)
             {
                 var cpuArray = GetArray(cpuData, "cpus") ?? GetArray(cpuData, "cpuList");
+                // #region agent log
+                DebugLog("A", "ExtractCPU:array", "GetArray result", new { cpuArrayHasValue = cpuArray.HasValue });
+                // #endregion
                 if (cpuArray.HasValue)
                     firstCpu = cpuArray.Value.EnumerateArray().FirstOrDefault();
+                // #region agent log
+                // If cpuArray is null but cpus/cpuList exists as object, try to get first item directly
+                if (!cpuArray.HasValue && cpuData.Value.TryGetProperty("cpus", out var cpusObj) && cpusObj.ValueKind == JsonValueKind.Object)
+                {
+                    firstCpu = cpusObj;
+                    DebugLog("A", "ExtractCPU:objectFallback", "cpus is object, using directly", new { firstCpuKind = firstCpu?.ValueKind.ToString() });
+                }
+                // #endregion
             }
 
             // 1. Modèle CPU
@@ -324,9 +377,27 @@ namespace PCDiagnosticPro.Services
 
             // 7. Throttling (Oui/Non + raison)
             var signals = GetDiagnosticSignals(root);
+            // #region agent log
             if (signals.HasValue)
             {
-                var throttle = GetSignalResult(signals.Value, "cpu_throttle");
+                var signalNames = new List<string>();
+                foreach (var prop in signals.Value.EnumerateObject()) signalNames.Add(prop.Name);
+                DebugLog("D", "ExtractCPU:signals", "available signal names", new { signalNames });
+            }
+            else
+            {
+                DebugLog("D", "ExtractCPU:signals", "diagnostic_signals is NULL", null);
+            }
+            // #endregion
+            if (signals.HasValue)
+            {
+                // Try multiple naming conventions for throttle signal
+                var throttle = GetSignalResult(signals.Value, "cpu_throttle") 
+                    ?? GetSignalResult(signals.Value, "cpuThrottle")
+                    ?? GetSignalResult(signals.Value, "CpuThrottle");
+                // #region agent log
+                DebugLog("D", "ExtractCPU:throttle", "throttle signal found", new { hasThrottle = throttle.HasValue });
+                // #endregion
                 if (throttle.HasValue)
                 {
                     var detected = GetBool(throttle, "detected") ?? false;
@@ -801,10 +872,25 @@ namespace PCDiagnosticPro.Services
 
             // === C#: network_diagnostics ===
             var netDiag = GetNestedElement(root, "network_diagnostics");
+            // #region agent log
             if (netDiag.HasValue)
             {
-                // 8. Latence
-                var latency = GetDouble(netDiag, "latencyMs") ?? GetDouble(netDiag, "pingMs");
+                var netDiagProps = new List<string>();
+                foreach (var prop in netDiag.Value.EnumerateObject()) netDiagProps.Add(prop.Name);
+                DebugLog("B", "ExtractNetwork:netDiag", "network_diagnostics properties", new { netDiagProps });
+            }
+            else
+            {
+                DebugLog("B", "ExtractNetwork:netDiag", "network_diagnostics is NULL", null);
+            }
+            // #endregion
+            if (netDiag.HasValue)
+            {
+                // 8. Latence - try multiple property name variations
+                var latency = GetDouble(netDiag, "latencyMs") 
+                    ?? GetDouble(netDiag, "pingMs")
+                    ?? GetDouble(netDiag, "OverallLatencyMsP50")
+                    ?? GetDouble(netDiag, "overallLatencyMsP50");
                 if (latency.HasValue)
                 {
                     var status = latency > 100 ? " ⚠️ Élevée" : latency > 50 ? " ⚡" : " ✅";
@@ -1303,10 +1389,54 @@ namespace PCDiagnosticPro.Services
             int expected = 9;
             
             var secData = GetSectionData(root, "Security");
+            // #region agent log
+            if (secData.HasValue)
+            {
+                var secProps = new List<string>();
+                foreach (var prop in secData.Value.EnumerateObject()) secProps.Add(prop.Name);
+                DebugLog("C", "ExtractSecurity:entry", "Security section properties", new { secProps });
+                // Check for antivirusProducts array
+                if (secData.Value.TryGetProperty("antivirusProducts", out var avProducts))
+                {
+                    DebugLog("C", "ExtractSecurity:av", "antivirusProducts found", new { kind = avProducts.ValueKind.ToString() });
+                }
+                // Check for firewall structure
+                if (secData.Value.TryGetProperty("firewall", out var fw))
+                {
+                    DebugLog("C", "ExtractSecurity:fw", "firewall found", new { kind = fw.ValueKind.ToString() });
+                    if (fw.ValueKind == JsonValueKind.Object)
+                    {
+                        var fwProps = new List<string>();
+                        foreach (var p in fw.EnumerateObject()) fwProps.Add(p.Name);
+                        DebugLog("C", "ExtractSecurity:fw", "firewall properties", new { fwProps });
+                    }
+                }
+            }
+            else
+            {
+                DebugLog("C", "ExtractSecurity:entry", "Security section is NULL", null);
+            }
+            // #endregion
             
-            // 1. Antivirus
-            var avName = GetString(secData, "antivirusName") ?? GetString(secData, "avName");
-            var avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus");
+            // 1. Antivirus - try multiple sources
+            string? avName = null;
+            string? avStatus = null;
+            // Try antivirusProducts array first
+            if (secData.HasValue && secData.Value.TryGetProperty("antivirusProducts", out var avProductsArr) && avProductsArr.ValueKind == JsonValueKind.Array)
+            {
+                var firstAv = avProductsArr.EnumerateArray().FirstOrDefault();
+                if (firstAv.ValueKind == JsonValueKind.Object)
+                {
+                    avName = GetString(firstAv, "displayName") ?? GetString(firstAv, "name");
+                    avStatus = GetString(firstAv, "productState") ?? GetString(firstAv, "status");
+                }
+            }
+            // Fallback to direct properties
+            if (string.IsNullOrEmpty(avName))
+            {
+                avName = GetString(secData, "antivirusName") ?? GetString(secData, "avName");
+                avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus");
+            }
             if (!string.IsNullOrEmpty(avName))
             {
                 var icon = avStatus?.ToLower() switch
@@ -1323,9 +1453,21 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "Antivirus", "données AV absentes");
             }
 
-            // 2. Pare-feu
-            var fwEnabled = GetBool(secData, "firewallEnabled") ?? GetBool(secData, "firewall");
+            // 2. Pare-feu - handle multiple structures
+            bool? fwEnabled = GetBool(secData, "firewallEnabled") ?? GetBool(secData, "firewall");
             var fwProfiles = GetString(secData, "firewallProfiles");
+            // Handle firewall object with value__ property (1=enabled, 0=disabled)
+            if (!fwEnabled.HasValue && secData.HasValue && secData.Value.TryGetProperty("firewall", out var fwObj))
+            {
+                if (fwObj.ValueKind == JsonValueKind.Object && fwObj.TryGetProperty("value__", out var fwVal))
+                {
+                    fwEnabled = fwVal.ValueKind == JsonValueKind.Number ? fwVal.GetInt32() == 1 : null;
+                }
+                else if (fwObj.ValueKind == JsonValueKind.Number)
+                {
+                    fwEnabled = fwObj.GetInt32() == 1;
+                }
+            }
             if (fwEnabled.HasValue)
             {
                 var status = fwEnabled.Value ? "✅ Activé" : "⚠️ Désactivé";
@@ -1662,8 +1804,21 @@ namespace PCDiagnosticPro.Services
             var result = new List<string>();
             
             var telemetry = GetNestedElement(root, "process_telemetry");
+            // #region agent log
             if (telemetry.HasValue)
             {
+                var propNames = new List<string>();
+                foreach (var prop in telemetry.Value.EnumerateObject()) propNames.Add(prop.Name);
+                DebugLog("B", "GetTopProcesses:entry", $"process_telemetry props for metric={metric}", new { propNames });
+            }
+            else
+            {
+                DebugLog("B", "GetTopProcesses:entry", "process_telemetry is NULL", new { metric });
+            }
+            // #endregion
+            if (telemetry.HasValue)
+            {
+                // Extended case variations including TopByXxx pattern
                 var arrayName = metric switch
                 {
                     "cpu" => "topCpu",
@@ -1673,8 +1828,14 @@ namespace PCDiagnosticPro.Services
                     _ => $"top{char.ToUpper(metric[0])}{metric.Substring(1)}"
                 };
                 
-                // Try multiple case variations
-                var names = new[] { arrayName, arrayName.ToLower(), $"Top{metric}" };
+                // Try multiple case variations including PascalCase "TopByXxx" pattern
+                var names = new[] { 
+                    arrayName, 
+                    arrayName.ToLower(), 
+                    $"Top{metric}",
+                    $"TopBy{char.ToUpper(metric[0])}{metric.Substring(1)}",  // TopByCpu, TopByMemory
+                    $"topBy{char.ToUpper(metric[0])}{metric.Substring(1)}"   // topByCpu, topByMemory
+                };
                 foreach (var name in names)
                 {
                     if (telemetry.Value.TryGetProperty(name, out var arr) && arr.ValueKind == JsonValueKind.Array)
@@ -1684,6 +1845,9 @@ namespace PCDiagnosticPro.Services
                             .Where(n => !string.IsNullOrEmpty(n))
                             .Take(count)
                             .ToList();
+                        // #region agent log
+                        DebugLog("B", "GetTopProcesses:found", $"Found data at {name}", new { resultCount = result.Count });
+                        // #endregion
                         if (result.Count > 0) break;
                     }
                 }

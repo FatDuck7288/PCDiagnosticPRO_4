@@ -7,9 +7,9 @@ L'analyse et l'interpretation sont effectuees par l'IA externe.
 
 METADATA
 --------------------------------------------------
-Run ID               : c203cf5f-ea8d-47b7-8590-653992be0022
+Run ID               : 88b86660-8a7b-4287-a397-091660fdaedb
 Version              : 7.0
-Date                 : 2026-01-31 22:12:06
+Date                 : 2026-02-01 11:50:02
 Machine              : PC-52391b
 Admin                : True
 Redaction            : Full
@@ -35,7 +35,7 @@ Build                    : 26200
 UPTIME
 --------------------------------------------------
 Dernier Boot             : 2026-01-31 10:26
-Uptime                   : 0j 11h
+Uptime                   : 1j 1h
 
 FABRICANT
 --------------------------------------------------
@@ -73,7 +73,7 @@ PROCESSEUR(S)
 CPU: AMD Ryzen 9 5900X 12-Core Processor            
   Cores/Threads          : 12 / 24
   Frequence Max          : 3701 MHz
-  Charge Actuelle        : 1%
+  Charge Actuelle        : 2%
 
 ====================================================================================================
 [4. MEMOIRE]
@@ -81,8 +81,8 @@ CPU: AMD Ryzen 9 5900X 12-Core Processor
 MEMOIRE PHYSIQUE (RAM)
 --------------------------------------------------
 Memoire Totale           : 95.93 GB
-Memoire Libre            : 74.64 GB
-Utilisation              : 22.2%
+Memoire Libre            : 73.7 GB
+Utilisation              : 23.2%
 
 MODULES
 --------------------------------------------------
@@ -109,9 +109,9 @@ Disque: TOSHIBA DT01ACA200
 
 VOLUMES
 --------------------------------------------------
-C: 952.65 GB | Libre: 370.12 GB (61.1% utilise)
+C: 952.65 GB | Libre: 363.42 GB (61.9% utilise)
 D: 1863.02 GB | Libre: 1094.91 GB (41.2% utilise)
-E: 1862.17 GB | Libre: 1492.64 GB (19.8% utilise)
+E: 1862.17 GB | Libre: 1487.47 GB (20.1% utilise)
 H: 1862.88 GB | Libre: 701.18 GB (62.4% utilise)
 
 SMART
@@ -153,7 +153,7 @@ Interface: RZ616 Wi-Fi 6E 160MHz
 
 CONNEXIONS
 --------------------------------------------------
-Total connexions: 110 | Ports en ecoute: 39
+Total connexions: 119 | Ports en ecoute: 40
 
 ====================================================================================================
 [8. SECURITE]
@@ -189,7 +189,7 @@ SERVICES CRITIQUES
 [OK] Journal d’événements Windows
 [OK] Services de chiffrement
 
-Total: 310 | Running: 130
+Total: 310 | Running: 131
 
 ====================================================================================================
 [10. DEMARRAGE]
@@ -317,16 +317,16 @@ Est une VM: Non
 ====================================================================================================
 POINTS DE RESTAURATION
 --------------------------------------------------
-Points disponibles: 4
+Points disponibles: 3
 
 ====================================================================================================
 [24. FICHIERS TEMPORAIRES]
 ====================================================================================================
 FICHIERS TEMPORAIRES
 --------------------------------------------------
-Temp User : 1,99 GB
-Temp Windows : 121,96 MB
-TOTAL: 2,11 GB
+Temp User : 1,97 GB
+Temp Windows : 124,06 MB
+TOTAL: 2,09 GB
 
 ====================================================================================================
 [25. VARIABLES ENVIRONNEMENT]
@@ -448,8 +448,8 @@ SMART DETAILLE
 Disque: 5&221baba8&0&020000_0
   Prediction defaillance : Non
   Reallocated Sectors    : 0
-  Power-On Hours         : 22935 h
-  Temperature            : 35 C
+  Power-On Hours         : 22949 h
+  Temperature            : 36 C
   Reallocation Events    : 0
   Pending Sectors        : 0
   Uncorrectable Sectors  : 0
@@ -463,11 +463,11 @@ SIGNES DYNAMIQUES (DONNEES BRUTES)
 
 [CONFIG] Duree: 10s | Echantillons: 10
 
-CPU: moyenne 35% | max 35% | min 35% [WMI-Fallback]
-Memoire: 22.64% utilisee | 75994.45 MB libres [WMI-Fallback]
-Disque: utilisation 0% | file 0 [WMI-Fallback]
-Top CPU: dwm
-Top RAM: Cursor (1031.83 MB)
+CPU: moyenne 0% | max 0% | min 0% [WMI-Fallback]
+Memoire: 23.69% utilisee | 74958.22 MB libres [WMI-Fallback]
+Disque: utilisation 1% | file 0 [WMI-Fallback]
+Top CPU: chrome
+Top RAM: Cursor (800.45 MB)
 Reseau: 0.00 Mbps | erreurs: 0
 
 ====================================================================================================
@@ -478,9 +478,9 @@ ANALYSE AVANCEE (DONNEES BRUTES)
 
 FRAGMENTATION DISQUE
 --------------------------------------------------
-C: 8%
+C: 3%
 H: [Non disponible]
-E: 2%
+E: 0%
 D: 0%
 
 BENCHMARKS SYSTEME
@@ -521,8 +521,8 @@ RESUME DE COLLECTE
 METADATA
 --------------------------------------------------
 Version              : 7.0
-Run ID               : c203cf5f-ea8d-47b7-8590-653992be0022
-Date                 : 2026-01-31 22:12:57
+Run ID               : 88b86660-8a7b-4287-a397-091660fdaedb
+Date                 : 2026-02-01 11:50:53
 Admin                : True
 Redaction            : Full
 QuickScan            : False
@@ -574,7 +574,7 @@ ERREURS
 Erreurs de collecte: 1
 
 ####################################################################################################
-Duree collecte       : 51.6 secondes
-Genere le            : 2026-01-31 22:12:57
+Duree collecte       : 51.1 secondes
+Genere le            : 2026-02-01 11:50:53
 
-Hash (SHA256): D8A7DB0A85C818F40CF4E01B02FB3F4FD1F5779033E42138B8DFD7B3BB4670DC
+Hash (SHA256): 6D40A97983EFB64F6B2527D59F5107D142AD32433DB98938BD3DEB7B543832CC
