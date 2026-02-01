@@ -244,7 +244,7 @@ namespace PCDiagnosticPro.Services
             // Injection CPU
             if (cpuSection != null && sensors.Cpu.CpuTempC.Available)
             {
-                cpuSection.EvidenceData["Temperature"] = $"{sensors.Cpu.CpuTempC.Value:F1}°C";
+                SetEvidenceIfMissing(cpuSection, "Température CPU", $"{sensors.Cpu.CpuTempC.Value:F1}°C", "Temperature");
                 cpuSection.HasData = true;
                 App.LogMessage($"[Sensors→CPU] Température injectée: {sensors.Cpu.CpuTempC.Value:F1}°C");
             }
@@ -253,25 +253,36 @@ namespace PCDiagnosticPro.Services
             if (gpuSection != null)
             {
                 if (sensors.Gpu.Name.Available)
-                    gpuSection.EvidenceData["GPU"] = sensors.Gpu.Name.Value ?? "N/A";
+                    SetEvidenceIfMissing(gpuSection, "GPU", sensors.Gpu.Name.Value ?? "N/A");
                 
                 if (sensors.Gpu.GpuTempC.Available)
                 {
-                    gpuSection.EvidenceData["Temperature"] = $"{sensors.Gpu.GpuTempC.Value:F1}°C";
+                    var label = "Température GPU";
+                    var source = sensors.Gpu.GpuTempSource ?? "";
+                    if (source.Contains("hot spot", StringComparison.OrdinalIgnoreCase) ||
+                        source.Contains("hotspot", StringComparison.OrdinalIgnoreCase))
+                    {
+                        label = "Température GPU (Hot Spot)";
+                    }
+                    SetEvidenceIfMissing(gpuSection, label, $"{sensors.Gpu.GpuTempC.Value:F1}°C", "Temperature", "Température GPU");
                     App.LogMessage($"[Sensors→GPU] Température injectée: {sensors.Gpu.GpuTempC.Value:F1}°C");
                 }
                 
                 if (sensors.Gpu.GpuLoadPercent.Available)
                 {
-                    gpuSection.EvidenceData["Load"] = $"{sensors.Gpu.GpuLoadPercent.Value:F0}%";
+                    SetEvidenceIfMissing(gpuSection, "Charge GPU", $"{sensors.Gpu.GpuLoadPercent.Value:F0}%", "Load");
                     App.LogMessage($"[Sensors→GPU] Charge injectée: {sensors.Gpu.GpuLoadPercent.Value:F0}%");
                 }
                 
                 if (sensors.Gpu.VramTotalMB.Available && sensors.Gpu.VramUsedMB.Available)
                 {
                     var vramUsedPct = (sensors.Gpu.VramUsedMB.Value / sensors.Gpu.VramTotalMB.Value) * 100;
-                    gpuSection.EvidenceData["VRAM Total"] = $"{sensors.Gpu.VramTotalMB.Value:F0} MB";
-                    gpuSection.EvidenceData["VRAM Utilisée"] = $"{sensors.Gpu.VramUsedMB.Value:F0} MB ({vramUsedPct:F0}%)";
+                    SetEvidenceIfMissing(gpuSection, "VRAM", $"{sensors.Gpu.VramUsedMB.Value:F0} MB / {sensors.Gpu.VramTotalMB.Value:F0} MB ({vramUsedPct:F0}%)", 
+                        "VRAM totale", "VRAM Total", "VRAM Utilisée");
+                }
+                else if (sensors.Gpu.VramTotalMB.Available)
+                {
+                    SetEvidenceIfMissing(gpuSection, "VRAM totale", $"{sensors.Gpu.VramTotalMB.Value:F0} MB", "VRAM Total", "VRAM");
                 }
                 
                 gpuSection.HasData = true;
@@ -288,7 +299,8 @@ namespace PCDiagnosticPro.Services
                     
                 if (maxDiskTemp > 0)
                 {
-                    storageSection.EvidenceData["TempMax Disques"] = $"{maxDiskTemp:F0}°C";
+                    var emoji = maxDiskTemp < 45 ? "✅" : maxDiskTemp <= 55 ? "⚡" : "⚠️";
+                    SetEvidenceIfMissing(storageSection, "TempMax Disques", $"{maxDiskTemp:F0}°C {emoji}");
                     App.LogMessage($"[Sensors→Storage] Temp max disques: {maxDiskTemp:F0}°C");
                 }
                 
@@ -298,10 +310,18 @@ namespace PCDiagnosticPro.Services
                     var disk = sensors.Disks[i];
                     if (disk.Name.Available && disk.TempC.Available)
                     {
-                        storageSection.EvidenceData[$"Disque {i+1}"] = $"{disk.Name.Value}: {disk.TempC.Value:F0}°C";
+                        var emoji = disk.TempC.Value < 45 ? "✅" : disk.TempC.Value <= 55 ? "⚡" : "⚠️";
+                        SetEvidenceIfMissing(storageSection, $"Disque {i+1}", $"{disk.Name.Value}: {disk.TempC.Value:F0}°C {emoji}");
                     }
                 }
             }
+        }
+
+        private static void SetEvidenceIfMissing(HealthSection section, string key, string value, params string[] alternateKeys)
+        {
+            if (section.EvidenceData.ContainsKey(key)) return;
+            if (alternateKeys.Any(k => section.EvidenceData.ContainsKey(k))) return;
+            section.EvidenceData[key] = value;
         }
 
         /// <summary>
@@ -884,58 +904,57 @@ namespace PCDiagnosticPro.Services
                             if (sectionName == "CPU" && data.ValueKind == JsonValueKind.Object)
                             {
                                 // FIX: Use correct field name 'cpus' (PS script), with 'cpuList' fallback
-                                JsonElement cpuArray = default;
-                                bool hasCpuArray = false;
+                                JsonElement? firstCpu = null;
                                 
-                                if (data.TryGetProperty("cpus", out var cpusEl) && cpusEl.ValueKind == JsonValueKind.Array)
+                                if (data.TryGetProperty("cpus", out var cpusEl))
                                 {
-                                    cpuArray = cpusEl;
-                                    hasCpuArray = true;
+                                    if (cpusEl.ValueKind == JsonValueKind.Array)
+                                        firstCpu = cpusEl.EnumerateArray().FirstOrDefault();
+                                    else if (cpusEl.ValueKind == JsonValueKind.Object)
+                                        firstCpu = cpusEl;
                                 }
-                                else if (data.TryGetProperty("cpuList", out var cpuListEl) && cpuListEl.ValueKind == JsonValueKind.Array)
+                                else if (data.TryGetProperty("cpuList", out var cpuListEl))
                                 {
-                                    cpuArray = cpuListEl;
-                                    hasCpuArray = true;
+                                    if (cpuListEl.ValueKind == JsonValueKind.Array)
+                                        firstCpu = cpuListEl.EnumerateArray().FirstOrDefault();
+                                    else if (cpuListEl.ValueKind == JsonValueKind.Object)
+                                        firstCpu = cpuListEl;
                                 }
                                 
-                                if (hasCpuArray)
+                                if (firstCpu.HasValue && firstCpu.Value.ValueKind == JsonValueKind.Object)
                                 {
-                                    var firstCpu = cpuArray.EnumerateArray().FirstOrDefault();
-                                    if (firstCpu.ValueKind == JsonValueKind.Object)
+                                    // Modèle
+                                    if (firstCpu.Value.TryGetProperty("name", out var name))
                                     {
-                                        // Modèle
-                                        if (firstCpu.TryGetProperty("name", out var name))
-                                        {
-                                            var nameStr = name.GetString()?.Trim() ?? "";
-                                            if (!string.IsNullOrEmpty(nameStr))
-                                                evidence["Modèle"] = nameStr;
-                                        }
-                                        
-                                        // Cœurs
-                                        if (firstCpu.TryGetProperty("cores", out var cores))
-                                            evidence["Cœurs"] = cores.ToString();
-                                        
-                                        // Threads
-                                        if (firstCpu.TryGetProperty("threads", out var threads))
-                                            evidence["Threads"] = threads.ToString();
-                                        
-                                        // Fréquence max
-                                        if (firstCpu.TryGetProperty("maxClockSpeed", out var maxClock))
-                                        {
-                                            var mhz = maxClock.ValueKind == JsonValueKind.Number ? maxClock.GetDouble() : 0;
-                                            if (mhz > 0)
-                                                evidence["Fréquence max"] = $"{mhz:F0} MHz";
-                                        }
-                                        
-                                        // Charge actuelle (currentLoad or load)
-                                        if (firstCpu.TryGetProperty("currentLoad", out var load))
-                                        {
-                                            evidence["Charge actuelle"] = $"{load.GetDouble():F0} %";
-                                        }
-                                        else if (firstCpu.TryGetProperty("load", out var load2))
-                                        {
-                                            evidence["Charge actuelle"] = $"{load2.GetDouble():F0} %";
-                                        }
+                                        var nameStr = name.GetString()?.Trim() ?? "";
+                                        if (!string.IsNullOrEmpty(nameStr))
+                                            evidence["Modèle"] = nameStr;
+                                    }
+                                    
+                                    // Cœurs
+                                    if (firstCpu.Value.TryGetProperty("cores", out var cores))
+                                        evidence["Cœurs"] = cores.ToString();
+                                    
+                                    // Threads
+                                    if (firstCpu.Value.TryGetProperty("threads", out var threads))
+                                        evidence["Threads"] = threads.ToString();
+                                    
+                                    // Fréquence max
+                                    if (firstCpu.Value.TryGetProperty("maxClockSpeed", out var maxClock))
+                                    {
+                                        var mhz = maxClock.ValueKind == JsonValueKind.Number ? maxClock.GetDouble() : 0;
+                                        if (mhz > 0)
+                                            evidence["Fréquence max"] = $"{mhz:F0} MHz";
+                                    }
+                                    
+                                    // Charge actuelle (currentLoad or load)
+                                    if (firstCpu.Value.TryGetProperty("currentLoad", out var load))
+                                    {
+                                        evidence["Charge actuelle"] = $"{load.GetDouble():F0} %";
+                                    }
+                                    else if (firstCpu.Value.TryGetProperty("load", out var load2))
+                                    {
+                                        evidence["Charge actuelle"] = $"{load2.GetDouble():F0} %";
                                     }
                                 }
                                 
@@ -952,110 +971,108 @@ namespace PCDiagnosticPro.Services
                         case HealthDomain.GPU:
                             if (sectionName == "GPU" && data.ValueKind == JsonValueKind.Object)
                             {
-                                // Try 'gpuList' first, then 'gpus' for compatibility
-                                JsonElement gpuArray = default;
-                                bool hasGpuArray = false;
+                                JsonElement? firstGpu = null;
                                 
-                                if (data.TryGetProperty("gpuList", out var gpuListEl) && gpuListEl.ValueKind == JsonValueKind.Array)
+                                if (data.TryGetProperty("gpuList", out var gpuListEl))
                                 {
-                                    gpuArray = gpuListEl;
-                                    hasGpuArray = true;
+                                    if (gpuListEl.ValueKind == JsonValueKind.Array)
+                                        firstGpu = gpuListEl.EnumerateArray().FirstOrDefault();
+                                    else if (gpuListEl.ValueKind == JsonValueKind.Object)
+                                        firstGpu = gpuListEl;
                                 }
-                                else if (data.TryGetProperty("gpus", out var gpusEl) && gpusEl.ValueKind == JsonValueKind.Array)
+                                else if (data.TryGetProperty("gpus", out var gpusEl))
                                 {
-                                    gpuArray = gpusEl;
-                                    hasGpuArray = true;
+                                    if (gpusEl.ValueKind == JsonValueKind.Array)
+                                        firstGpu = gpusEl.EnumerateArray().FirstOrDefault();
+                                    else if (gpusEl.ValueKind == JsonValueKind.Object)
+                                        firstGpu = gpusEl;
                                 }
                                 
-                                if (hasGpuArray)
+                                if (firstGpu.HasValue && firstGpu.Value.ValueKind == JsonValueKind.Object)
                                 {
-                                    var firstGpu = gpuArray.EnumerateArray().FirstOrDefault();
-                                    if (firstGpu.ValueKind == JsonValueKind.Object)
+                                    // Nom
+                                    if (firstGpu.Value.TryGetProperty("name", out var name))
                                     {
-                                        // Nom
-                                        if (firstGpu.TryGetProperty("name", out var name))
+                                        var nameStr = name.GetString()?.Trim() ?? "";
+                                        if (!string.IsNullOrEmpty(nameStr))
+                                            evidence["Nom"] = nameStr;
+                                    }
+                                    
+                                    // Fabricant (vendor)
+                                    if (firstGpu.Value.TryGetProperty("vendor", out var vendor))
+                                    {
+                                        var vendorStr = vendor.GetString()?.Trim() ?? "";
+                                        if (!string.IsNullOrEmpty(vendorStr))
+                                            evidence["Fabricant"] = vendorStr;
+                                    }
+                                    
+                                    // Résolution
+                                    if (firstGpu.Value.TryGetProperty("resolution", out var res))
+                                    {
+                                        var resStr = res.GetString() ?? "";
+                                        if (!string.IsNullOrEmpty(resStr))
+                                            evidence["Résolution"] = resStr;
+                                    }
+                                    
+                                    // Version pilote
+                                    if (firstGpu.Value.TryGetProperty("driverVersion", out var driverVer))
+                                    {
+                                        var verStr = driverVer.GetString() ?? "";
+                                        if (!string.IsNullOrEmpty(verStr))
+                                            evidence["Version pilote"] = verStr;
+                                    }
+                                    
+                                    // Date pilote (nested: driverDate.DateTime or driverDate directly)
+                                    if (firstGpu.Value.TryGetProperty("driverDate", out var driverDateEl))
+                                    {
+                                        string? dateStr = null;
+                                        if (driverDateEl.ValueKind == JsonValueKind.Object && 
+                                            driverDateEl.TryGetProperty("DateTime", out var dateTimeEl))
                                         {
-                                            var nameStr = name.GetString()?.Trim() ?? "";
-                                            if (!string.IsNullOrEmpty(nameStr))
-                                                evidence["Nom"] = nameStr;
+                                            dateStr = dateTimeEl.GetString();
                                         }
-                                        
-                                        // Fabricant (vendor)
-                                        if (firstGpu.TryGetProperty("vendor", out var vendor))
+                                        else if (driverDateEl.ValueKind == JsonValueKind.String)
                                         {
-                                            var vendorStr = vendor.GetString()?.Trim() ?? "";
-                                            if (!string.IsNullOrEmpty(vendorStr))
-                                                evidence["Fabricant"] = vendorStr;
+                                            dateStr = driverDateEl.GetString();
                                         }
-                                        
-                                        // Résolution
-                                        if (firstGpu.TryGetProperty("resolution", out var res))
+                                        if (!string.IsNullOrEmpty(dateStr))
+                                            evidence["Date pilote"] = dateStr;
+                                    }
+                                    
+                                    // VRAM: Try vramTotalMB first, fallback to vramNote, then adapterRAM_GB
+                                    bool vramFound = false;
+                                    
+                                    if (firstGpu.Value.TryGetProperty("vramTotalMB", out var vramMB) && 
+                                        vramMB.ValueKind == JsonValueKind.Number)
+                                    {
+                                        var mb = vramMB.GetDouble();
+                                        if (mb > 0)
                                         {
-                                            var resStr = res.GetString() ?? "";
-                                            if (!string.IsNullOrEmpty(resStr))
-                                                evidence["Résolution"] = resStr;
+                                            evidence["VRAM totale"] = mb >= 1024 
+                                                ? $"{mb / 1024:F1} GB" 
+                                                : $"{mb:F0} MB";
+                                            vramFound = true;
                                         }
-                                        
-                                        // Version pilote
-                                        if (firstGpu.TryGetProperty("driverVersion", out var driverVer))
+                                    }
+                                    
+                                    // Fallback to vramNote if vramTotalMB is null/0
+                                    if (!vramFound && firstGpu.Value.TryGetProperty("vramNote", out var vramNote))
+                                    {
+                                        var noteStr = vramNote.GetString();
+                                        if (!string.IsNullOrEmpty(noteStr))
                                         {
-                                            var verStr = driverVer.GetString() ?? "";
-                                            if (!string.IsNullOrEmpty(verStr))
-                                                evidence["Version pilote"] = verStr;
+                                            evidence["VRAM totale"] = noteStr;
+                                            vramFound = true;
                                         }
-                                        
-                                        // Date pilote (nested: driverDate.DateTime or driverDate directly)
-                                        if (firstGpu.TryGetProperty("driverDate", out var driverDateEl))
-                                        {
-                                            string? dateStr = null;
-                                            if (driverDateEl.ValueKind == JsonValueKind.Object && 
-                                                driverDateEl.TryGetProperty("DateTime", out var dateTimeEl))
-                                            {
-                                                dateStr = dateTimeEl.GetString();
-                                            }
-                                            else if (driverDateEl.ValueKind == JsonValueKind.String)
-                                            {
-                                                dateStr = driverDateEl.GetString();
-                                            }
-                                            if (!string.IsNullOrEmpty(dateStr))
-                                                evidence["Date pilote"] = dateStr;
-                                        }
-                                        
-                                        // VRAM: Try vramTotalMB first, fallback to vramNote, then adapterRAM_GB
-                                        bool vramFound = false;
-                                        
-                                        if (firstGpu.TryGetProperty("vramTotalMB", out var vramMB) && 
-                                            vramMB.ValueKind == JsonValueKind.Number)
-                                        {
-                                            var mb = vramMB.GetDouble();
-                                            if (mb > 0)
-                                            {
-                                                evidence["VRAM totale"] = mb >= 1024 
-                                                    ? $"{mb / 1024:F1} GB" 
-                                                    : $"{mb:F0} MB";
-                                                vramFound = true;
-                                            }
-                                        }
-                                        
-                                        // Fallback to vramNote if vramTotalMB is null/0
-                                        if (!vramFound && firstGpu.TryGetProperty("vramNote", out var vramNote))
-                                        {
-                                            var noteStr = vramNote.GetString();
-                                            if (!string.IsNullOrEmpty(noteStr))
-                                            {
-                                                evidence["VRAM totale"] = noteStr;
-                                                vramFound = true;
-                                            }
-                                        }
-                                        
-                                        // Fallback to adapterRAM_GB (legacy field)
-                                        if (!vramFound && firstGpu.TryGetProperty("adapterRAM_GB", out var adapterRam) &&
-                                            adapterRam.ValueKind == JsonValueKind.Number)
-                                        {
-                                            var gb = adapterRam.GetDouble();
-                                            if (gb > 0)
-                                                evidence["VRAM totale"] = $"{gb:F1} GB";
-                                        }
+                                    }
+                                    
+                                    // Fallback to adapterRAM_GB (legacy field)
+                                    if (!vramFound && firstGpu.Value.TryGetProperty("adapterRAM_GB", out var adapterRam) &&
+                                        adapterRam.ValueKind == JsonValueKind.Number)
+                                    {
+                                        var gb = adapterRam.GetDouble();
+                                        if (gb > 0)
+                                            evidence["VRAM totale"] = $"{gb:F1} GB";
                                     }
                                 }
                                 
@@ -1115,7 +1132,8 @@ namespace PCDiagnosticPro.Services
                         case HealthDomain.Storage:
                             if (sectionName == "Storage" && data.ValueKind == JsonValueKind.Object)
                             {
-                                if (data.TryGetProperty("disks", out var disks) && disks.ValueKind == JsonValueKind.Array)
+                                if ((data.TryGetProperty("physicalDisks", out var disks) && disks.ValueKind == JsonValueKind.Array) ||
+                                    (data.TryGetProperty("disks", out disks) && disks.ValueKind == JsonValueKind.Array))
                                 {
                                     int diskCount = 0;
                                     double totalSpace = 0;
@@ -1140,8 +1158,11 @@ namespace PCDiagnosticPro.Services
                                         double sizeGB = 0, freeGB = 0;
                                         
                                         if (vol.TryGetProperty("driveLetter", out var dl)) letter = dl.GetString() ?? "";
+                                        else if (vol.TryGetProperty("letter", out var l)) letter = l.GetString() ?? "";
                                         if (vol.TryGetProperty("sizeGB", out var s)) sizeGB = s.GetDouble();
+                                        else if (vol.TryGetProperty("totalGB", out var t)) sizeGB = t.GetDouble();
                                         if (vol.TryGetProperty("freeSpaceGB", out var f)) freeGB = f.GetDouble();
+                                        else if (vol.TryGetProperty("freeGB", out var fg)) freeGB = fg.GetDouble();
                                         
                                         double freePercent = sizeGB > 0 ? (freeGB / sizeGB * 100) : 0;
                                         
@@ -1188,6 +1209,14 @@ namespace PCDiagnosticPro.Services
                                         if (activeAdapter.TryGetProperty("ipv4", out var ipv4))
                                         {
                                             var ipStr = ipv4.GetString() ?? "";
+                                            if (!string.IsNullOrEmpty(ipStr))
+                                                evidence["Adresse IP"] = ipStr;
+                                        }
+                                        else if (activeAdapter.TryGetProperty("ip", out var ipArr) && ipArr.ValueKind == JsonValueKind.Array)
+                                        {
+                                            var ipStr = ipArr.EnumerateArray()
+                                                .Select(i => i.GetString())
+                                                .FirstOrDefault(i => !string.IsNullOrEmpty(i) && i.Contains('.')) ?? "";
                                             if (!string.IsNullOrEmpty(ipStr))
                                                 evidence["Adresse IP"] = ipStr;
                                         }

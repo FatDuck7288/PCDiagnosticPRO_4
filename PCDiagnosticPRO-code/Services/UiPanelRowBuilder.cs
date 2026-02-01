@@ -65,15 +65,31 @@ namespace PCDiagnosticPro.Services
                 if (cpuData.HasValue)
                 {
                     // Try 'cpus' first (correct PS field name), then 'cpuList' for compatibility
-                    if (cpuData.Value.TryGetProperty("cpus", out var cpusArray) && cpusArray.ValueKind == JsonValueKind.Array)
+                    if (TryGetPropertyIgnoreCase(cpuData.Value, "cpus", out var cpusArray))
                     {
-                        firstCpu = cpusArray.EnumerateArray().FirstOrDefault();
-                        basePath = "scan_powershell.sections.CPU.data.cpus[0]";
+                        if (cpusArray.ValueKind == JsonValueKind.Array)
+                        {
+                            firstCpu = cpusArray.EnumerateArray().FirstOrDefault();
+                            basePath = "scan_powershell.sections.CPU.data.cpus[0]";
+                        }
+                        else if (cpusArray.ValueKind == JsonValueKind.Object)
+                        {
+                            firstCpu = cpusArray;
+                            basePath = "scan_powershell.sections.CPU.data.cpus";
+                        }
                     }
-                    else if (cpuData.Value.TryGetProperty("cpuList", out var cpuListArray) && cpuListArray.ValueKind == JsonValueKind.Array)
+                    else if (TryGetPropertyIgnoreCase(cpuData.Value, "cpuList", out var cpuListArray))
                     {
-                        firstCpu = cpuListArray.EnumerateArray().FirstOrDefault();
-                        basePath = "scan_powershell.sections.CPU.data.cpuList[0]";
+                        if (cpuListArray.ValueKind == JsonValueKind.Array)
+                        {
+                            firstCpu = cpuListArray.EnumerateArray().FirstOrDefault();
+                            basePath = "scan_powershell.sections.CPU.data.cpuList[0]";
+                        }
+                        else if (cpuListArray.ValueKind == JsonValueKind.Object)
+                        {
+                            firstCpu = cpuListArray;
+                            basePath = "scan_powershell.sections.CPU.data.cpuList";
+                        }
                     }
                 }
 
@@ -160,15 +176,31 @@ namespace PCDiagnosticPro.Services
                 if (gpuData.HasValue)
                 {
                     // Try 'gpuList' first, then 'gpus' for compatibility
-                    if (gpuData.Value.TryGetProperty("gpuList", out var gpuListArray) && gpuListArray.ValueKind == JsonValueKind.Array)
+                    if (TryGetPropertyIgnoreCase(gpuData.Value, "gpuList", out var gpuListArray))
                     {
-                        firstGpu = gpuListArray.EnumerateArray().FirstOrDefault();
-                        basePath = "scan_powershell.sections.GPU.data.gpuList[0]";
+                        if (gpuListArray.ValueKind == JsonValueKind.Array)
+                        {
+                            firstGpu = gpuListArray.EnumerateArray().FirstOrDefault();
+                            basePath = "scan_powershell.sections.GPU.data.gpuList[0]";
+                        }
+                        else if (gpuListArray.ValueKind == JsonValueKind.Object)
+                        {
+                            firstGpu = gpuListArray;
+                            basePath = "scan_powershell.sections.GPU.data.gpuList";
+                        }
                     }
-                    else if (gpuData.Value.TryGetProperty("gpus", out var gpusArray) && gpusArray.ValueKind == JsonValueKind.Array)
+                    else if (TryGetPropertyIgnoreCase(gpuData.Value, "gpus", out var gpusArray))
                     {
-                        firstGpu = gpusArray.EnumerateArray().FirstOrDefault();
-                        basePath = "scan_powershell.sections.GPU.data.gpus[0]";
+                        if (gpusArray.ValueKind == JsonValueKind.Array)
+                        {
+                            firstGpu = gpusArray.EnumerateArray().FirstOrDefault();
+                            basePath = "scan_powershell.sections.GPU.data.gpus[0]";
+                        }
+                        else if (gpusArray.ValueKind == JsonValueKind.Object)
+                        {
+                            firstGpu = gpusArray;
+                            basePath = "scan_powershell.sections.GPU.data.gpus";
+                        }
                     }
                 }
 
@@ -333,7 +365,8 @@ namespace PCDiagnosticPro.Services
                 if (storageData.HasValue)
                 {
                     // Disks summary
-                    if (storageData.Value.TryGetProperty("disks", out var disksEl) && disksEl.ValueKind == JsonValueKind.Array)
+                    if (TryGetPropertyIgnoreCase(storageData.Value, "physicalDisks", out var disksEl) && disksEl.ValueKind == JsonValueKind.Array ||
+                        TryGetPropertyIgnoreCase(storageData.Value, "disks", out disksEl) && disksEl.ValueKind == JsonValueKind.Array)
                     {
                         var diskCount = disksEl.GetArrayLength();
                         double totalCapacity = 0;
@@ -354,11 +387,11 @@ namespace PCDiagnosticPro.Services
                     {
                         foreach (var vol in volumesEl.EnumerateArray())
                         {
-                            var letter = GetStringValue(vol, "driveLetter")?.ToUpper() ?? "";
+                            var letter = (GetStringValue(vol, "driveLetter") ?? GetStringValue(vol, "letter"))?.ToUpper() ?? "";
                             if (letter == "C")
                             {
-                                var sizeGB = GetDoubleValue(vol, "sizeGB");
-                                var freeGB = GetDoubleValue(vol, "freeSpaceGB");
+                                var sizeGB = GetDoubleValue(vol, "sizeGB") ?? GetDoubleValue(vol, "totalGB");
+                                var freeGB = GetDoubleValue(vol, "freeSpaceGB") ?? GetDoubleValue(vol, "freeGB");
                                 
                                 if (sizeGB.HasValue && sizeGB.Value > 0)
                                 {
@@ -408,6 +441,12 @@ namespace PCDiagnosticPro.Services
                     {
                         var name = GetStringValue(firstAdapter, "name");
                         var ipv4 = GetStringValue(firstAdapter, "ipv4");
+                        if (string.IsNullOrEmpty(ipv4) && TryGetPropertyIgnoreCase(firstAdapter, "ip", out var ipArr) && ipArr.ValueKind == JsonValueKind.Array)
+                        {
+                            ipv4 = ipArr.EnumerateArray()
+                                .Select(i => i.GetString())
+                                .FirstOrDefault(i => !string.IsNullOrEmpty(i) && i.Contains('.'));
+                        }
                         var status = GetStringValue(firstAdapter, "status");
                         var speed = GetStringValue(firstAdapter, "speed");
                         
@@ -632,6 +671,26 @@ namespace PCDiagnosticPro.Services
             }
             
             return null;
+        }
+
+        private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonElement value)
+        {
+            value = default;
+            if (element.ValueKind != JsonValueKind.Object) return false;
+            
+            if (element.TryGetProperty(propertyName, out value))
+                return true;
+            
+            foreach (var p in element.EnumerateObject())
+            {
+                if (string.Equals(p.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = p.Value;
+                    return true;
+                }
+            }
+            
+            return false;
         }
 
         private static int? GetIntValue(JsonElement? element, string propertyName)

@@ -10,6 +10,9 @@ namespace PCDiagnosticPro.Services
 {
     public class HardwareSensorsCollector
     {
+        private static bool DebugPathsEnabled =>
+            Environment.GetEnvironmentVariable("PCDIAG_DEBUG_PATHS") == "1";
+
         public Task<HardwareSensorsResult> CollectAsync(CancellationToken ct)
         {
             return Task.Run(() => CollectInternal(ct), ct);
@@ -160,6 +163,48 @@ namespace PCDiagnosticPro.Services
                 App.LogMessage($"[GPU Memory] Logging error: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Log GPU temperature sensors for debugging sensor selection.
+        /// </summary>
+        private static void LogGpuTemperatureSensors(List<ISensor> sensors, ISensor? selected)
+        {
+            if (!DebugPathsEnabled) return;
+            
+            try
+            {
+                var tempSensors = sensors.Where(s => s.SensorType == SensorType.Temperature).ToList();
+                if (tempSensors.Count == 0) return;
+                
+                var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "PCDiagnosticPro_GpuTemp_Debug.log");
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"=== GPU Temperature Sensors - {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+                sb.AppendLine($"Total sensors found: {tempSensors.Count}");
+                sb.AppendLine();
+                
+                foreach (var sensor in tempSensors)
+                {
+                    sb.AppendLine($"  Sensor: {sensor.Name}");
+                    sb.AppendLine($"    Type: {sensor.SensorType}");
+                    sb.AppendLine($"    Value: {sensor.Value?.ToString() ?? "null"}");
+                    sb.AppendLine($"    Hardware: {sensor.Hardware?.Name ?? "unknown"}");
+                    sb.AppendLine($"    Timestamp: {DateTimeOffset.Now:O}");
+                }
+                
+                sb.AppendLine();
+                sb.AppendLine($"SELECTED:");
+                sb.AppendLine($"  Name: {selected?.Name ?? "null"}");
+                sb.AppendLine($"  Value: {selected?.Value?.ToString() ?? "null"}");
+                sb.AppendLine();
+                
+                System.IO.File.AppendAllText(logPath, sb.ToString());
+                App.LogMessage($"[GPU Temp] Found {tempSensors.Count} temp sensors. Selected: {selected?.Name ?? "none"}");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[GPU Temp] Logging error: {ex.Message}");
+            }
+        }
         
         /// <summary>
         /// Log sensor collection status to %TEMP% for debugging
@@ -193,6 +238,7 @@ namespace PCDiagnosticPro.Services
             res.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisee non collectee");
             res.Gpu.GpuLoadPercent = UnavailableDouble("Charge GPU non collectee");
             res.Gpu.GpuTempC = UnavailableDouble("Temperature GPU non collectee");
+            res.Gpu.GpuTempSource = "N/A";
             
             res.Cpu = new CpuMetrics();
             res.Cpu.CpuTempC = UnavailableDouble("Temperature CPU non collectee");
@@ -211,6 +257,7 @@ namespace PCDiagnosticPro.Services
             result.Gpu.VramUsedMB = UnavailableDouble(reason);
             result.Gpu.GpuLoadPercent = UnavailableDouble(reason);
             result.Gpu.GpuTempC = UnavailableDouble(reason);
+            result.Gpu.GpuTempSource = "N/A";
             result.Cpu.CpuTempC = UnavailableDouble(reason);
             result.Cpu.CpuTempSource = "Erreur";
             result.Cpu.CpuLoadPercent = UnavailableDouble(reason);
@@ -281,11 +328,20 @@ namespace PCDiagnosticPro.Services
                 else
                     result.Gpu.GpuLoadPercent = UnavailableDouble("Charge GPU indisponible");
 
-                var gpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "GPU", "Core");
-                if (gpuTemp.HasValue)
-                    result.Gpu.GpuTempC = Available(gpuTemp.Value);
+                var gpuTempSensor = SelectGpuTemperatureSensor(sensors);
+                if (gpuTempSensor != null && gpuTempSensor.Value.HasValue)
+                {
+                    result.Gpu.GpuTempC = Available(gpuTempSensor.Value.Value);
+                    result.Gpu.GpuTempSource = gpuTempSensor.Name;
+                }
                 else
+                {
                     result.Gpu.GpuTempC = UnavailableDouble("Temperature GPU indisponible");
+                    result.Gpu.GpuTempSource = "N/A";
+                }
+                
+                // Debug: Log GPU temperature sensors for selection audit
+                LogGpuTemperatureSensors(sensors, gpuTempSensor);
             }
             catch (Exception ex)
             {
@@ -571,6 +627,36 @@ namespace PCDiagnosticPro.Services
                 }
             }
             return null;
+        }
+
+        private static ISensor? SelectGpuTemperatureSensor(List<ISensor> sensors)
+        {
+            var tempSensors = sensors
+                .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue)
+                .ToList();
+            
+            if (tempSensors.Count == 0) return null;
+            
+            ISensor? selected = tempSensors.FirstOrDefault(s => s.Name.Contains("GPU Core", StringComparison.OrdinalIgnoreCase));
+            if (selected == null)
+                selected = tempSensors.FirstOrDefault(s => s.Name.Contains("GPU Temperature", StringComparison.OrdinalIgnoreCase));
+            if (selected == null)
+                selected = tempSensors.FirstOrDefault(s => s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase) && 
+                                                          s.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase));
+            if (selected == null)
+                selected = tempSensors.FirstOrDefault(s => s.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase) &&
+                                                          !s.Name.Contains("Hot Spot", StringComparison.OrdinalIgnoreCase) &&
+                                                          !s.Name.Contains("Hotspot", StringComparison.OrdinalIgnoreCase) &&
+                                                          !s.Name.Contains("Junction", StringComparison.OrdinalIgnoreCase) &&
+                                                          !s.Name.Contains("Memory", StringComparison.OrdinalIgnoreCase));
+            if (selected == null)
+                selected = tempSensors.FirstOrDefault(s => s.Name.Contains("Hot Spot", StringComparison.OrdinalIgnoreCase) ||
+                                                          s.Name.Contains("Hotspot", StringComparison.OrdinalIgnoreCase));
+            if (selected == null)
+                selected = tempSensors.FirstOrDefault(s => s.Name.Contains("Junction", StringComparison.OrdinalIgnoreCase) ||
+                                                          s.Name.Contains("Memory", StringComparison.OrdinalIgnoreCase));
+            
+            return selected ?? tempSensors.FirstOrDefault();
         }
 
         private static MetricValue<string> Available(string value)

@@ -33,6 +33,10 @@ namespace PCDiagnosticPro.Models
 
         [JsonPropertyName("gpuTempC")]
         public MetricValue<double> GpuTempC { get; set; } = new MetricValue<double>();
+
+        /// <summary>Source du capteur température GPU (GPU Core, Hot Spot, etc.)</summary>
+        [JsonPropertyName("gpuTempSource")]
+        public string? GpuTempSource { get; set; }
     }
 
     public class CpuMetrics
