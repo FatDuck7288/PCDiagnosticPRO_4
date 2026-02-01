@@ -25,7 +25,7 @@ namespace PCDiagnosticPro.Services
             JsonElement root,
             HardwareSensorsResult? sensors = null)
         {
-            return domain switch
+            var evidence = domain switch
             {
                 HealthDomain.OS => ExtractOS(root, sensors),
                 HealthDomain.CPU => ExtractCPU(root, sensors),
@@ -41,6 +41,9 @@ namespace PCDiagnosticPro.Services
                 HealthDomain.Power => ExtractPower(root, sensors),
                 _ => new Dictionary<string, string>()
             };
+
+            AppendSnapshotFallbacks(domain, root, evidence);
+            return evidence;
         }
 
         #region OS - Système d'exploitation
@@ -48,15 +51,6 @@ namespace PCDiagnosticPro.Services
         private static Dictionary<string, string> ExtractOS(JsonElement root, HardwareSensorsResult? sensors)
         {
             var ev = new Dictionary<string, string>();
-
-            AddIfNotEmpty(ev, "Version Windows", GetSnapshotMetricString(root, "os", "caption"),
-                "diagnostic_snapshot.metrics.os.caption.value");
-            AddIfNotEmpty(ev, "Build", GetSnapshotMetricString(root, "os", "buildNumber"),
-                "diagnostic_snapshot.metrics.os.buildNumber.value");
-            AddIfNotEmpty(ev, "Architecture", GetSnapshotMetricString(root, "os", "architecture"),
-                "diagnostic_snapshot.metrics.os.architecture.value");
-            AddIfNotEmpty(ev, "Uptime", GetSnapshotMetricString(root, "os", "uptime"),
-                "diagnostic_snapshot.metrics.os.uptime.value");
             
             // === PS: sections.OS ===
             var osData = GetSectionData(root, "OS");
@@ -188,11 +182,6 @@ namespace PCDiagnosticPro.Services
                     AddIfNotEmpty(ev, "Updates en attente", pending.Value > 0 ? $"⚠️ {pending.Value}" : "✅ À jour",
                         "updates_csharp.pendingCount");
             }
-
-            var snapshotPending = GetSnapshotMetricString(root, "updates", "pendingCount");
-            if (!string.IsNullOrEmpty(snapshotPending))
-                AddIfNotEmpty(ev, "Updates en attente", int.TryParse(snapshotPending, out var p) && p > 0 ? $"⚠️ {p}" : "✅ À jour",
-                    "diagnostic_snapshot.metrics.updates.pendingCount.value");
 
             return ev;
         }
@@ -363,16 +352,6 @@ namespace PCDiagnosticPro.Services
         private static Dictionary<string, string> ExtractRAM(JsonElement root, HardwareSensorsResult? sensors)
         {
             var ev = new Dictionary<string, string>();
-
-            var snapTotal = GetSnapshotMetricDisplay(root, "memory", "totalGB");
-            if (!string.IsNullOrEmpty(snapTotal))
-                AddIfNotEmpty(ev, "RAM totale", snapTotal, "diagnostic_snapshot.metrics.memory.totalGB.value");
-            var snapAvail = GetSnapshotMetricDisplay(root, "memory", "availableGB");
-            if (!string.IsNullOrEmpty(snapAvail))
-                AddIfNotEmpty(ev, "RAM disponible", snapAvail, "diagnostic_snapshot.metrics.memory.availableGB.value");
-            var snapUsed = GetSnapshotMetricDisplay(root, "memory", "usedPercent");
-            if (!string.IsNullOrEmpty(snapUsed))
-                AddIfNotEmpty(ev, "RAM utilisée", snapUsed, "diagnostic_snapshot.metrics.memory.usedPercent.value");
             
             // === PS: sections.Memory ===
             var memData = GetSectionData(root, "Memory");
@@ -577,11 +556,6 @@ namespace PCDiagnosticPro.Services
         private static Dictionary<string, string> ExtractNetwork(JsonElement root)
         {
             var ev = new Dictionary<string, string>();
-
-            AddIfNotEmpty(ev, "Passerelle", GetSnapshotMetricString(root, "network", "defaultGateway"),
-                "diagnostic_snapshot.metrics.network.defaultGateway.value");
-            AddIfNotEmpty(ev, "DNS", GetSnapshotMetricString(root, "network", "dnsServers"),
-                "diagnostic_snapshot.metrics.network.dnsServers.value");
             
             // === PS: sections.Network ===
             var netData = GetSectionData(root, "Network");
@@ -1005,22 +979,6 @@ namespace PCDiagnosticPro.Services
         private static Dictionary<string, string> ExtractSecurity(JsonElement root)
         {
             var ev = new Dictionary<string, string>();
-
-            var snapAv = GetSnapshotMetricString(root, "security", "antivirusName");
-            if (!string.IsNullOrEmpty(snapAv))
-                AddIfNotEmpty(ev, "Antivirus", snapAv, "diagnostic_snapshot.metrics.security.antivirusName.value");
-            var snapSecureBoot = GetSnapshotMetricBool(root, "security", "secureBootEnabled");
-            if (snapSecureBoot.HasValue)
-                AddIfNotEmpty(ev, "Secure Boot", snapSecureBoot.Value ? "✅ Activé" : "⚠️ Désactivé",
-                    "diagnostic_snapshot.metrics.security.secureBootEnabled.value");
-            var snapUac = GetSnapshotMetricBool(root, "security", "uacEnabled");
-            if (snapUac.HasValue)
-                AddIfNotEmpty(ev, "UAC", snapUac.Value ? "✅ Activé" : "⚠️ Désactivé",
-                    "diagnostic_snapshot.metrics.security.uacEnabled.value");
-            var snapBitlocker = GetSnapshotMetricString(root, "security", "bitlockerStatus");
-            if (!string.IsNullOrEmpty(snapBitlocker))
-                AddIfNotEmpty(ev, "Chiffrement disque", snapBitlocker,
-                    "diagnostic_snapshot.metrics.security.bitlockerStatus.value");
             
             // === PS: Security ===
             var secData = GetSectionData(root, "Security");
@@ -1353,6 +1311,63 @@ namespace PCDiagnosticPro.Services
         {
             if (!string.IsNullOrEmpty(value) && !dict.ContainsKey(key))
                 dict[key] = FormatValue(value, jsonPath);
+        }
+
+        private static void AppendSnapshotFallbacks(HealthDomain domain, JsonElement root, Dictionary<string, string> ev)
+        {
+            switch (domain)
+            {
+                case HealthDomain.OS:
+                    AddIfNotEmpty(ev, "Version Windows", GetSnapshotMetricString(root, "os", "caption"),
+                        "diagnostic_snapshot.metrics.os.caption.value");
+                    AddIfNotEmpty(ev, "Build", GetSnapshotMetricString(root, "os", "buildNumber"),
+                        "diagnostic_snapshot.metrics.os.buildNumber.value");
+                    AddIfNotEmpty(ev, "Architecture", GetSnapshotMetricString(root, "os", "architecture"),
+                        "diagnostic_snapshot.metrics.os.architecture.value");
+                    AddIfNotEmpty(ev, "Uptime", GetSnapshotMetricString(root, "os", "uptime"),
+                        "diagnostic_snapshot.metrics.os.uptime.value");
+
+                    var snapshotPending = GetSnapshotMetricString(root, "updates", "pendingCount");
+                    if (!string.IsNullOrEmpty(snapshotPending))
+                        AddIfNotEmpty(ev, "Updates en attente",
+                            int.TryParse(snapshotPending, out var p) && p > 0 ? $"⚠️ {p}" : "✅ À jour",
+                            "diagnostic_snapshot.metrics.updates.pendingCount.value");
+                    break;
+                case HealthDomain.RAM:
+                    var snapTotal = GetSnapshotMetricDisplay(root, "memory", "totalGB");
+                    if (!string.IsNullOrEmpty(snapTotal))
+                        AddIfNotEmpty(ev, "RAM totale", snapTotal, "diagnostic_snapshot.metrics.memory.totalGB.value");
+                    var snapAvail = GetSnapshotMetricDisplay(root, "memory", "availableGB");
+                    if (!string.IsNullOrEmpty(snapAvail))
+                        AddIfNotEmpty(ev, "RAM disponible", snapAvail, "diagnostic_snapshot.metrics.memory.availableGB.value");
+                    var snapUsed = GetSnapshotMetricDisplay(root, "memory", "usedPercent");
+                    if (!string.IsNullOrEmpty(snapUsed))
+                        AddIfNotEmpty(ev, "RAM utilisée", snapUsed, "diagnostic_snapshot.metrics.memory.usedPercent.value");
+                    break;
+                case HealthDomain.Network:
+                    AddIfNotEmpty(ev, "Passerelle", GetSnapshotMetricString(root, "network", "defaultGateway"),
+                        "diagnostic_snapshot.metrics.network.defaultGateway.value");
+                    AddIfNotEmpty(ev, "DNS", GetSnapshotMetricString(root, "network", "dnsServers"),
+                        "diagnostic_snapshot.metrics.network.dnsServers.value");
+                    break;
+                case HealthDomain.Security:
+                    var snapAv = GetSnapshotMetricString(root, "security", "antivirusName");
+                    if (!string.IsNullOrEmpty(snapAv))
+                        AddIfNotEmpty(ev, "Antivirus", snapAv, "diagnostic_snapshot.metrics.security.antivirusName.value");
+                    var snapSecureBoot = GetSnapshotMetricBool(root, "security", "secureBootEnabled");
+                    if (snapSecureBoot.HasValue)
+                        AddIfNotEmpty(ev, "Secure Boot", snapSecureBoot.Value ? "✅ Activé" : "⚠️ Désactivé",
+                            "diagnostic_snapshot.metrics.security.secureBootEnabled.value");
+                    var snapUac = GetSnapshotMetricBool(root, "security", "uacEnabled");
+                    if (snapUac.HasValue)
+                        AddIfNotEmpty(ev, "UAC", snapUac.Value ? "✅ Activé" : "⚠️ Désactivé",
+                            "diagnostic_snapshot.metrics.security.uacEnabled.value");
+                    var snapBitlocker = GetSnapshotMetricString(root, "security", "bitlockerStatus");
+                    if (!string.IsNullOrEmpty(snapBitlocker))
+                        AddIfNotEmpty(ev, "Chiffrement disque", snapBitlocker,
+                            "diagnostic_snapshot.metrics.security.bitlockerStatus.value");
+                    break;
+            }
         }
 
         private static bool TryGetSnapshotMetric(JsonElement root, string category, string key, out JsonElement metric)
