@@ -221,6 +221,8 @@ namespace PCDiagnosticPro.Services
             if (TryGetPropertyCaseInsensitive(root, out var sections, "sections") && sections.ValueKind == JsonValueKind.Object)
             {
                 AddOsMetricsFromPs(sections);
+                AddCpuMetricsFromPs(sections);
+                AddGpuMetricsFromPs(sections);
                 AddMemoryMetricsFromPs(sections);
                 AddNetworkMetricsFromPs(sections);
                 AddUpdatesMetricsFromPs(sections);
@@ -311,6 +313,133 @@ namespace PCDiagnosticPro.Services
                 LogBuild($"[AddOsMetricsFromPs] Error: {ex.Message}");
             }
         }
+
+        private void AddCpuMetricsFromPs(JsonElement sections)
+        {
+            var cpuMetrics = new Dictionary<string, NormalizedMetric>();
+
+            try
+            {
+                if (TryGetSectionData(sections, out var cpu, "CPU"))
+                {
+                    JsonElement? cpuElement = null;
+                    if (cpu.TryGetProperty("cpus", out var cpus))
+                    {
+                        if (cpus.ValueKind == JsonValueKind.Array)
+                        {
+                            cpuElement = cpus.EnumerateArray().FirstOrDefault();
+                        }
+                        else if (cpus.ValueKind == JsonValueKind.Object)
+                        {
+                            cpuElement = cpus;
+                        }
+                    }
+                    else if (cpu.TryGetProperty("cpuList", out var cpuList))
+                    {
+                        if (cpuList.ValueKind == JsonValueKind.Array)
+                        {
+                            cpuElement = cpuList.EnumerateArray().FirstOrDefault();
+                        }
+                        else if (cpuList.ValueKind == JsonValueKind.Object)
+                        {
+                            cpuElement = cpuList;
+                        }
+                    }
+
+                    if (cpuElement.HasValue && cpuElement.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        cpuMetrics["model"] = MetricFromString(cpuElement.Value, "name", "PS/CPU");
+                        cpuMetrics["cores"] = MetricFromNumber(cpuElement.Value, "cores", "count", "PS/CPU");
+                        cpuMetrics["threads"] = MetricFromNumber(cpuElement.Value, "threads", "count", "PS/CPU");
+                        cpuMetrics["maxClockSpeed"] = MetricFromNumber(cpuElement.Value, "maxClockSpeed", "MHz", "PS/CPU");
+                        cpuMetrics["currentLoad"] = MetricFromNumber(cpuElement.Value, "currentLoad", "%", "PS/CPU");
+                    }
+
+                    cpuMetrics["cpuCount"] = MetricFromNumber(cpu, "cpuCount", "count", "PS/CPU");
+                }
+
+                if (cpuMetrics.Count > 0)
+                {
+                    if (!_snapshot.Metrics.ContainsKey("cpu"))
+                        _snapshot.Metrics["cpu"] = new Dictionary<string, NormalizedMetric>();
+
+                    foreach (var pair in cpuMetrics)
+                    {
+                        _snapshot.Metrics["cpu"][pair.Key] = pair.Value;
+                    }
+
+                    LogBuild($"[AddCpuMetricsFromPs] Added {cpuMetrics.Count} CPU metrics");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogBuild($"[AddCpuMetricsFromPs] Error: {ex.Message}");
+            }
+        }
+
+        private void AddGpuMetricsFromPs(JsonElement sections)
+        {
+            var gpuMetrics = new Dictionary<string, NormalizedMetric>();
+
+            try
+            {
+                if (TryGetSectionData(sections, out var gpu, "GPU"))
+                {
+                    JsonElement? gpuElement = null;
+                    if (gpu.TryGetProperty("gpuList", out var gpuList))
+                    {
+                        if (gpuList.ValueKind == JsonValueKind.Array)
+                        {
+                            gpuElement = gpuList.EnumerateArray().FirstOrDefault();
+                        }
+                        else if (gpuList.ValueKind == JsonValueKind.Object)
+                        {
+                            gpuElement = gpuList;
+                        }
+                    }
+                    else if (gpu.TryGetProperty("gpus", out var gpus))
+                    {
+                        if (gpus.ValueKind == JsonValueKind.Array)
+                        {
+                            gpuElement = gpus.EnumerateArray().FirstOrDefault();
+                        }
+                        else if (gpus.ValueKind == JsonValueKind.Object)
+                        {
+                            gpuElement = gpus;
+                        }
+                    }
+
+                    if (gpuElement.HasValue && gpuElement.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        gpuMetrics["model"] = MetricFromString(gpuElement.Value, "name", "PS/GPU");
+                        gpuMetrics["vendor"] = MetricFromString(gpuElement.Value, "vendor", "PS/GPU");
+                        gpuMetrics["driverVersion"] = MetricFromString(gpuElement.Value, "driverVersion", "PS/GPU");
+                        gpuMetrics["resolution"] = MetricFromString(gpuElement.Value, "resolution", "PS/GPU");
+                        gpuMetrics["vramTotalMB"] = MetricFromNumber(gpuElement.Value, "vramTotalMB", "MB", "PS/GPU");
+                        gpuMetrics["vramNote"] = MetricFromString(gpuElement.Value, "vramNote", "PS/GPU");
+                    }
+
+                    gpuMetrics["gpuCount"] = MetricFromNumber(gpu, "gpuCount", "count", "PS/GPU");
+                }
+
+                if (gpuMetrics.Count > 0)
+                {
+                    if (!_snapshot.Metrics.ContainsKey("gpu"))
+                        _snapshot.Metrics["gpu"] = new Dictionary<string, NormalizedMetric>();
+
+                    foreach (var pair in gpuMetrics)
+                    {
+                        _snapshot.Metrics["gpu"][pair.Key] = pair.Value;
+                    }
+
+                    LogBuild($"[AddGpuMetricsFromPs] Added {gpuMetrics.Count} GPU metrics");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogBuild($"[AddGpuMetricsFromPs] Error: {ex.Message}");
+            }
+        }
         
         private void AddMemoryMetricsFromPs(JsonElement sections)
         {
@@ -320,13 +449,37 @@ namespace PCDiagnosticPro.Services
             {
                 if (TryGetSectionData(sections, out var mem, "Memory", "MemoryInfo"))
                 {
-                    memMetrics["totalGB"] = MetricFromNumber(mem, "TotalMemoryGB", "GB", "PS/Memory");
-                    memMetrics["availableGB"] = MetricFromNumber(mem, "AvailableMemoryGB", "GB", "PS/Memory");
-                    memMetrics["usedPercent"] = MetricFromNumber(mem, "UsedMemoryPercent", "%", "PS/Memory");
-                    memMetrics["freePercent"] = MetricFromNumber(mem, "FreeMemoryPercent", "%", "PS/Memory");
-                    memMetrics["commitTotalGB"] = MetricFromNumber(mem, "CommitTotalGB", "GB", "PS/Memory");
-                    memMetrics["commitUsedGB"] = MetricFromNumber(mem, "CommitUsedGB", "GB", "PS/Memory");
-                    memMetrics["pageFileUsagePercent"] = MetricFromNumber(mem, "PageFileUsagePercent", "%", "PS/Memory");
+                    memMetrics["totalGB"] = MetricFromNumber(mem, "totalGB", "GB", "PS/Memory");
+                    if (!memMetrics["totalGB"].Available)
+                        memMetrics["totalGB"] = MetricFromNumber(mem, "TotalMemoryGB", "GB", "PS/Memory");
+
+                    memMetrics["availableGB"] = MetricFromNumber(mem, "availableGB", "GB", "PS/Memory");
+                    if (!memMetrics["availableGB"].Available)
+                        memMetrics["availableGB"] = MetricFromNumber(mem, "freeGB", "GB", "PS/Memory");
+                    if (!memMetrics["availableGB"].Available)
+                        memMetrics["availableGB"] = MetricFromNumber(mem, "AvailableMemoryGB", "GB", "PS/Memory");
+
+                    memMetrics["usedPercent"] = MetricFromNumber(mem, "usedPercent", "%", "PS/Memory");
+                    if (!memMetrics["usedPercent"].Available)
+                        memMetrics["usedPercent"] = MetricFromNumber(mem, "UsedMemoryPercent", "%", "PS/Memory");
+
+                    memMetrics["freePercent"] = MetricFromNumber(mem, "freePercent", "%", "PS/Memory");
+                    if (!memMetrics["freePercent"].Available)
+                        memMetrics["freePercent"] = MetricFromNumber(mem, "FreeMemoryPercent", "%", "PS/Memory");
+
+                    memMetrics["commitTotalGB"] = MetricFromNumber(mem, "commitTotalGB", "GB", "PS/Memory");
+                    if (!memMetrics["commitTotalGB"].Available)
+                        memMetrics["commitTotalGB"] = MetricFromNumber(mem, "CommitTotalGB", "GB", "PS/Memory");
+
+                    memMetrics["commitUsedGB"] = MetricFromNumber(mem, "commitUsedGB", "GB", "PS/Memory");
+                    if (!memMetrics["commitUsedGB"].Available)
+                        memMetrics["commitUsedGB"] = MetricFromNumber(mem, "CommitUsedGB", "GB", "PS/Memory");
+
+                    memMetrics["pageFileUsagePercent"] = MetricFromNumber(mem, "pageFileUsagePercent", "%", "PS/Memory");
+                    if (!memMetrics["pageFileUsagePercent"].Available)
+                        memMetrics["pageFileUsagePercent"] = MetricFromNumber(mem, "PageFileUsagePercent", "%", "PS/Memory");
+
+                    memMetrics["moduleCount"] = MetricFromNumber(mem, "moduleCount", "count", "PS/Memory");
                 }
                 
                 if (memMetrics.Count > 0)
@@ -838,7 +991,7 @@ namespace PCDiagnosticPro.Services
                 
                 if (TryGetSectionData(sections, out var storage, "Storage"))
                 {
-                    // Disk space info
+                    // Disk space info (legacy Drives)
                     if (storage.TryGetProperty("Drives", out var drives) && drives.ValueKind == JsonValueKind.Array)
                     {
                         int idx = 0;
@@ -848,6 +1001,29 @@ namespace PCDiagnosticPro.Services
                             storageMetrics[$"drive_{idx}_freeGB"] = MetricFromNumber(drive, "FreeSpaceGB", "GB", "PS/Storage");
                             storageMetrics[$"drive_{idx}_usedPercent"] = MetricFromNumber(drive, "UsedPercent", "%", "PS/Storage");
                             idx++;
+                        }
+                    }
+
+                    if (storage.TryGetProperty("physicalDisks", out var physicalDisks) && physicalDisks.ValueKind == JsonValueKind.Array)
+                    {
+                        storageMetrics["physicalDiskCount"] = MetricFactory.CreateAvailable(physicalDisks.GetArrayLength(), "count", "PS/Storage", 100);
+                    }
+                    else if (storage.TryGetProperty("physicalDiskCount", out var physicalDiskCount))
+                    {
+                        storageMetrics["physicalDiskCount"] = MetricFromNumber(storage, "physicalDiskCount", "count", "PS/Storage");
+                    }
+
+                    if (storage.TryGetProperty("volumes", out var volumes) && volumes.ValueKind == JsonValueKind.Array)
+                    {
+                        storageMetrics["volumeCount"] = MetricFactory.CreateAvailable(volumes.GetArrayLength(), "count", "PS/Storage", 100);
+                        foreach (var volume in volumes.EnumerateArray())
+                        {
+                            var letter = GetStringValue(volume, "letter") ?? GetStringValue(volume, "driveLetter");
+                            if (string.IsNullOrEmpty(letter)) continue;
+                            var normalized = letter.Trim().TrimEnd(':').ToUpperInvariant();
+                            storageMetrics[$"volume_{normalized}_totalGB"] = MetricFromNumber(volume, "totalGB", "GB", "PS/Storage");
+                            storageMetrics[$"volume_{normalized}_freeGB"] = MetricFromNumber(volume, "freeGB", "GB", "PS/Storage");
+                            storageMetrics[$"volume_{normalized}_usedPercent"] = MetricFromNumber(volume, "usedPercent", "%", "PS/Storage");
                         }
                     }
                 }
