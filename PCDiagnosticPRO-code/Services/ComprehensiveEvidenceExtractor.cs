@@ -551,6 +551,75 @@ namespace PCDiagnosticPro.Services
         #region GPU - Carte graphique
         // Champs attendus: Nom, Fabricant, Résolution, VersionPilote, DatePilote, VRAMTotal, VRAMUtilisée, ChargeGPU, TempGPU, TDR
 
+        /// <summary>
+        /// Table de référence VRAM pour GPU connus (en GB).
+        /// Utilisé pour corriger les valeurs WMI incorrectes (overflow 32-bit sur GPU > 4GB).
+        /// </summary>
+        private static readonly Dictionary<string, int> KnownGpuVramGB = new(StringComparer.OrdinalIgnoreCase)
+        {
+            // NVIDIA RTX 40 Series
+            { "RTX 4090", 24 }, { "GeForce RTX 4090", 24 },
+            { "RTX 4080 SUPER", 16 }, { "RTX 4080", 16 }, { "GeForce RTX 4080", 16 },
+            { "RTX 4070 Ti SUPER", 16 }, { "RTX 4070 Ti", 12 }, { "RTX 4070 SUPER", 12 }, { "RTX 4070", 12 },
+            { "RTX 4060 Ti", 16 }, { "RTX 4060", 8 },
+            // NVIDIA RTX 30 Series
+            { "RTX 3090 Ti", 24 }, { "RTX 3090", 24 }, { "GeForce RTX 3090", 24 },
+            { "RTX 3080 Ti", 12 }, { "RTX 3080", 12 }, { "GeForce RTX 3080", 12 },
+            { "RTX 3070 Ti", 8 }, { "RTX 3070", 8 }, { "GeForce RTX 3070", 8 },
+            { "RTX 3060 Ti", 8 }, { "RTX 3060", 12 }, { "GeForce RTX 3060", 12 },
+            // NVIDIA RTX 20 Series
+            { "RTX 2080 Ti", 11 }, { "RTX 2080 SUPER", 8 }, { "RTX 2080", 8 },
+            { "RTX 2070 SUPER", 8 }, { "RTX 2070", 8 }, { "RTX 2060 SUPER", 8 }, { "RTX 2060", 6 },
+            // NVIDIA GTX Series
+            { "GTX 1080 Ti", 11 }, { "GTX 1080", 8 }, { "GTX 1070 Ti", 8 }, { "GTX 1070", 8 },
+            { "GTX 1060", 6 }, { "GTX 1050 Ti", 4 }, { "GTX 1050", 2 },
+            // AMD RX 7000 Series
+            { "RX 7900 XTX", 24 }, { "RX 7900 XT", 20 }, { "RX 7800 XT", 16 }, { "RX 7700 XT", 12 },
+            { "RX 7600 XT", 16 }, { "RX 7600", 8 },
+            // AMD RX 6000 Series
+            { "RX 6950 XT", 16 }, { "RX 6900 XT", 16 }, { "RX 6800 XT", 16 }, { "RX 6800", 16 },
+            { "RX 6700 XT", 12 }, { "RX 6600 XT", 8 }, { "RX 6600", 8 },
+            // Quadro / Pro
+            { "Quadro RTX 8000", 48 }, { "Quadro RTX 6000", 24 }, { "Quadro RTX 5000", 16 },
+        };
+
+        /// <summary>
+        /// Corrige la VRAM si WMI retourne une valeur incorrecte (overflow 32-bit)
+        /// </summary>
+        private static double? GetCorrectedVramMB(string? gpuName, double? wmiVramMB)
+        {
+            if (string.IsNullOrEmpty(gpuName)) return wmiVramMB;
+            
+            // Si WMI retourne exactement 4096 MB (4 GB) et que c'est un GPU connu avec plus de VRAM
+            // c'est probablement un overflow 32-bit
+            foreach (var kvp in KnownGpuVramGB)
+            {
+                if (gpuName.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    int expectedGB = kvp.Value;
+                    double expectedMB = expectedGB * 1024;
+                    
+                    // Si WMI retourne ≤4GB mais le GPU devrait avoir plus
+                    if (wmiVramMB.HasValue && wmiVramMB <= 4096 && expectedGB > 4)
+                    {
+                        App.LogMessage($"[GPU VRAM] Corrected: {gpuName} WMI={wmiVramMB}MB -> Expected={expectedMB}MB ({expectedGB}GB)");
+                        return expectedMB;
+                    }
+                    
+                    // Si pas de valeur WMI, utiliser la valeur connue
+                    if (!wmiVramMB.HasValue || wmiVramMB <= 0)
+                    {
+                        App.LogMessage($"[GPU VRAM] Using known value for {gpuName}: {expectedMB}MB ({expectedGB}GB)");
+                        return expectedMB;
+                    }
+                    
+                    break;
+                }
+            }
+            
+            return wmiVramMB;
+        }
+
         private static ExtractionResult ExtractGPU(JsonElement root, HardwareSensorsResult? sensors)
         {
             var ev = new Dictionary<string, string>();
@@ -659,10 +728,14 @@ namespace PCDiagnosticPro.Services
             if (!vramDisplayed && firstGpu.HasValue)
             {
                 var vramMB = GetDouble(firstGpu, "vramTotalMB");
+                
+                // FIX: Corriger les valeurs WMI incorrectes (overflow 32-bit pour GPU > 4GB)
+                vramMB = GetCorrectedVramMB(name, vramMB);
+                
                 if (vramMB.HasValue && vramMB > 0)
                 {
                     var str = vramMB >= 1024 ? $"{vramMB / 1024:F1} GB" : $"{vramMB:F0} MB";
-                    Add(ev, "VRAM totale", str, "scan_powershell.sections.GPU.data.gpuList[0].vramTotalMB");
+                    Add(ev, "VRAM totale", str, "scan_powershell.sections.GPU.data.gpuList[0].vramTotalMB (corrigé)");
                     vramDisplayed = true;
                 }
                 else
@@ -673,6 +746,17 @@ namespace PCDiagnosticPro.Services
                     {
                         Add(ev, "VRAM", vramNote, "scan_powershell.sections.GPU.data.gpuList[0].vramNote");
                         vramDisplayed = true;
+                    }
+                    else
+                    {
+                        // Dernier fallback: utiliser la table de référence si GPU connu
+                        var correctedFromTable = GetCorrectedVramMB(name, null);
+                        if (correctedFromTable.HasValue)
+                        {
+                            var str = correctedFromTable >= 1024 ? $"{correctedFromTable / 1024:F0} GB" : $"{correctedFromTable:F0} MB";
+                            Add(ev, "VRAM totale", $"{str} (référence)", "GPU_VRAM_LOOKUP");
+                            vramDisplayed = true;
+                        }
                     }
                 }
             }

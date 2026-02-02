@@ -69,6 +69,9 @@ namespace PCDiagnosticPro.ViewModels
         // Résultat Security Info (C# - BitLocker, RDP, SMBv1)
         private SecurityInfoCollector.SecurityInfoResult? _lastSecurityInfo;
 
+        // Service LibreSpeed pour tests de vitesse fiables
+        private readonly LibreSpeedTestService _libreSpeedService = new();
+
         // Combined JSON data for applications window (from scan_result_combined.json)
         private string? _lastCombinedJsonContent;
 
@@ -968,21 +971,40 @@ namespace PCDiagnosticPro.ViewModels
             IsSpeedTestRunning = true;
             try
             {
-                if (HealthReport?.UdisReport != null)
+                App.LogMessage("[SpeedTest] Démarrage du test LibreSpeed...");
+                
+                // Utiliser LibreSpeed CLI en priorité
+                var libreResult = await _libreSpeedService.RunTestAsync();
+                
+                if (libreResult.Success && HealthReport?.UdisReport != null)
                 {
+                    // Mettre à jour le UdisReport avec les résultats LibreSpeed
+                    HealthReport.UdisReport.DownloadMbps = libreResult.DownloadMbps;
+                    HealthReport.UdisReport.UploadMbps = libreResult.UploadMbps;
+                    HealthReport.UdisReport.LatencyMs = libreResult.PingMs;
+                    HealthReport.UdisReport.NetworkSpeedTier = libreResult.SpeedTier;
+                    HealthReport.UdisReport.NetworkRecommendation = GetSpeedRecommendation(libreResult);
+                    
+                    App.LogMessage($"[SpeedTest] LibreSpeed OK: Down={libreResult.DownloadMbps:F1} Mbps, Up={libreResult.UploadMbps:F1} Mbps, Ping={libreResult.PingMs:F1} ms");
+                }
+                else if (HealthReport?.UdisReport != null)
+                {
+                    // Fallback sur l'ancienne méthode HTTP
+                    App.LogMessage($"[SpeedTest] LibreSpeed échoué ({libreResult.Error}), fallback HTTP...");
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                     var updatedUdis = await UnifiedDiagnosticScoreEngine.AddNetworkSpeedTestAsync(HealthReport.UdisReport, cts.Token);
-                    // Notifier la UI
-                    OnPropertyChanged(nameof(NetworkDownloadMbps));
-                    OnPropertyChanged(nameof(NetworkUploadMbps));
-                    OnPropertyChanged(nameof(NetworkLatencyMs));
-                    OnPropertyChanged(nameof(NetworkSpeedTier));
-                    OnPropertyChanged(nameof(NetworkRecommendation));
-                    OnPropertyChanged(nameof(NetworkDownloadColor));
-                    OnPropertyChanged(nameof(NetworkUploadColor));
-                    OnPropertyChanged(nameof(NetworkLatencyColor));
-                    App.LogMessage($"[SpeedTest] Terminé: Download={updatedUdis.DownloadMbps:F1} Mbps, Upload={updatedUdis.UploadMbps:F1} Mbps, Latence={updatedUdis.LatencyMs:F0} ms");
+                    App.LogMessage($"[SpeedTest] Fallback: Download={updatedUdis.DownloadMbps:F1} Mbps");
                 }
+                
+                // Notifier la UI
+                OnPropertyChanged(nameof(NetworkDownloadMbps));
+                OnPropertyChanged(nameof(NetworkUploadMbps));
+                OnPropertyChanged(nameof(NetworkLatencyMs));
+                OnPropertyChanged(nameof(NetworkSpeedTier));
+                OnPropertyChanged(nameof(NetworkRecommendation));
+                OnPropertyChanged(nameof(NetworkDownloadColor));
+                OnPropertyChanged(nameof(NetworkUploadColor));
+                OnPropertyChanged(nameof(NetworkLatencyColor));
             }
             catch (Exception ex)
             {
@@ -993,6 +1015,21 @@ namespace PCDiagnosticPro.ViewModels
                 IsSpeedTestRunning = false;
             }
         });
+        
+        private static string GetSpeedRecommendation(LibreSpeedTestService.SpeedTestResult result)
+        {
+            if (!result.DownloadMbps.HasValue) return "";
+            
+            return result.DownloadMbps.Value switch
+            {
+                >= 500 => "Connexion excellente, idéale pour tout usage (streaming 4K, gaming, télétravail).",
+                >= 100 => "Très bonne connexion, adaptée à tous usages intensifs.",
+                >= 50 => "Bonne connexion, suffisante pour la plupart des usages.",
+                >= 25 => "Connexion correcte, peut être limitante pour plusieurs appareils simultanés.",
+                >= 10 => "Connexion lente, recommandé de vérifier votre forfait ou équipement.",
+                _ => "Connexion très lente, contactez votre fournisseur d'accès."
+            };
+        }
 
         // ========== FIN HEALTH REPORT ==========
 
@@ -3162,8 +3199,12 @@ namespace PCDiagnosticPro.ViewModels
                 var errors = HealthReport?.Errors ?? new List<Models.ScanErrorInfo>();
                 var missing = HealthReport?.MissingData ?? new List<string>();
                 var collectorErrors = HealthReport?.CollectorErrorsLogical ?? 0;
-                
-                var window = new Views.CollectorErrorsWindow(errors, missing, collectorErrors)
+                var machineHealth = HealthReport?.MachineHealthScore ?? 0;
+                var dataReliability = HealthReport?.DataReliabilityScore ?? 0;
+                var autoFixAllowed = HealthReport?.AutoFixAllowed ?? false;
+
+                var window = new Views.CollectorErrorsWindow(errors, missing, collectorErrors,
+                    machineHealth, dataReliability, autoFixAllowed)
                 {
                     Owner = Application.Current?.MainWindow
                 };
@@ -3172,9 +3213,13 @@ namespace PCDiagnosticPro.ViewModels
             catch (Exception ex)
             {
                 App.LogMessage($"[ShowCollectorErrors] Erreur: {ex.Message}");
-                // Fallback to simple message if window fails
+                var errCount = HealthReport?.CollectorErrorsLogical ?? 0;
+                var missCount = HealthReport?.MissingData?.Count ?? 0;
+                var mh = HealthReport?.MachineHealthScore ?? 0;
+                var dr = HealthReport?.DataReliabilityScore ?? 0;
+                var af = HealthReport?.AutoFixAllowed ?? false;
                 System.Windows.MessageBox.Show(
-                    $"Erreurs détectées: {HealthReport?.CollectorErrorsLogical ?? 0}\nDonnées manquantes: {HealthReport?.MissingData?.Count ?? 0}",
+                    $"Erreurs détectées: {errCount}\nDonnées manquantes: {missCount}\n\nContexte: Santé machine {mh}/100, Fiabilité UDIS {dr}/100, AutoFix {(af ? "Autorisé" : "Bloqué")}",
                     "Erreurs collecteur",
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Warning);

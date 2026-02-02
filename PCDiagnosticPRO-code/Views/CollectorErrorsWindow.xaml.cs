@@ -12,10 +12,15 @@ namespace PCDiagnosticPro.Views
     /// </summary>
     public partial class CollectorErrorsWindow : Window
     {
-        public CollectorErrorsWindow(List<ScanErrorInfo>? errors, List<string>? missingData, int collectorErrorsLogical)
+        /// <param name="machineHealthScore">Santé machine 0-100 (affiché dans la fenêtre pour renseigner l'utilisateur)</param>
+        /// <param name="dataReliabilityScore">Fiabilité UDIS 0-100</param>
+        /// <param name="autoFixAllowed">AutoFix autorisé ou bloqué</param>
+        public CollectorErrorsWindow(List<ScanErrorInfo>? errors, List<string>? missingData, int collectorErrorsLogical,
+            int machineHealthScore = 0, int dataReliabilityScore = 0, bool autoFixAllowed = false)
         {
             InitializeComponent();
-            DataContext = new CollectorErrorsViewModel(errors, missingData, collectorErrorsLogical);
+            DataContext = new CollectorErrorsViewModel(errors, missingData, collectorErrorsLogical,
+                machineHealthScore, dataReliabilityScore, autoFixAllowed);
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
@@ -29,7 +34,8 @@ namespace PCDiagnosticPro.Views
     /// </summary>
     public class CollectorErrorsViewModel
     {
-        public CollectorErrorsViewModel(List<ScanErrorInfo>? errors, List<string>? missingData, int collectorErrorsLogical)
+        public CollectorErrorsViewModel(List<ScanErrorInfo>? errors, List<string>? missingData, int collectorErrorsLogical,
+            int machineHealthScore = 0, int dataReliabilityScore = 0, bool autoFixAllowed = false)
         {
             var errorList = errors ?? new List<ScanErrorInfo>();
             var missingList = missingData ?? new List<string>();
@@ -37,6 +43,10 @@ namespace PCDiagnosticPro.Views
             ErrorCount = errorList.Count;
             MissingCount = missingList.Count;
             CollectorErrorsLogical = collectorErrorsLogical;
+            MachineHealthDisplay = $"{machineHealthScore}/100";
+            DataReliabilityDisplay = $"{dataReliabilityScore}/100";
+            AutoFixDisplay = autoFixAllowed ? "Autorisé" : "Bloqué";
+            AutoFixAllowed = autoFixAllowed;
             
             // Build error items for DataGrid
             var items = new List<ErrorDisplayItem>();
@@ -81,6 +91,10 @@ namespace PCDiagnosticPro.Views
         public bool HasErrors => ErrorCount > 0;
         public bool HasMissing => MissingCount > 0;
         public string SummaryText => $"{ErrorCount + MissingCount} problème(s) de collecte identifié(s)";
+        public string MachineHealthDisplay { get; }
+        public string DataReliabilityDisplay { get; }
+        public string AutoFixDisplay { get; }
+        public bool AutoFixAllowed { get; }
         public string CollectionScoreDisplay => $"{Math.Max(0, 100 - (ErrorCount * 10) - (MissingCount * 5))}/100";
         public List<ErrorDisplayItem> ErrorItems { get; }
         public List<string> MissingDataItems { get; }

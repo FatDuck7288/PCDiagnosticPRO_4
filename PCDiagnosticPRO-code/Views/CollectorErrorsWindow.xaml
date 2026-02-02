@@ -14,6 +14,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -26,6 +27,30 @@
             <TextBlock Text="{Binding SummaryText}" FontSize="12"
                        Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0"/>
         </StackPanel>
+
+        <!-- Contexte du scan : Santé machine, Fiabilité UDIS, AutoFix (pour bien renseigner l'utilisateur) -->
+        <Border Grid.Row="1" Background="{StaticResource BackgroundLightBrush}" 
+                CornerRadius="6" Padding="12,10" Margin="0,0,0,10"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Santé machine: " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding MachineHealthDisplay}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                <TextBlock Text="   |   Fiabilité UDIS: " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="12,0,0,0"/>
+                <TextBlock Text="{Binding DataReliabilityDisplay}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                <TextBlock Text="   |   AutoFix: " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="12,0,0,0"/>
+                <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="#4CAF50" Text="{Binding AutoFixDisplay}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding AutoFixAllowed}" Value="False">
+                                    <Setter Property="Foreground" Value="#F44336"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+        </Border>
 
         <!-- Summary Stats -->
         <Border Grid.Row="1" Background="{StaticResource BackgroundMediumBrush}" 
@@ -55,7 +80,7 @@
         </Border>
 
         <!-- Error List -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -139,7 +164,7 @@
         </Border>
 
         <!-- Footer -->
-        <Border Grid.Row="4" Margin="0,15,0,0">
+        <Border Grid.Row="5" Margin="0,15,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
