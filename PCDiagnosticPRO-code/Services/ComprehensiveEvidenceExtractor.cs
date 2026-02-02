@@ -331,6 +331,49 @@ namespace PCDiagnosticPro.Services
 
             // NOTE: BitLocker retiré de cette section -> va dans Sécurité
 
+            // === SECTION A1: Utilisateur et Organisation (demande user 2026-01-31) ===
+            // 10. Nom d'utilisateur (protégé/masqué par le script PS)
+            var username = GetString(machineIdData, "username");
+            if (!string.IsNullOrEmpty(username))
+                Add(ev, "Utilisateur", username, "scan_powershell.sections.MachineIdentity.data.username");
+            else
+                AddUnknown(ev, "Utilisateur", "username absent");
+            
+            // 11. Organisation/Domaine (si NULL -> "Aucune")
+            var domain = GetString(machineIdData, "domain");
+            var computerName = GetString(machineIdData, "computerName");
+            if (!string.IsNullOrEmpty(domain) && domain.ToUpper() != "WORKGROUP" && domain.ToUpper() != computerName?.ToUpper())
+                Add(ev, "Organisation", domain, "scan_powershell.sections.MachineIdentity.data.domain");
+            else
+                Add(ev, "Organisation", "Aucune (Workgroup)", "scan_powershell.sections.MachineIdentity.data.domain");
+
+            // === SECTION A3: Carte mère (demande user 2026-01-31) ===
+            var sysInfo = GetSectionData(root, "SystemInfo");
+            // 12. Modèle carte mère
+            var mbProduct = GetString(sysInfo, "MotherboardProduct") ?? GetString(sysInfo, "motherboardProduct");
+            var mbManufacturer = GetString(sysInfo, "MotherboardManufacturer") ?? GetString(sysInfo, "motherboardManufacturer") ?? GetString(sysInfo, "Manufacturer");
+            if (!string.IsNullOrEmpty(mbProduct))
+            {
+                var mbDisplay = !string.IsNullOrEmpty(mbManufacturer) ? $"{mbManufacturer} {mbProduct}" : mbProduct;
+                Add(ev, "Carte mère", mbDisplay, "scan_powershell.sections.SystemInfo.data.MotherboardProduct");
+            }
+            else
+                AddUnknown(ev, "Carte mère", "MotherboardProduct absent");
+
+            // === SECTION A4: BIOS (demande user 2026-01-31) ===
+            // 13. Version BIOS (SMBIOSBIOSVersion)
+            var biosVersion = GetString(machineIdData, "biosVersion") ?? GetString(sysInfo, "BIOSVersion") ?? GetString(sysInfo, "biosVersion");
+            if (!string.IsNullOrEmpty(biosVersion))
+                Add(ev, "Version BIOS", biosVersion, "scan_powershell.sections.MachineIdentity.data.biosVersion");
+            else
+                AddUnknown(ev, "Version BIOS", "biosVersion absent");
+            
+            // 14. Date BIOS (si disponible)
+            var biosDate = GetString(sysInfo, "BIOSDate") ?? GetString(sysInfo, "biosDate") ?? GetString(machineIdData, "biosDate");
+            if (!string.IsNullOrEmpty(biosDate))
+                Add(ev, "Date BIOS", biosDate, "scan_powershell.sections.SystemInfo.data.BIOSDate");
+            // Pas de "Inconnu" si absent - champ optionnel
+
             return new ExtractionResult { Evidence = ev, ExpectedFields = expected, ActualFields = CountActualFields(ev) };
         }
 
@@ -419,21 +462,44 @@ namespace PCDiagnosticPro.Services
             }
 
             // 6. Température CPU (capteurs C# - UNE SEULE LIGNE)
-            if (sensors?.Cpu?.CpuTempC?.Available == true)
+            // FIX: Provide detailed reason when unavailable + check security blocking
+            if (sensors?.Cpu?.CpuTempC?.Available == true && sensors.Cpu.CpuTempC.Value > 0)
             {
                 var temp = sensors.Cpu.CpuTempC.Value;
                 var status = temp > 85 ? " 🔥 Critique" : temp > 70 ? " ⚠️ Élevée" : " ✅";
-                Add(ev, "Température CPU", $"{temp:F0}°C{status}", "sensors_csharp.cpu.cpuTempC.value");
+                var source = !string.IsNullOrEmpty(sensors.Cpu.CpuTempSource) ? $" ({sensors.Cpu.CpuTempSource})" : "";
+                Add(ev, "Température CPU", $"{temp:F0}°C{status}{source}", "sensors_csharp.cpu.cpuTempC.value");
+            }
+            else if (sensors?.BlockedBySecurity == true)
+            {
+                // Security software blocking sensor access (e.g., Defender blocking WinRing0)
+                Add(ev, "Température CPU", "Non disponible (capteurs bloqués par sécurité)", "sensors_csharp.blockedBySecurity");
+            }
+            else if (sensors?.Cpu?.CpuTempC?.Available == true && sensors.Cpu.CpuTempC.Value <= 0)
+            {
+                // Sensor returned sentinel value (0) - driver issue or not exposed by firmware
+                Add(ev, "Température CPU", "Non supporté (firmware ne l'expose pas)", "sensors_csharp.cpu.sentinelValue");
             }
             else
             {
-                AddUnknown(ev, "Température CPU", sensors?.Cpu?.CpuTempC?.Reason ?? "capteur indisponible");
+                // Detailed reason from the sensor collector
+                var reason = sensors?.Cpu?.CpuTempC?.Reason;
+                if (string.IsNullOrEmpty(reason))
+                {
+                    reason = sensors == null ? "capteurs non collectés" : "capteur indisponible";
+                }
+                // Clarify WMI thermal zone limitation on desktop
+                if (reason?.Contains("thermal_zone") == true || reason?.Contains("WMI") == true)
+                {
+                    reason = "WMI non supporté (desktop typique)";
+                }
+                AddUnknown(ev, "Température CPU", reason);
             }
 
             // 7. Throttling (Oui/Non + raison)
             var signals = GetDiagnosticSignals(root);
             // #region agent log
-            if (signals.HasValue)
+            if (signals.HasValue && signals.Value.ValueKind == JsonValueKind.Object)
             {
                 var signalNames = new List<string>();
                 foreach (var prop in signals.Value.EnumerateObject()) signalNames.Add(prop.Name);
@@ -441,7 +507,7 @@ namespace PCDiagnosticPro.Services
             }
             else
             {
-                DebugLog("D", "ExtractCPU:signals", "diagnostic_signals is NULL", null);
+                DebugLog("D", "ExtractCPU:signals", "diagnostic_signals is NULL or not an Object", null);
             }
             // #endregion
             if (signals.HasValue)
@@ -549,8 +615,10 @@ namespace PCDiagnosticPro.Services
                 Add(ev, "Date pilote", driverDate, "scan_powershell.sections.GPU.data.gpuList[0].driverDate");
             // Optionnel
 
-            // 6 & 7. VRAM totale et utilisée (UNE SEULE SECTION, pas de doublons)
+            // 6 & 7. VRAM totale et utilisée (PARTIE 4: Clarification source)
             // Priorité: capteurs C# > PS vramTotalMB > vramNote
+            // IMPORTANT: "D3D Dedicated Memory Used" = Task Manager value (mémoire dédiée réellement utilisée)
+            //            "GPU Memory Used" = allocated/committed (peut être beaucoup plus élevé sur RTX)
             bool vramDisplayed = false;
             
             if (sensors?.Gpu?.VramTotalMB?.Available == true)
@@ -558,16 +626,32 @@ namespace PCDiagnosticPro.Services
                 var totalMB = sensors.Gpu.VramTotalMB.Value;
                 var totalStr = totalMB >= 1024 ? $"{totalMB / 1024:F1} GB" : $"{totalMB:F0} MB";
                 
+                // Toujours afficher VRAM totale
+                Add(ev, "VRAM totale", totalStr, "sensors_csharp.gpu.vramTotalMB");
+                
                 if (sensors.Gpu.VramUsedMB?.Available == true)
                 {
                     var usedMB = sensors.Gpu.VramUsedMB.Value;
-                    var pct = totalMB > 0 ? (usedMB / totalMB * 100) : 0;
-                    var status = pct > 90 ? " ⚠️" : "";
-                    Add(ev, "VRAM", $"{usedMB:F0} MB / {totalStr} ({pct:F0}%){status}", "sensors_csharp.gpu.vramTotalMB/vramUsedMB");
-                }
-                else
-                {
-                    Add(ev, "VRAM totale", totalStr, "sensors_csharp.gpu.vramTotalMB");
+                    var usedStr = usedMB >= 1024 ? $"{usedMB / 1024:F1} GB" : $"{usedMB:F0} MB";
+                    var source = sensors.Gpu.VramUsedSource ?? "LHM";
+                    
+                    // PARTIE 4: Déterminer si c'est mémoire dédiée ou allouée
+                    bool isDedicated = source.Contains("D3D", StringComparison.OrdinalIgnoreCase) || 
+                                       source.Contains("Dedicated", StringComparison.OrdinalIgnoreCase);
+                    
+                    if (isDedicated)
+                    {
+                        // Mémoire dédiée (correspond au Gestionnaire des tâches)
+                        var pct = totalMB > 0 ? (usedMB / totalMB * 100) : 0;
+                        var status = pct > 90 ? " ⚠️" : "";
+                        Add(ev, "VRAM dédiée utilisée", $"{usedStr} ({pct:F0}%){status}", $"sensors_csharp.gpu ({source})");
+                    }
+                    else
+                    {
+                        // Mémoire allouée/committed (peut être différente du Gestionnaire des tâches)
+                        // Note: Le tooltip est défini dans HealthReport.GetDefaultTooltip pour "vram allouée (commit)"
+                        Add(ev, "VRAM allouée (commit)", $"{usedStr}", $"sensors_csharp.gpu ({source})");
+                    }
                 }
                 vramDisplayed = true;
             }
@@ -608,12 +692,19 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "Charge GPU", sensors?.Gpu?.GpuLoadPercent?.Reason ?? "capteur indisponible");
             }
 
-            // 9. Température GPU (capteurs C# - UNE SEULE LIGNE)
+            // 9. Température GPU (capteurs C# - UNE SEULE LIGNE + SOURCE pour debug)
             if (sensors?.Gpu?.GpuTempC?.Available == true)
             {
                 var temp = sensors.Gpu.GpuTempC.Value;
                 var status = temp > 85 ? " 🔥 Critique" : temp > 75 ? " ⚠️ Élevée" : " ✅";
-                Add(ev, "Température GPU", $"{temp:F0}°C{status}", "sensors_csharp.gpu.gpuTempC");
+                // FIX: Show temperature source for debugging discrepancies with Task Manager
+                var source = sensors.Gpu.GpuTempSource ?? "LHM";
+                Add(ev, "Température GPU", $"{temp:F0}°C{status}", $"sensors_csharp.gpu.gpuTempC ({source})");
+                
+                // ADD: Temperature source trace for GPU
+                // NOTE: Task Manager shows "GPU Edge" typically ~10-15°C lower than "Hot Spot"
+                // LibreHardwareMonitor may pick Hot Spot if Edge isn't available
+                Add(ev, "Source temp GPU", source, "sensors_csharp.gpu.gpuTempSource");
             }
             else
             {
@@ -731,7 +822,7 @@ namespace PCDiagnosticPro.Services
                 }
             }
             
-            if (disksElement.HasValue)
+            if (disksElement.HasValue && disksElement.Value.ValueKind == JsonValueKind.Array)
             {
                 var diskList = disksElement.Value.EnumerateArray().ToList();
                 Add(ev, "Disques physiques", diskList.Count.ToString(), $"scan_powershell.sections.Storage.data.{diskSource}.length");
@@ -914,12 +1005,13 @@ namespace PCDiagnosticPro.Services
         #endregion
 
         #region Network - Réseau
-        // Champs: AdaptateurActif (pas VMware), Vitesse, IP, Passerelle, DNS, MAC, WiFiRSSI, Latence, Jitter, Perte, Débit, VPN
+        // Champs: "ipconfig /all" style complet
+        // Adaptateur, Description, Statut, MAC, IPv4, IPv6, Passerelle, DNS, DHCP, Serveur DHCP, DNS Suffix, MTU, Vitesse, Profil, WiFi
 
         private static ExtractionResult ExtractNetwork(JsonElement root)
         {
             var ev = new Dictionary<string, string>();
-            int expected = 12;
+            int expected = 18; // Extended for ipconfig /all style
             
             var netData = GetSectionData(root, "Network");
             JsonElement? activeAdapter = null;
@@ -975,29 +1067,51 @@ namespace PCDiagnosticPro.Services
 
             if (activeAdapter.HasValue)
             {
-                // 1. Adaptateur
+                // 1. Adaptateur (nom)
                 var name = GetString(activeAdapter, "name");
                 Add(ev, "Adaptateur", name ?? "Inconnu", "scan_powershell.sections.Network.data.adapters[active].name");
 
-                // 2. Vitesse lien
-                var speed = GetString(activeAdapter, "speed") ?? 
-                    (GetDouble(activeAdapter, "speedMbps").HasValue ? $"{GetDouble(activeAdapter, "speedMbps"):F0} Mbps" : null);
-                if (!string.IsNullOrEmpty(speed))
-                    Add(ev, "Vitesse lien", speed, "scan_powershell.sections.Network.data.adapters[active].speed");
+                // 2. Description (ipconfig /all style)
+                var description = GetString(activeAdapter, "description") ?? GetString(activeAdapter, "interfaceDescription");
+                if (!string.IsNullOrEmpty(description))
+                    Add(ev, "Description", description, "scan_powershell.sections.Network.data.adapters[active].description");
 
-                // 3. IP - FIX: Extract from ip[] array OR ipv4 string
+                // 3. Statut connexion
+                var connStatus = GetString(activeAdapter, "status") ?? GetString(activeAdapter, "connectionStatus");
+                if (!string.IsNullOrEmpty(connStatus))
+                {
+                    var icon = connStatus.ToLower() switch
+                    {
+                        "up" or "connected" or "connecté" => "✅",
+                        "down" or "disconnected" or "déconnecté" => "❌",
+                        _ => "⚡"
+                    };
+                    Add(ev, "Statut", $"{icon} {connStatus}", "scan_powershell.sections.Network.data.adapters[active].status");
+                }
+
+                // 4. MAC
+                var mac = GetString(activeAdapter, "mac") ?? GetString(activeAdapter, "macAddress") ?? GetString(activeAdapter, "physicalAddress");
+                if (!string.IsNullOrEmpty(mac))
+                    Add(ev, "Adresse MAC", mac, "scan_powershell.sections.Network.data.adapters[active].mac");
+
+                // 5. IPv4 - FIX: Extract from ip[] array OR ipv4 string
                 var ipv4 = ExtractIPv4FromAdapter(activeAdapter.Value);
                 if (!string.IsNullOrEmpty(ipv4))
-                    Add(ev, "Adresse IP", ipv4, "scan_powershell.sections.Network.data.adapters[active].ip[]");
+                    Add(ev, "Adresse IPv4", ipv4, "scan_powershell.sections.Network.data.adapters[active].ip[]");
                 else
-                    AddUnknown(ev, "Adresse IP", "ip/ipv4 absent");
+                    AddUnknown(ev, "Adresse IPv4", "ip/ipv4 absent");
 
-                // 4. Passerelle - FIX: Handle gateway as string or object
+                // 6. IPv6
+                var ipv6 = ExtractIPv6FromAdapter(activeAdapter.Value);
+                if (!string.IsNullOrEmpty(ipv6))
+                    Add(ev, "Adresse IPv6", ipv6, "scan_powershell.sections.Network.data.adapters[active].ip[]");
+
+                // 7. Passerelle - FIX: Handle gateway as string or object
                 var gateway = GetGatewayFromAdapter(activeAdapter.Value);
                 if (!string.IsNullOrEmpty(gateway))
                     Add(ev, "Passerelle", gateway, "scan_powershell.sections.Network.data.adapters[active].gateway");
 
-                // 5. DNS - Handle as array or object
+                // 8. DNS - Handle as array or object
                 string? dnsServers = null;
                 if (activeAdapter.Value.TryGetProperty("dns", out var dnsEl))
                 {
@@ -1005,34 +1119,63 @@ namespace PCDiagnosticPro.Services
                     {
                         dnsServers = string.Join(", ", dnsEl.EnumerateArray()
                             .Select(d => d.ValueKind == JsonValueKind.String ? d.GetString() : null)
-                            .Where(s => !string.IsNullOrEmpty(s))
-                            .Take(2));
+                            .Where(s => !string.IsNullOrEmpty(s)));
                     }
                     else if (dnsEl.ValueKind == JsonValueKind.String)
                     {
                         dnsServers = dnsEl.GetString();
                     }
                 }
+                // Fallback to dnsServers property
+                if (string.IsNullOrEmpty(dnsServers))
+                    dnsServers = GetString(activeAdapter, "dnsServers");
                 if (!string.IsNullOrEmpty(dnsServers))
-                    Add(ev, "DNS", dnsServers, "scan_powershell.sections.Network.data.adapters[active].dns");
+                    Add(ev, "Serveurs DNS", dnsServers, "scan_powershell.sections.Network.data.adapters[active].dns");
 
-                // 6. MAC
-                var mac = GetString(activeAdapter, "mac") ?? GetString(activeAdapter, "macAddress");
-                if (!string.IsNullOrEmpty(mac))
-                    Add(ev, "MAC", mac, "scan_powershell.sections.Network.data.adapters[active].mac");
+                // 9. DHCP activé
+                var dhcp = GetBool(activeAdapter, "dhcp") ?? GetBool(activeAdapter, "dhcpEnabled");
+                if (dhcp.HasValue)
+                    Add(ev, "DHCP activé", dhcp.Value ? "Oui" : "Non", "scan_powershell.sections.Network.data.adapters[active].dhcp");
 
-                // 7. WiFi RSSI
+                // 10. Serveur DHCP
+                var dhcpServer = GetString(activeAdapter, "dhcpServer");
+                if (!string.IsNullOrEmpty(dhcpServer))
+                    Add(ev, "Serveur DHCP", dhcpServer, "scan_powershell.sections.Network.data.adapters[active].dhcpServer");
+
+                // 11. Suffixe DNS
+                var dnsSuffix = GetString(activeAdapter, "dnsSuffix") ?? GetString(activeAdapter, "dnsSuffixList") ?? GetString(activeAdapter, "connectionSpecificDnsSuffix");
+                if (!string.IsNullOrEmpty(dnsSuffix))
+                    Add(ev, "Suffixe DNS", dnsSuffix, "scan_powershell.sections.Network.data.adapters[active].dnsSuffix");
+
+                // 12. MTU
+                var mtu = GetInt(activeAdapter, "mtu");
+                if (mtu.HasValue)
+                    Add(ev, "MTU", mtu.Value.ToString(), "scan_powershell.sections.Network.data.adapters[active].mtu");
+
+                // 13. Vitesse lien
+                var speed = GetString(activeAdapter, "speed") ?? 
+                    (GetDouble(activeAdapter, "speedMbps").HasValue ? $"{GetDouble(activeAdapter, "speedMbps"):F0} Mbps" : null) ??
+                    (GetDouble(activeAdapter, "linkSpeed").HasValue ? $"{GetDouble(activeAdapter, "linkSpeed"):F0} Mbps" : null);
+                if (!string.IsNullOrEmpty(speed))
+                    Add(ev, "Vitesse lien", speed, "scan_powershell.sections.Network.data.adapters[active].speed");
+
+                // 14. Profil réseau
+                var profile = GetString(activeAdapter, "networkCategory") ?? GetString(activeAdapter, "profile") ?? GetString(activeAdapter, "networkProfile");
+                if (!string.IsNullOrEmpty(profile))
+                    Add(ev, "Profil réseau", profile, "scan_powershell.sections.Network.data.adapters[active].networkCategory");
+
+                // 15. WiFi RSSI
                 var rssi = GetInt(activeAdapter, "rssi") ?? GetInt(activeAdapter, "signalStrength");
                 if (rssi.HasValue)
                 {
                     var quality = rssi.Value > -50 ? "Excellent" : rssi.Value > -60 ? "Bon" : rssi.Value > -70 ? "Moyen" : "Faible";
                     Add(ev, "WiFi Signal", $"{rssi.Value} dBm ({quality})", "scan_powershell.sections.Network.data.adapters[active].rssi");
                 }
-                
-                // 7b. DHCP
-                var dhcp = GetBool(activeAdapter, "dhcp");
-                if (dhcp.HasValue)
-                    Add(ev, "DHCP", dhcp.Value ? "Oui" : "Non", "scan_powershell.sections.Network.data.adapters[active].dhcp");
+
+                // 16. Type adaptateur
+                var adapterType = GetString(activeAdapter, "type") ?? GetString(activeAdapter, "interfaceType");
+                if (!string.IsNullOrEmpty(adapterType))
+                    Add(ev, "Type", adapterType, "scan_powershell.sections.Network.data.adapters[active].type");
             }
             else
             {
@@ -1042,13 +1185,15 @@ namespace PCDiagnosticPro.Services
             // === C#: network_diagnostics ===
             var netDiag = GetNestedElement(root, "network_diagnostics");
             // Also try diagnostic_signals.networkQuality as fallback
-            var netQuality = GetSignalResult(GetDiagnosticSignals(root) ?? default, "networkQuality");
+            // FIX: Properly handle null signals (avoid "Operation is not valid" error)
+            var diagSignals = GetDiagnosticSignals(root);
+            var netQuality = diagSignals.HasValue ? GetSignalResult(diagSignals.Value, "networkQuality") : null;
             JsonElement? netQualityValue = null;
             if (netQuality.HasValue && netQuality.Value.TryGetProperty("value", out var nqv))
                 netQualityValue = nqv;
             
             // #region agent log
-            if (netDiag.HasValue)
+            if (netDiag.HasValue && netDiag.Value.ValueKind == JsonValueKind.Object)
             {
                 var netDiagProps = new List<string>();
                 foreach (var prop in netDiag.Value.EnumerateObject()) netDiagProps.Add(prop.Name);
@@ -1056,7 +1201,7 @@ namespace PCDiagnosticPro.Services
             }
             else
             {
-                DebugLog("B", "ExtractNetwork:netDiag", "network_diagnostics is NULL", null);
+                DebugLog("B", "ExtractNetwork:netDiag", "network_diagnostics is NULL or not an Object", null);
             }
             // #endregion
             
@@ -1255,13 +1400,82 @@ namespace PCDiagnosticPro.Services
                 }
             }
 
-            // 8. Points de restauration
+            // 8. Points de restauration - Enhanced with dates and "too old" signal
             var rpData = GetSectionData(root, "RestorePoints");
             if (rpData.HasValue)
             {
                 var rpCount = GetInt(rpData, "count") ?? GetInt(rpData, "restorePointCount");
-                if (rpCount.HasValue)
-                    Add(ev, "Points de restauration", rpCount.Value.ToString(), "scan_powershell.sections.RestorePoints.data.count");
+                
+                // Try to get the list of restore points with dates
+                JsonElement? rpList = null;
+                if (rpData.Value.TryGetProperty("points", out var pts) && pts.ValueKind == JsonValueKind.Array)
+                    rpList = pts;
+                else if (rpData.Value.TryGetProperty("restorePoints", out var rps) && rps.ValueKind == JsonValueKind.Array)
+                    rpList = rps;
+                
+                if (rpList.HasValue)
+                {
+                    // Extract dates from restore points
+                    var rpDates = new List<(DateTime date, string desc)>();
+                    foreach (var rp in rpList.Value.EnumerateArray())
+                    {
+                        var dateStr = GetString(rp, "creationTime") ?? GetString(rp, "date") ?? GetString(rp, "CreationTime");
+                        var desc = GetString(rp, "description") ?? GetString(rp, "Description") ?? "";
+                        
+                        if (!string.IsNullOrEmpty(dateStr) && DateTime.TryParse(dateStr, out var dt))
+                        {
+                            rpDates.Add((dt, desc));
+                        }
+                    }
+                    
+                    if (rpDates.Count > 0)
+                    {
+                        // Sort by date descending (most recent first)
+                        rpDates = rpDates.OrderByDescending(x => x.date).ToList();
+                        
+                        // Calculate age of most recent restore point
+                        var mostRecentDate = rpDates.First().date;
+                        var ageInDays = (DateTime.Now - mostRecentDate).TotalDays;
+                        
+                        // Configurable threshold (default 30 days - pragmatic, not ISO mandated)
+                        const int RESTORE_POINT_AGE_THRESHOLD_DAYS = 30;
+                        var tooOld = ageInDays > RESTORE_POINT_AGE_THRESHOLD_DAYS;
+                        
+                        // Format dates for display (show top 3)
+                        var datesList = rpDates.Take(3).Select(x => x.date.ToString("d MMM"));
+                        var datesStr = string.Join(", ", datesList);
+                        if (rpDates.Count > 3)
+                            datesStr += $", +{rpDates.Count - 3}";
+                        
+                        var ageIcon = tooOld ? "⚠️" : "✅";
+                        var ageInfo = $"Dernier: {(int)ageInDays}j";
+                        
+                        Add(ev, "Points de restauration", $"{rpDates.Count} ({datesStr})", 
+                            "scan_powershell.sections.RestorePoints.data.points");
+                        Add(ev, "Âge dernier point", $"{ageIcon} {ageInfo} (seuil {RESTORE_POINT_AGE_THRESHOLD_DAYS}j)", 
+                            "scan_powershell.sections.RestorePoints.data.points[0]");
+                        
+                        // Add recommendation if too old
+                        if (tooOld)
+                        {
+                            Add(ev, "⚠️ Recommandation", 
+                                "Créer un point de restauration. Vérifier la stratégie de sauvegarde et restauration.", 
+                                "n/a");
+                        }
+                    }
+                    else if (rpCount.HasValue)
+                    {
+                        // Fallback: just show count
+                        Add(ev, "Points de restauration", rpCount.Value.ToString(), 
+                            "scan_powershell.sections.RestorePoints.data.count");
+                    }
+                }
+                else if (rpCount.HasValue)
+                {
+                    // Only count available
+                    Add(ev, "Points de restauration", rpCount.Value.ToString(), 
+                        "scan_powershell.sections.RestorePoints.data.count");
+                }
             }
 
             return new ExtractionResult { Evidence = ev, ExpectedFields = expected, ActualFields = CountActualFields(ev) };
@@ -1535,7 +1749,7 @@ namespace PCDiagnosticPro.Services
                 }
             }
 
-            // 5. Bottlenecks
+            // 5. Bottlenecks - TÂCHE 12: Tooltip explicatif via EvidenceTooltips (géré côté HealthReport)
             var signals = GetDiagnosticSignals(root);
             if (signals.HasValue)
             {
@@ -1554,36 +1768,95 @@ namespace PCDiagnosticPro.Services
                     "diagnostic_signals.*");
             }
 
-            // 6. Températures (résumé)
-            if (sensors != null)
+            // TÂCHE 12: Températures et Top CPU/RAM SUPPRIMÉS de cette section 
+            // (déjà présents dans les sections CPU, GPU, Memory respectivement)
+            
+            // TÂCHE 13: Nouveaux indicateurs orientés performance globale
+            
+            // 6. Score CPU relatif (basé sur charge et throttling)
+            var cpuScore = 100;
+            var cpuDetails = new List<string>();
+            if (cpuData.HasValue)
             {
-                var temps = new List<string>();
-                if (sensors.Cpu?.CpuTempC?.Available == true)
+                var cpuArray = GetArray(cpuData, "cpus") ?? GetArray(cpuData, "cpuList");
+                if (cpuArray.HasValue)
                 {
-                    var t = sensors.Cpu.CpuTempC.Value;
-                    temps.Add($"CPU: {t:F0}°C" + (t > 80 ? "🔥" : ""));
+                    var first = cpuArray.Value.EnumerateArray().FirstOrDefault();
+                    var load = GetDouble(first, "currentLoad") ?? GetDouble(first, "load");
+                    if (load.HasValue)
+                    {
+                        if (load > 90) { cpuScore -= 30; cpuDetails.Add("saturé"); }
+                        else if (load > 80) { cpuScore -= 15; cpuDetails.Add("charge élevée"); }
+                        else if (load > 70) { cpuScore -= 5; cpuDetails.Add("charge modérée"); }
+                    }
                 }
-                if (sensors.Gpu?.GpuTempC?.Available == true)
-                {
-                    var t = sensors.Gpu.GpuTempC.Value;
-                    temps.Add($"GPU: {t:F0}°C" + (t > 80 ? "🔥" : ""));
-                }
-                if (temps.Count > 0)
-                    Add(ev, "Températures", string.Join(" | ", temps), "sensors_csharp.*TempC");
             }
-
-            // 7-8. Top processes
-            var topCpu = GetTopProcesses(root, "cpu", 5);
-            if (topCpu.Count > 0)
-                Add(ev, "Top CPU", string.Join(", ", topCpu), "process_telemetry.topCpu");
+            if (signals.HasValue && GetBool(GetSignalResult(signals.Value, "cpu_throttle"), "detected") == true)
+            {
+                cpuScore -= 20; cpuDetails.Add("throttling");
+            }
+            Add(ev, "Score CPU", $"{cpuScore}/100 {(cpuDetails.Count > 0 ? $"({string.Join(", ", cpuDetails)})" : "✅")}", 
+                "calculé");
             
-            var topMem = GetTopProcesses(root, "memory", 5);
-            if (topMem.Count > 0)
-                Add(ev, "Top RAM", string.Join(", ", topMem), "process_telemetry.topMemory");
+            // 7. Score GPU relatif (basé sur charge et température)
+            var gpuScore = 100;
+            var gpuDetails = new List<string>();
+            if (sensors?.Gpu != null)
+            {
+                if (sensors.Gpu.GpuLoadPercent?.Available == true)
+                {
+                    var load = sensors.Gpu.GpuLoadPercent.Value;
+                    if (load > 95) { gpuScore -= 20; gpuDetails.Add("saturé"); }
+                    else if (load > 85) { gpuScore -= 10; gpuDetails.Add("charge élevée"); }
+                }
+                if (sensors.Gpu.GpuTempC?.Available == true)
+                {
+                    var temp = sensors.Gpu.GpuTempC.Value;
+                    if (temp > 85) { gpuScore -= 25; gpuDetails.Add("surchauffe"); }
+                    else if (temp > 75) { gpuScore -= 10; gpuDetails.Add("temp élevée"); }
+                }
+            }
+            Add(ev, "Score GPU", $"{gpuScore}/100 {(gpuDetails.Count > 0 ? $"({string.Join(", ", gpuDetails)})" : "✅")}", 
+                "calculé");
             
-            var topIO = GetTopProcesses(root, "io", 3);
-            if (topIO.Count > 0)
-                Add(ev, "Top IO", string.Join(", ", topIO), "process_telemetry.topIo");
+            // 8. RAM headroom (marge disponible)
+            if (memData.HasValue)
+            {
+                var totalGB = GetDouble(memData, "totalGB");
+                var availGB = GetDouble(memData, "availableGB");
+                if (totalGB.HasValue && totalGB > 0 && availGB.HasValue)
+                {
+                    var headroomPct = (availGB.Value / totalGB.Value) * 100;
+                    var headroomIcon = headroomPct < 10 ? "🔴" : headroomPct < 20 ? "🟡" : "🟢";
+                    Add(ev, "RAM headroom", $"{headroomIcon} {availGB.Value:F1} GB libre ({headroomPct:F0}%)", 
+                        "scan_powershell.sections.Memory.data (calculé)");
+                }
+            }
+            
+            // 9. Capacité multitâche estimée (basée sur RAM libre et cœurs CPU)
+            var multitaskScore = "N/A";
+            if (cpuData.HasValue && memData.HasValue)
+            {
+                var cpuArray = GetArray(cpuData, "cpus") ?? GetArray(cpuData, "cpuList");
+                var availGB = GetDouble(memData, "availableGB");
+                if (cpuArray.HasValue && availGB.HasValue)
+                {
+                    var first = cpuArray.Value.EnumerateArray().FirstOrDefault();
+                    var cores = GetInt(first, "coreCount") ?? GetInt(first, "cores") ?? 4;
+                    var threads = GetInt(first, "threadCount") ?? GetInt(first, "threads") ?? cores * 2;
+                    
+                    // Estimation simplifiée: bonne capacité si >4GB libre ET >4 threads
+                    if (availGB >= 8 && threads >= 8)
+                        multitaskScore = "🟢 Excellente";
+                    else if (availGB >= 4 && threads >= 4)
+                        multitaskScore = "🟢 Bonne";
+                    else if (availGB >= 2 && threads >= 2)
+                        multitaskScore = "🟡 Correcte";
+                    else
+                        multitaskScore = "🟠 Limitée";
+                }
+            }
+            Add(ev, "Capacité multitâche", multitaskScore, "calculé (RAM libre + threads)");
 
             return new ExtractionResult { Evidence = ev, ExpectedFields = expected, ActualFields = CountActualFields(ev) };
         }
@@ -1602,7 +1875,7 @@ namespace PCDiagnosticPro.Services
             var machineIdData = GetSectionData(root, "MachineIdentity");
             
             // #region agent log
-            if (secData.HasValue)
+            if (secData.HasValue && secData.Value.ValueKind == JsonValueKind.Object)
             {
                 var secProps = new List<string>();
                 foreach (var prop in secData.Value.EnumerateObject()) secProps.Add(prop.Name);
@@ -1783,16 +2056,41 @@ namespace PCDiagnosticPro.Services
                 : "Security.secureBootEnabled";
             AddYesNo(ev, "Secure Boot", secureBoot, secureBootSource);
 
+            // === C# Security Info Fallback (BitLocker, RDP, SMBv1) ===
+            // Read from security_info_csharp if PowerShell didn't collect these
+            var securityInfoCsharp = GetNestedElement(root, "security_info_csharp");
+            
             // 4. BitLocker (OUI/NON - OBLIGATOIRE, pas "—")
-            // FIX: If no data found, show "Non détectable" with debug reason
+            // FIX: Try PowerShell first, then C# fallback from SecurityInfoCollector
             var bitlocker = GetBool(secData, "bitlockerEnabled") ?? GetBool(secData, "bitLocker") ?? GetBool(secData, "BitLocker");
             if (bitlocker.HasValue)
             {
                 AddYesNo(ev, "BitLocker", bitlocker, "scan_powershell.sections.Security.data.bitlockerEnabled");
             }
+            else if (securityInfoCsharp.HasValue)
+            {
+                // C# fallback: SecurityInfoCollector.BitLockerEnabled
+                var blCsharp = GetBool(securityInfoCsharp, "bitLockerEnabled");
+                var blStatus = GetString(securityInfoCsharp, "bitLockerStatus") ?? "unknown";
+                var blSource = GetString(securityInfoCsharp, "bitLockerSource") ?? "C#";
+                var isHome = GetBool(securityInfoCsharp, "isWindowsHome") ?? false;
+                
+                if (blCsharp.HasValue)
+                {
+                    var displayText = blCsharp.Value ? "✅ Oui" : "❌ Non";
+                    if (isHome && blStatus == "device_encryption_on")
+                        displayText = "✅ Chiffrement appareil";
+                    else if (isHome && blStatus == "not_supported_home")
+                        displayText = "Non supporté (Windows Home)";
+                    Add(ev, "BitLocker", displayText, $"security_info_csharp.{blSource}");
+                }
+                else
+                {
+                    Add(ev, "BitLocker", $"Non détectable ({blStatus})", $"security_info_csharp.{blSource}");
+                }
+            }
             else
             {
-                // Not "Inconnu" but "Non détectable" with reason
                 Add(ev, "BitLocker", DebugPathsEnabled ? "Non détectable (collecte non implémentée) 📍[n/a]" : "Non détectable", 
                     "n/a");
             }
@@ -1802,10 +2100,29 @@ namespace PCDiagnosticPro.Services
             AddYesNo(ev, "UAC", uac, "scan_powershell.sections.Security.data.uacEnabled");
 
             // 6. RDP
+            // FIX: Try PowerShell first, then C# fallback from SecurityInfoCollector
             var rdp = GetBool(secData, "rdpEnabled") ?? GetBool(secData, "RDP");
             if (rdp.HasValue)
             {
                 Add(ev, "RDP", rdp.Value ? "⚠️ Activé" : "✅ Désactivé", "scan_powershell.sections.Security.data.rdpEnabled");
+            }
+            else if (securityInfoCsharp.HasValue)
+            {
+                var rdpCsharp = GetBool(securityInfoCsharp, "rdpEnabled");
+                var rdpStatus = GetString(securityInfoCsharp, "rdpStatus") ?? "unknown";
+                var rdpSource = GetString(securityInfoCsharp, "rdpSource") ?? "C#";
+                
+                if (rdpCsharp.HasValue)
+                {
+                    var text = rdpCsharp.Value ? "⚠️ Activé" : "✅ Désactivé";
+                    if (rdpStatus == "enabled_service_stopped")
+                        text = "⚠️ Activé (service arrêté)";
+                    Add(ev, "RDP", text, $"security_info_csharp.{rdpSource}");
+                }
+                else
+                {
+                    Add(ev, "RDP", $"Inconnu ({rdpStatus})", $"security_info_csharp.{rdpSource}");
+                }
             }
             else
             {
@@ -1813,10 +2130,26 @@ namespace PCDiagnosticPro.Services
             }
 
             // 7. SMBv1
+            // FIX: Try PowerShell first, then C# fallback from SecurityInfoCollector
             var smb1 = GetBool(secData, "smbV1Enabled") ?? GetBool(secData, "SMBv1");
             if (smb1.HasValue)
             {
                 Add(ev, "SMBv1", smb1.Value ? "⚠️ Activé (risque)" : "✅ Désactivé", "scan_powershell.sections.Security.data.smbV1Enabled");
+            }
+            else if (securityInfoCsharp.HasValue)
+            {
+                var smb1Csharp = GetBool(securityInfoCsharp, "smbV1Enabled");
+                var smb1Status = GetString(securityInfoCsharp, "smbV1Status") ?? "unknown";
+                var smb1Source = GetString(securityInfoCsharp, "smbV1Source") ?? "C#";
+                
+                if (smb1Csharp.HasValue)
+                {
+                    Add(ev, "SMBv1", smb1Csharp.Value ? "⚠️ Activé (risque)" : "✅ Désactivé", $"security_info_csharp.{smb1Source}");
+                }
+                else
+                {
+                    Add(ev, "SMBv1", $"Inconnu ({smb1Status})", $"security_info_csharp.{smb1Source}");
+                }
             }
             else
             {
@@ -1989,19 +2322,27 @@ namespace PCDiagnosticPro.Services
 
         private static JsonElement? GetSectionData(JsonElement root, string sectionName)
         {
+            // FIX: Always check ValueKind before calling TryGetProperty to avoid exceptions on Arrays
+            if (root.ValueKind != JsonValueKind.Object)
+                return null;
+            
             // Try scan_powershell.sections first
-            if (root.TryGetProperty("scan_powershell", out var ps) &&
-                ps.TryGetProperty("sections", out var sections) &&
+            if (root.TryGetProperty("scan_powershell", out var ps) && ps.ValueKind == JsonValueKind.Object &&
+                ps.TryGetProperty("sections", out var sections) && sections.ValueKind == JsonValueKind.Object &&
                 sections.TryGetProperty(sectionName, out var section))
             {
-                return section.TryGetProperty("data", out var data) ? data : section;
+                if (section.ValueKind == JsonValueKind.Object && section.TryGetProperty("data", out var data))
+                    return data;
+                return section;
             }
             
             // Direct sections access
-            if (root.TryGetProperty("sections", out var directSections) &&
+            if (root.TryGetProperty("sections", out var directSections) && directSections.ValueKind == JsonValueKind.Object &&
                 directSections.TryGetProperty(sectionName, out var directSection))
             {
-                return directSection.TryGetProperty("data", out var data) ? data : directSection;
+                if (directSection.ValueKind == JsonValueKind.Object && directSection.TryGetProperty("data", out var data))
+                    return data;
+                return directSection;
             }
             
             return null;
@@ -2012,13 +2353,15 @@ namespace PCDiagnosticPro.Services
             JsonElement current = root;
             foreach (var key in path)
             {
+                // FIX: Preserve current value before TryGetProperty to enable case-insensitive fallback
+                JsonElement previous = current;
                 if (!current.TryGetProperty(key, out current))
                 {
-                    // Case-insensitive fallback
+                    // Case-insensitive fallback using the previous (non-default) element
                     bool found = false;
-                    if (current.ValueKind == JsonValueKind.Object)
+                    if (previous.ValueKind == JsonValueKind.Object)
                     {
-                        foreach (var prop in current.EnumerateObject())
+                        foreach (var prop in previous.EnumerateObject())
                         {
                             if (string.Equals(prop.Name, key, StringComparison.OrdinalIgnoreCase))
                             {
@@ -2057,6 +2400,10 @@ namespace PCDiagnosticPro.Services
 
         private static JsonElement? GetSignalResult(JsonElement signals, string signalName)
         {
+            // FIX: Guard against undefined/invalid element (fixes "Operation is not valid" crash)
+            if (signals.ValueKind != JsonValueKind.Object)
+                return null;
+            
             // Try exact name first
             if (signals.TryGetProperty(signalName, out var signal))
                 return signal;
@@ -2071,11 +2418,14 @@ namespace PCDiagnosticPro.Services
                 }
             }
             
-            // Case-insensitive fallback
-            foreach (var prop in signals.EnumerateObject())
+            // Case-insensitive fallback (only if signals is an Object)
+            if (signals.ValueKind == JsonValueKind.Object)
             {
-                if (string.Equals(prop.Name, signalName, StringComparison.OrdinalIgnoreCase))
-                    return prop.Value;
+                foreach (var prop in signals.EnumerateObject())
+                {
+                    if (string.Equals(prop.Name, signalName, StringComparison.OrdinalIgnoreCase))
+                        return prop.Value;
+                }
             }
             
             return null;
@@ -2137,30 +2487,67 @@ namespace PCDiagnosticPro.Services
         
         /// <summary>
         /// FIX: Map expected value names to actual JSON property names.
+        /// FIX: Support both PascalCase (C# models) and camelCase (JSON serialization)
         /// </summary>
         private static string[] MapSignalValueName(string signalName, string valueName)
         {
             // Map "count" to actual property names based on signal type
+            // NOTE: Include both PascalCase (model) and camelCase (JSON) versions
             if (valueName.Equals("count", StringComparison.OrdinalIgnoreCase))
             {
                 return signalName.ToLower() switch
                 {
-                    "whea_errors" or "whea" => new[] { "Last30dCount", "Last7dCount", "FatalCount", "count" },
-                    "bsod_minidump" or "driverstability" => new[] { "BugcheckCount30d", "count" },
-                    "kernel_power" or "driverstability" => new[] { "KernelPower41Count30d", "count" },
-                    "tdr_video" or "gpurootcause" => new[] { "TdrCount30d", "TdrCount7d", "count" },
+                    "whea_errors" or "whea" => new[] { 
+                        "last30dCount", "Last30dCount", 
+                        "last7dCount", "Last7dCount", 
+                        "fatalCount", "FatalCount", 
+                        "count" 
+                    },
+                    "bsod_minidump" => new[] { 
+                        "bugcheckCount30d", "BugcheckCount30d", 
+                        "count" 
+                    },
+                    "kernel_power" => new[] { 
+                        "kernelPower41Count30d", "KernelPower41Count30d", 
+                        "count" 
+                    },
+                    "tdr_video" or "gpurootcause" => new[] { 
+                        "tdrCount30d", "TdrCount30d", 
+                        "tdrCount7d", "TdrCount7d", 
+                        "count" 
+                    },
+                    "driverstability" => new[] {
+                        // driverStability contains all these counts
+                        "bugcheckCount30d", "BugcheckCount30d",
+                        "kernelPower41Count30d", "KernelPower41Count30d",
+                        "tdrCount30d", "TdrCount30d",
+                        "count"
+                    },
                     _ => new[] { valueName, "count", "Count" }
                 };
             }
             
             if (valueName.Equals("detected", StringComparison.OrdinalIgnoreCase))
             {
+                // FIX: Support both PascalCase (model) and camelCase (JSON)
                 return signalName.ToLower() switch
                 {
-                    "cpu_throttle" or "cputhrottle" => new[] { "ThrottleSuspected", "detected", "Detected" },
-                    "ram_pressure" or "memorypressure" => new[] { "PressureDetected", "detected" },
+                    "cpu_throttle" or "cputhrottle" => new[] { 
+                        "throttleSuspected", "ThrottleSuspected", 
+                        "detected", "Detected" 
+                    },
+                    "ram_pressure" or "memorypressure" => new[] { 
+                        "pressureDetected", "PressureDetected", 
+                        "detected", "Detected" 
+                    },
                     _ => new[] { valueName, "detected", "Detected" }
                 };
+            }
+            
+            // FIX: For reason field, support both cases
+            if (valueName.Equals("reason", StringComparison.OrdinalIgnoreCase))
+            {
+                return new[] { "reason", "Reason", valueName };
             }
             
             return new[] { valueName };
@@ -2283,6 +2670,45 @@ namespace PCDiagnosticPro.Services
             
             return null;
         }
+
+        /// <summary>
+        /// Extract IPv6 address from adapter's ip[] array OR ipv6 string.
+        /// </summary>
+        private static string? ExtractIPv6FromAdapter(JsonElement adapter)
+        {
+            // Try ipv6 direct property first (legacy)
+            var ipv6Direct = GetString(adapter, "ipv6");
+            if (!string.IsNullOrEmpty(ipv6Direct))
+                return ipv6Direct;
+            
+            // Try ip[] array (actual PS output)
+            if (adapter.TryGetProperty("ip", out var ipEl))
+            {
+                if (ipEl.ValueKind == JsonValueKind.Array)
+                {
+                    // Find IPv6 - IPv6 contains ':' and typically starts with fe80:: or 2xxx:
+                    foreach (var ip in ipEl.EnumerateArray())
+                    {
+                        var ipStr = ip.ValueKind == JsonValueKind.String ? ip.GetString() : null;
+                        if (!string.IsNullOrEmpty(ipStr) && ipStr.Contains(":"))
+                        {
+                            // Truncate very long IPv6 for UI display
+                            if (ipStr.Length > 25)
+                                return ipStr.Substring(0, 22) + "...";
+                            return ipStr;
+                        }
+                    }
+                }
+                else if (ipEl.ValueKind == JsonValueKind.String)
+                {
+                    var ip = ipEl.GetString();
+                    if (!string.IsNullOrEmpty(ip) && ip.Contains(":"))
+                        return ip;
+                }
+            }
+            
+            return null;
+        }
         
         /// <summary>
         /// FIX: Extract gateway from adapter's gateway property (can be string or empty object {}).
@@ -2320,7 +2746,7 @@ namespace PCDiagnosticPro.Services
             // Source 1: process_telemetry (C# collector) - HIGHEST PRIORITY
             var telemetry = GetNestedElement(root, "process_telemetry");
             // #region agent log
-            if (telemetry.HasValue)
+            if (telemetry.HasValue && telemetry.Value.ValueKind == JsonValueKind.Object)
             {
                 var propNames = new List<string>();
                 foreach (var prop in telemetry.Value.EnumerateObject()) propNames.Add(prop.Name);

@@ -8,14 +8,14 @@
              x:Name="ScanOverlayControl">
     
     <UserControl.Resources>
-        <!-- Animation pluie matrix verticale -->
+        <!-- Animation pluie matrix verticale (subtil) -->
         <Storyboard x:Key="MatrixRainAnimation" RepeatBehavior="Forever">
             <DoubleAnimation Storyboard.TargetName="MatrixTransform"
                              Storyboard.TargetProperty="Y"
                              From="-20" To="20" Duration="0:0:2.5"/>
         </Storyboard>
         
-        <!-- Animation fichiers droite → gauche (train 1) - traverse toute la largeur -->
+        <!-- Animation fichiers droite → gauche (train 1) -->
         <Storyboard x:Key="Files1Animation" RepeatBehavior="Forever">
             <DoubleAnimation Storyboard.TargetName="Files1Transform"
                              Storyboard.TargetProperty="X"
@@ -30,33 +30,12 @@
                              BeginTime="0:0:5"/>
         </Storyboard>
         
-        <!-- Animation loupe gauche → droite avec effet zoom - traverse TOUTE la largeur -->
-        <Storyboard x:Key="LoupeAnimation" RepeatBehavior="Forever">
-            <!-- Déplacement X de bord à bord (0 → 620 pour une fenêtre typique) -->
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LoupeTransform"
-                                           Storyboard.TargetProperty="X">
-                <LinearDoubleKeyFrame Value="-10" KeyTime="0:0:0"/>
-                <LinearDoubleKeyFrame Value="620" KeyTime="0:0:4"/>
-                <LinearDoubleKeyFrame Value="620" KeyTime="0:0:4.4"/>
-                <LinearDoubleKeyFrame Value="-10" KeyTime="0:0:4.6"/>
-            </DoubleAnimationUsingKeyFrames>
-            <!-- Effet zoom à la fin (quand loupe arrive au bord droit) -->
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LoupeScale"
-                                           Storyboard.TargetProperty="ScaleX">
-                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:0"/>
-                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:3.7"/>
-                <LinearDoubleKeyFrame Value="1.3" KeyTime="0:0:4.15"/>
-                <LinearDoubleKeyFrame Value="1.3" KeyTime="0:0:4.4"/>
-                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:4.6"/>
-            </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LoupeScale"
-                                           Storyboard.TargetProperty="ScaleY">
-                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:0"/>
-                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:3.7"/>
-                <LinearDoubleKeyFrame Value="1.3" KeyTime="0:0:4.15"/>
-                <LinearDoubleKeyFrame Value="1.3" KeyTime="0:0:4.4"/>
-                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:4.6"/>
-            </DoubleAnimationUsingKeyFrames>
+        <!-- Micro pulsation sobre sur le texte "Scan en cours" (remplace la loupe) -->
+        <Storyboard x:Key="PulseTextAnimation" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="StatusText"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0.5" To="1" Duration="0:0:1.2"
+                             AutoReverse="True"/>
         </Storyboard>
     </UserControl.Resources>
     
@@ -65,14 +44,14 @@
             <BeginStoryboard Storyboard="{StaticResource MatrixRainAnimation}"/>
             <BeginStoryboard Storyboard="{StaticResource Files1Animation}"/>
             <BeginStoryboard Storyboard="{StaticResource Files2Animation}"/>
-            <BeginStoryboard Storyboard="{StaticResource LoupeAnimation}"/>
+            <BeginStoryboard Storyboard="{StaticResource PulseTextAnimation}"/>
         </EventTrigger>
     </UserControl.Triggers>
     
     <Grid ClipToBounds="True" Background="Transparent">
         
-        <!-- FOND: Pluie Matrix (0/1 qui descend) -->
-        <Rectangle Opacity="0.08">
+        <!-- FOND: Pluie Matrix (subtil) -->
+        <Rectangle Opacity="0.06">
             <Rectangle.Fill>
                 <VisualBrush TileMode="Tile" Viewport="0,0,45,22" ViewportUnits="Absolute" Stretch="None">
                     <VisualBrush.Visual>
@@ -86,10 +65,10 @@
             </Rectangle.RenderTransform>
         </Rectangle>
         
-        <!-- PLAN MILIEU: Fichiers défilant (train 1) -->
+        <!-- PLAN MILIEU: Fichiers défilant -->
         <Canvas ClipToBounds="True" Margin="5,0">
             <Border Canvas.Top="20" Padding="6,3" CornerRadius="3"
-                    Background="#2D333B" Opacity="0.7">
+                    Background="#2D333B" Opacity="0.6">
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="Files1Transform"/>
                 </Border.RenderTransform>
@@ -100,7 +79,7 @@
             </Border>
             
             <Border Canvas.Top="42" Padding="6,3" CornerRadius="3"
-                    Background="#2D333B" Opacity="0.6">
+                    Background="#2D333B" Opacity="0.5">
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="Files2Transform"/>
                 </Border.RenderTransform>
@@ -111,25 +90,10 @@
             </Border>
         </Canvas>
         
-        <!-- PLAN AVANT: Loupe scanner -->
-        <Grid Width="32" Height="32" HorizontalAlignment="Left" VerticalAlignment="Center" 
-              Margin="10,0,0,0" RenderTransformOrigin="0.5,0.5">
-            <Grid.RenderTransform>
-                <TransformGroup>
-                    <ScaleTransform x:Name="LoupeScale"/>
-                    <TranslateTransform x:Name="LoupeTransform"/>
-                </TransformGroup>
-            </Grid.RenderTransform>
-            
-            <Ellipse Width="22" Height="22" Stroke="#FF5252" StrokeThickness="2" 
-                     Opacity="0.8" HorizontalAlignment="Left" VerticalAlignment="Top"/>
-            <Line X1="18" Y1="18" X2="30" Y2="30" Stroke="#FF5252" 
-                  StrokeThickness="2.5" Opacity="0.8"/>
-        </Grid>
-        
-        <!-- Texte status -->
-        <TextBlock Text="Analyse en cours..." HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                   FontFamily="Consolas" FontSize="10" Foreground="#8B949E" Opacity="0.6"
-                   Margin="0,0,0,2"/>
+        <!-- Texte status avec micro pulsation (plus de loupe) -->
+        <TextBlock x:Name="StatusText" Text="Scan en cours…" 
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
+                   Foreground="#8B949E"/>
     </Grid>
 </UserControl>

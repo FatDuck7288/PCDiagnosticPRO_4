@@ -570,15 +570,15 @@ namespace PCDiagnosticPro.Services
                     var firstCpu = cpusEl.EnumerateArray().FirstOrDefault();
                     if (firstCpu.ValueKind != JsonValueKind.Undefined)
                     {
-                        var maxSpeedMhz = firstCpu.TryGetProperty("maxClockSpeed", out var mcs) ? mcs.GetDouble() : -1;
-                        var currentSpeedMhz = firstCpu.TryGetProperty("currentClockSpeed", out var ccs) ? ccs.GetDouble() : maxSpeedMhz;
+                        var maxSpeedMhz = firstCpu.TryGetProperty("maxClockSpeed", out var mcs) ? SafeGetDouble(mcs, -1) : -1;
+                        var currentSpeedMhz = firstCpu.TryGetProperty("currentClockSpeed", out var ccs) ? SafeGetDouble(ccs, maxSpeedMhz) : maxSpeedMhz;
                         if (maxSpeedMhz > 0)
                         {
                             rows.Add(("Fréquence CPU (max)", $"{maxSpeedMhz / 1000:F2} GHz"));
                             if (currentSpeedMhz > 0 && Math.Abs(currentSpeedMhz - maxSpeedMhz) > 1)
                                 rows.Add(("Fréquence CPU (instantanée)", $"{currentSpeedMhz / 1000:F2} GHz"));
                         }
-                        cpuUsage = firstCpu.TryGetProperty("currentLoad", out var cl) ? cl.GetDouble() : -1;
+                        cpuUsage = firstCpu.TryGetProperty("currentLoad", out var cl) ? SafeGetDouble(cl, -1) : -1;
                     }
                 }
                 if (cpuUsage < 0) cpuUsage = GetNestedDouble(psData.Value, "sections", "CPUInfo", "data", "LoadPercentage");
@@ -586,7 +586,7 @@ namespace PCDiagnosticPro.Services
                 {
                     var dynSignals = GetNestedElement(psData.Value, "sections", "DynamicSignals", "data");
                     if (dynSignals.HasValue && dynSignals.Value.TryGetProperty("cpu", out var cpuEl))
-                        cpuUsage = cpuEl.TryGetProperty("average", out var avg) ? avg.GetDouble() : -1;
+                        cpuUsage = cpuEl.TryGetProperty("average", out var avg) ? SafeGetDouble(avg, -1) : -1;
                 }
                 if (cpuUsage >= 0)
                     rows.Add(("Charge CPU", $"{cpuUsage:F0}%"));
@@ -619,7 +619,7 @@ namespace PCDiagnosticPro.Services
                 {
                     var dynMem = GetNestedElement(psData.Value, "sections", "DynamicSignals", "data");
                     if (dynMem.HasValue && dynMem.Value.TryGetProperty("memory", out var memEl))
-                        usedRam = memEl.TryGetProperty("usedPercent", out var up) ? up.GetDouble() : -1;
+                        usedRam = memEl.TryGetProperty("usedPercent", out var up) ? SafeGetDouble(up, -1) : -1;
                 }
                 if (usedRam >= 0 && !double.IsNaN(usedRam))
                     rows.Add(("Utilisation RAM", $"{usedRam:F0}%"));
@@ -647,7 +647,7 @@ namespace PCDiagnosticPro.Services
                     JsonElement dm = default;
                     if (TryGetPropertyRobust(tp, out dm, "downloadMbpsMedian", "DownloadMbpsMedian"))
                     {
-                        var mbps = dm.GetDouble();
+                        var mbps = SafeGetDouble(dm, 0);
                         if (mbps > 0) rows.Add(("Débit réseau (test HTTP)", $"{mbps:F1} Mbps"));
                     }
                 }
@@ -657,7 +657,7 @@ namespace PCDiagnosticPro.Services
                 var dynData = GetNestedElement(psData.Value, "sections", "DynamicSignals", "data");
                 if (dynData.HasValue && dynData.Value.TryGetProperty("network", out var netEl) && netEl.TryGetProperty("throughputMbps", out var tm))
                 {
-                    var mbps = tm.GetDouble();
+                    var mbps = SafeGetDouble(tm, 0);
                     if (mbps >= 0) rows.Add(("Débit réseau (samples)", $"{mbps:F1} Mbps"));
                 }
             }
@@ -739,8 +739,8 @@ namespace PCDiagnosticPro.Services
                 {
                     if (count++ >= 5) break;
                     var name = TryGetString(proc, "Name", "name") ?? "?";
-                    var cpuPct = proc.TryGetProperty("CpuPercent", out var c) ? c.GetDouble() : proc.TryGetProperty("cpuPercent", out var c2) ? c2.GetDouble() : 0;
-                    var ram = proc.TryGetProperty("WorkingSetMB", out var r) ? r.GetDouble() : proc.TryGetProperty("workingSetMB", out var r2) ? r2.GetDouble() : proc.TryGetProperty("memoryMB", out var m) ? m.GetDouble() : 0;
+                    var cpuPct = proc.TryGetProperty("CpuPercent", out var c) ? SafeGetDouble(c, 0) : proc.TryGetProperty("cpuPercent", out var c2) ? SafeGetDouble(c2, 0) : 0;
+                    var ram = proc.TryGetProperty("WorkingSetMB", out var r) ? SafeGetDouble(r, 0) : proc.TryGetProperty("workingSetMB", out var r2) ? SafeGetDouble(r2, 0) : proc.TryGetProperty("memoryMB", out var m) ? SafeGetDouble(m, 0) : 0;
                     name = name.Length > 26 ? name.Substring(0, 23) + "..." : name;
                     sb.AppendLine($"  │ {name,-26} │ {cpuPct,7:F1}% │ {ram,9:F1} │");
                 }
@@ -758,8 +758,8 @@ namespace PCDiagnosticPro.Services
                 {
                     if (count++ >= 5) break;
                     var name = TryGetString(proc, "Name", "name") ?? "?";
-                    var ram = proc.TryGetProperty("WorkingSetMB", out var r) ? r.GetDouble() : proc.TryGetProperty("workingSetMB", out var r2) ? r2.GetDouble() : proc.TryGetProperty("memoryMB", out var m) ? m.GetDouble() : 0;
-                    var cpuPct = proc.TryGetProperty("CpuPercent", out var c) ? c.GetDouble() : proc.TryGetProperty("cpuPercent", out var c2) ? c2.GetDouble() : 0;
+                    var ram = proc.TryGetProperty("WorkingSetMB", out var r) ? SafeGetDouble(r, 0) : proc.TryGetProperty("workingSetMB", out var r2) ? SafeGetDouble(r2, 0) : proc.TryGetProperty("memoryMB", out var m) ? SafeGetDouble(m, 0) : 0;
+                    var cpuPct = proc.TryGetProperty("CpuPercent", out var c) ? SafeGetDouble(c, 0) : proc.TryGetProperty("cpuPercent", out var c2) ? SafeGetDouble(c2, 0) : 0;
                     name = name.Length > 26 ? name.Substring(0, 23) + "..." : name;
                     sb.AppendLine($"  │ {name,-26} │ {ram,9:F1} │ {cpuPct,7:F1}% │");
                 }
@@ -925,18 +925,17 @@ namespace PCDiagnosticPro.Services
                         {
                             var letter = vol.TryGetProperty("letter", out var l) ? l.GetString() ?? "?" : 
                                          vol.TryGetProperty("DeviceID", out var l2) ? l2.GetString() ?? "?" : "?";
-                            var sizeGb = vol.TryGetProperty("totalGB", out var s) ? s.GetDouble() : 
-                                         vol.TryGetProperty("SizeGB", out var s2) ? s2.GetDouble() : 0;
-                            var freeGb = vol.TryGetProperty("freeGB", out var f) ? f.GetDouble() : 
-                                         vol.TryGetProperty("FreeSpaceGB", out var f2) ? f2.GetDouble() : 0;
+                            var sizeGb = vol.TryGetProperty("totalGB", out var s) ? SafeGetDouble(s, 0) : 
+                                         vol.TryGetProperty("SizeGB", out var s2) ? SafeGetDouble(s2, 0) : 0;
+                            var freeGb = vol.TryGetProperty("freeGB", out var f) ? SafeGetDouble(f, 0) : 
+                                         vol.TryGetProperty("FreeSpaceGB", out var f2) ? SafeGetDouble(f2, 0) : 0;
                             var usedGb = sizeGb - freeGb;
                             // FIX: Calcul du pourcentage utilisé
                             var usedPct = sizeGb > 0 ? ((usedGb / sizeGb) * 100) : 0;
                             // Essayer d'utiliser usedPercent du PS si disponible
                             if (vol.TryGetProperty("usedPercent", out var upEl) || vol.TryGetProperty("UsedPercent", out upEl))
                             {
-                                if (upEl.ValueKind == JsonValueKind.Number)
-                                    usedPct = upEl.GetDouble();
+                                usedPct = SafeGetDouble(upEl, usedPct);
                             }
                             var freePct = sizeGb > 0 ? (freeGb / sizeGb * 100) : 0;
                             var alert = freePct < 15 ? "⚠️ <15%" : "OK";
@@ -1682,6 +1681,28 @@ namespace PCDiagnosticPro.Services
                 }
             }
             return -1;
+        }
+        
+        /// <summary>Helper: essaie plusieurs noms de propriétés pour un double</summary>
+        private static double TryGetDoubleValue(JsonElement el, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (TryGetPropertyRobust(el, out var prop, name))
+                {
+                    if (prop.ValueKind == JsonValueKind.Number) return prop.GetDouble();
+                    if (prop.ValueKind == JsonValueKind.String && double.TryParse(prop.GetString(), out var d)) return d;
+                }
+            }
+            return -1;
+        }
+        
+        /// <summary>Helper: extrait un double depuis un JsonElement de façon sûre (Number ou String)</summary>
+        private static double SafeGetDouble(JsonElement el, double defaultValue = 0)
+        {
+            if (el.ValueKind == JsonValueKind.Number) return el.GetDouble();
+            if (el.ValueKind == JsonValueKind.String && double.TryParse(el.GetString(), out var d)) return d;
+            return defaultValue;
         }
 
         #endregion

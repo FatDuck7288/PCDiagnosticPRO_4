@@ -40,6 +40,13 @@ namespace PCDiagnosticPro.Models
         /// </summary>
         [JsonPropertyName("gpuTempSource")]
         public string GpuTempSource { get; set; } = "N/A";
+        
+        /// <summary>
+        /// Source of VRAM Used sensor (D3D Dedicated Memory Used = Task Manager, GPU Memory Used = allocated)
+        /// Important: "D3D Dedicated Memory Used" matches Task Manager, others may show higher values (committed/allocated).
+        /// </summary>
+        [JsonPropertyName("vramUsedSource")]
+        public string VramUsedSource { get; set; } = "N/A";
     }
 
     public class CpuMetrics
@@ -98,6 +105,13 @@ namespace PCDiagnosticPro.Models
         [JsonPropertyName("blockingMessage")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? BlockingMessage { get; set; }
+        
+        /// <summary>
+        /// Indicates if safe mode was used (no kernel drivers, WMI/PerfCounters only)
+        /// Safe mode avoids Windows Defender WinRing0 alerts but has limited sensor access.
+        /// </summary>
+        [JsonPropertyName("safeModeUsed")]
+        public bool SafeModeUsed { get; set; }
 
         public static JsonSerializerOptions JsonOptions { get; } = new JsonSerializerOptions
         {

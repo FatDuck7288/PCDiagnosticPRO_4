@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace PCDiagnosticPro.Models
@@ -186,6 +187,115 @@ namespace PCDiagnosticPro.Models
         /// <summary>Données utilisées pour calculer le score</summary>
         public Dictionary<string, string> EvidenceData { get; set; } = new();
         
+        /// <summary>Info-bulles explicatives pour les termes techniques</summary>
+        public Dictionary<string, string> EvidenceTooltips { get; set; } = new();
+        
+        /// <summary>
+        /// Données avec info-bulles pour affichage UI
+        /// Combine EvidenceData avec EvidenceTooltips
+        /// </summary>
+        public IEnumerable<EvidenceItem> EvidenceDataWithTooltips => 
+            EvidenceData.Select(kvp => new EvidenceItem
+            {
+                Key = kvp.Key,
+                Value = kvp.Value,
+                Tooltip = EvidenceTooltips.TryGetValue(kvp.Key, out var tip) ? tip : GetDefaultTooltip(kvp.Key)
+            });
+        
+        /// <summary>
+        /// Retourne une info-bulle par défaut pour les termes techniques courants
+        /// </summary>
+        private static string? GetDefaultTooltip(string key)
+        {
+            return key.ToLower() switch
+            {
+                // Stabilité système - PARTIE 7: Tooltips complets avec définitions
+                "bsod" or "bsod 30j" => 
+                    "BSOD (Blue Screen of Death)\n\n" +
+                    "Définition : Écran bleu affiché par Windows lors d'une erreur critique qui empêche le système de fonctionner normalement.\n\n" +
+                    "Importance : Un BSOD occasionnel peut être bénin, mais des BSOD fréquents indiquent généralement un problème matériel (RAM, disque), de pilote, ou de corruption système.\n\n" +
+                    "Risques : Perte de données non enregistrées, instabilité récurrente, usure prématurée des composants si non résolu.\n\n" +
+                    "Que faire : Notez le code d'erreur (ex: DRIVER_IRQL_NOT_LESS_OR_EQUAL), vérifiez les pilotes récemment installés, testez la RAM avec Windows Memory Diagnostic.",
+                    
+                "erreurs whea" or "whea" or "whea 30j" => 
+                    "WHEA (Windows Hardware Error Architecture)\n\n" +
+                    "Définition : Système intégré à Windows qui détecte et enregistre les erreurs matérielles. WHEA surveille le processeur, la mémoire, les bus (PCIe), et d'autres composants.\n\n" +
+                    "Importance : Des erreurs WHEA récurrentes peuvent signaler une défaillance imminente du matériel, même si le système semble fonctionner.\n\n" +
+                    "Risques : Corruption de données, plantages inattendus, panne matérielle totale si ignoré.\n\n" +
+                    "Que faire : Vérifiez la température du CPU/GPU, testez la RAM, surveillez les journaux d'événements Windows pour identifier le composant concerné.",
+                    
+                "kernel-power" => 
+                    "Kernel-Power (ID 41)\n\n" +
+                    "Définition : Événement Windows signalant un arrêt système inattendu sans arrêt propre. Souvent appelé \"bug check\" ou crash kernel.\n\n" +
+                    "Causes courantes : Coupure de courant soudaine, alimentation défaillante, surchauffe entraînant un arrêt de protection, pilote défectueux causant un crash.\n\n" +
+                    "Importance : Des événements fréquents indiquent un problème d'alimentation ou de stabilité nécessitant une attention immédiate.\n\n" +
+                    "Que faire : Vérifiez l'alimentation (onduleur recommandé), contrôlez les températures, mettez à jour les pilotes.",
+                    
+                "points de restauration" => 
+                    "Points de restauration système\n\n" +
+                    "Définition : Sauvegardes automatiques de l'état du système (registre, fichiers système, programmes installés) créées par Windows avant des modifications importantes.\n\n" +
+                    "Importance : Permettent de revenir à un état antérieur si une mise à jour ou installation cause des problèmes.\n\n" +
+                    "Recommandation : Avoir au moins 1 point de restauration récent (< 30 jours). Politique interne basée sur le risque (pas une exigence ISO).\n\n" +
+                    "Que faire si aucun point récent : Créez un point manuellement via 'Créer un point de restauration' dans les paramètres système.",
+                    
+                "âge dernier point" => 
+                    "Fraîcheur du dernier point de restauration\n\n" +
+                    "Le seuil de 30 jours est une politique interne basée sur les bonnes pratiques, pas une exigence normative.\n\n" +
+                    "Un point récent vous permet de revenir à un état stable en cas de problème après une mise à jour ou installation.",
+                
+                // Sécurité — définitions complètes (définition, importance, risque)
+                "bitlocker" => "Définition : BitLocker est une fonctionnalité de chiffrement complet du disque intégrée à certaines éditions de Windows (Pro/Enterprise). Elle protège vos données en chiffrant l'intégralité du volume où est installé le système et/ou d'autres lecteurs.\n\nImportance : Très important pour la confidentialité et la sécurité des données, surtout en cas de vol ou de perte de l'appareil.\n\nRisque si désactivé : Vos données sont vulnérables à l'accès non autorisé si quelqu'un obtient un accès physique à votre appareil. Non disponible sur Windows Home.",
+                "secure boot" => "Définition : Secure Boot est une fonctionnalité de sécurité du micrologiciel UEFI qui garantit que votre ordinateur démarre uniquement avec des logiciels de confiance (comme Windows). Il empêche le chargement de logiciels malveillants ou non autorisés avant même le démarrage du système d'exploitation.\n\nImportance : Fondamental pour protéger le processus de démarrage contre les rootkits et autres menaces persistantes avancées.\n\nRisque si désactivé : L'ordinateur pourrait démarrer avec des logiciels malveillants ou des systèmes d'exploitation non fiables, compromettant la sécurité dès le démarrage.",
+                "uac" => "Définition : Le Contrôle de compte d'utilisateur (UAC) est une fonction de sécurité de Windows qui aide à empêcher les modifications non autorisées sur votre ordinateur. Lorsque l'UAC est actif, les applications et les tâches s'exécutent avec des autorisations limitées, et une invite de consentement est affichée avant que les actions nécessitant des privilèges d'administrateur ne soient exécutées.\n\nImportance : Essentiel pour la protection contre les logiciels malveillants et pour prévenir les modifications accidentelles du système.\n\nRisque si désactivé : Les programmes malveillants peuvent s'exécuter avec des privilèges élevés sans votre consentement, rendant votre système plus vulnérable.",
+                "rdp" => "Définition : Le Protocole de Bureau à distance (RDP) est une technologie de Microsoft qui permet à un utilisateur de se connecter à un ordinateur distant via un réseau et d'afficher le bureau de cet ordinateur. Il est couramment utilisé pour l'administration à distance et le support technique.\n\nImportance : Utile pour l'accès et la gestion à distance, mais doit être sécurisé.\n\nRisque si désactivé : Aucun risque direct de sécurité, mais limite les capacités de gestion à distance.\n\nRisque si activé et mal sécurisé : Peut être une porte d'entrée pour des attaquants s'il est exposé à Internet sans mesures de sécurité robustes (mots de passe faibles, MFA manquant, pas de VPN).",
+                "smbv1" => "Définition : SMBv1 est une ancienne version du protocole Server Message Block, utilisé pour le partage de fichiers, d'imprimantes et de ports série sur un réseau. Il est considéré comme obsolète et a été remplacé par des versions plus sécurisées (SMBv2, SMBv3).\n\nImportance : Ne devrait plus être utilisé. Les versions plus récentes offrent de meilleures performances et une sécurité renforcée.\n\nRisque si désactivé : Aucun risque, au contraire, c'est une bonne pratique de sécurité.\n\nRisque si activé : SMBv1 contient des vulnérabilités de sécurité connues (ex. WannaCry, EternalBlue) et est susceptible d'attaques par rançongiciel et autres exploits. Il est fortement recommandé de le désactiver.",
+                "antivirus" => "Définition : Un antivirus est un logiciel de protection qui détecte, bloque et supprime les logiciels malveillants (virus, trojans, ransomwares, etc.). Windows Defender est l'antivirus intégré à Windows et est activé par défaut.\n\nImportance : Indispensable pour protéger votre ordinateur contre les menaces en ligne et les fichiers infectés.\n\nRisque si désactivé : Votre système est exposé aux malwares, aux rançongiciels et au vol de données. Gardez toujours un antivirus actif.",
+                "pare-feu" => "Définition : Le pare-feu Windows filtre le trafic réseau entrant et sortant selon des règles de sécurité. Il bloque les connexions non autorisées tout en autorisant les communications légitimes.\n\nImportance : Essentiel pour bloquer les accès non sollicités depuis Internet ou le réseau local et pour limiter les programmes qui peuvent communiquer.\n\nRisque si désactivé : Votre ordinateur devient visible et accessible depuis le réseau sans protection, ce qui favorise les intrusions et les attaques.",
+                
+                // Performance
+                "bottlenecks" or "bottleneck" => "Bottleneck (goulot d'étranglement) : Composant limitant les performances globales car plus lent ou saturé que les autres. Ex: CPU saturé limitant le GPU.",
+                "ram pressure" => "Pression RAM : Indique que la mémoire est insuffisante, forçant Windows à utiliser le fichier d'échange (plus lent).",
+                "cpu bound" => "CPU Bound : Le processeur est le facteur limitant des performances. Les autres composants attendent le CPU.",
+                "disk saturation" => "Saturation disque : Le disque est le goulot d'étranglement. Peut indiquer un HDD lent ou un SSD saturé.",
+                
+                // GPU
+                "température gpu" or "temp gpu" => "Température GPU : Température de la carte graphique. <75°C = Normal, 75-85°C = Élevée, >85°C = Critique (throttling possible).",
+                "vram" or "vram totale" => "VRAM : Mémoire vidéo dédiée de la carte graphique. Différente de la RAM système. Utilisée pour les textures, rendus 3D, buffers vidéo, etc.",
+                "vram dédiée utilisée" => "VRAM Dédiée : Mémoire GPU réellement utilisée à cet instant. Cette valeur correspond à ce qu'affiche le Gestionnaire des tâches sous 'Mémoire GPU dédiée'. C'est la mémoire physique de votre carte graphique en cours d'utilisation.",
+                "vram allouée (commit)" => "VRAM Allouée/Committed : Mémoire réservée par les applications pour le GPU. Cette valeur peut être significativement plus élevée que la VRAM dédiée car elle inclut les allocations prévues, les buffers, et la mémoire partagée. Pour la valeur exacte de mémoire GPU utilisée, référez-vous au Gestionnaire des tâches ou GPU-Z.",
+                
+                // CPU
+                "température cpu" or "temp cpu" => "Température CPU : <70°C = Normal, 70-85°C = Élevée (surveiller), >85°C = Critique (throttling activé).",
+                "throttling" => "Throttling : Réduction automatique des performances pour éviter la surchauffe. Indique un problème de refroidissement.",
+                
+                // Stockage
+                "smart" or "santé smart" => "SMART : Système d'auto-surveillance des disques. Détecte les signes avant-coureurs de panne.",
+                
+                // Réseau (C3: définitions centralisées)
+                "latence" or "ping" => "Latence (Ping) : Temps de réponse du réseau en millisecondes.\n\n<30ms = Excellent (jeux, visio)\n30-100ms = Correct (navigation)\n>100ms = Lent (problème réseau ou distance serveur)",
+                "download" or "téléchargement" => "Download : Débit descendant (téléchargement).\n\n>100 Mbps = Fibre/Excellent\n25-100 Mbps = Bon\n<25 Mbps = Lent (ADSL ou problème)",
+                "upload" or "envoi" => "Upload : Débit montant (envoi de fichiers, visioconférence).\n\n>50 Mbps = Excellent\n10-50 Mbps = Correct\n<10 Mbps = Peut limiter visio/streaming",
+                "jitter" => "Jitter : Variation de la latence. Un jitter élevé (>30ms) cause des saccades en visio ou jeux en ligne.",
+                "packet loss" or "perte de paquets" => "Perte de paquets : Pourcentage de données perdues en transit.\n\n0% = Parfait\n<1% = Acceptable\n>1% = Problème réseau (câble, Wi-Fi, congestion)",
+                
+                // Système (A1-A4: définitions pour nouveaux champs)
+                "utilisateur" => "Nom d'utilisateur Windows connecté. Peut être masqué pour la confidentialité.",
+                "organisation" => "Domaine ou organisation Windows (si l'ordinateur est joint à un domaine Active Directory).",
+                "carte mère" or "motherboard" => "Carte mère : Composant principal reliant tous les autres composants (CPU, RAM, GPU, stockage).",
+                "version bios" or "bios" => "BIOS/UEFI : Micrologiciel de démarrage.\n\nUne version récente corrige des failles de sécurité et améliore la compatibilité matérielle.",
+                "date bios" => "Date de sortie de la version du BIOS. Un BIOS ancien (>3 ans) peut nécessiter une mise à jour.",
+                
+                // Pilotes
+                "pilote" or "driver" => "Pilote : Logiciel permettant au système d'exploitation de communiquer avec le matériel.\n\nDes pilotes obsolètes peuvent causer des problèmes de stabilité ou de performance.",
+                "date pilote" => "Date de mise à jour du pilote. Un pilote ancien (>2 ans) peut être mis à jour.",
+                
+                // Applications
+                "applications" or "apps" => "Applications installées détectées via le registre Windows et les packages AppX.",
+                
+                _ => null
+            };
+        }
+        
         /// <summary>Recommandations spécifiques à cette section</summary>
         public List<string> SectionRecommendations { get; set; } = new();
         
@@ -199,6 +309,83 @@ namespace PCDiagnosticPro.Models
         public string CollectionStatus { get; set; } = "OK";
     }
 
+    /// <summary>
+    /// Item de données avec info-bulle pour affichage UI
+    /// </summary>
+    public class EvidenceItem
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+        public string? Tooltip { get; set; }
+        public bool HasTooltip => !string.IsNullOrEmpty(Tooltip);
+        
+        /// <summary>
+        /// Détermine si l'icône info "i" doit être affichée.
+        /// Certains champs n'ont pas besoin d'icône explicative (ex: Antivirus, Temp GPU, VRAM).
+        /// Selon Modèle.png, on affiche le "i" uniquement pour les termes de sécurité nécessitant explication.
+        /// </summary>
+        public bool ShouldShowInfoIcon
+        {
+            get
+            {
+                if (!HasTooltip) return false;
+                
+                // Liste des clés qui NE doivent PAS afficher l'icône "i" selon les règles métier
+                var keysWithoutInfoIcon = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    // Règle C2: Supprimer "i" pour ces champs
+                    "Antivirus",
+                    "Température GPU", "Temp GPU",
+                    "VRAM", "VRAM Totale", "VRAM totale",
+                    "VRAM Dédiée Utilisée", "VRAM dédiée utilisée",
+                    "VRAM Allouée (Commit)", "VRAM allouée (commit)",
+                    // Champs factuels ne nécessitant pas d'explication
+                    "Version Windows", "Architecture", "Uptime",
+                    "Modèle", "Cœurs / Threads", "Cœurs", "Fréquence max", "Fréquence actuelle",
+                    "Charge CPU", "Température CPU",
+                    "Nom", "Fabricant", "Version pilote", "Date pilote", "Résolution", "Charge GPU",
+                    "RAM Totale", "RAM Utilisée", "Pression mémoire", "Top consommateur",
+                    "Type", "Capacité", "Espace libre", "Santé SMART",
+                    "Connexion", "Adresse IP", "Passerelle", "Latence", "Download", "Upload",
+                    "Processus total", "Services"
+                };
+                
+                return !keysWithoutInfoIcon.Contains(Key);
+            }
+        }
+        
+        /// <summary>
+        /// Icône de statut basée sur la valeur (✓, ✗, ou rien)
+        /// Affiche une coche/croix selon que la valeur indique un état positif/négatif
+        /// </summary>
+        public string StatusIcon
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(Value)) return "";
+                var v = Value.ToLower();
+                
+                // États positifs
+                if (v.Contains("✅") || v.StartsWith("oui") || v == "actif" || v.Contains("activé (tous")) 
+                    return "☑";
+                
+                // États négatifs
+                if (v.Contains("❌") || v.StartsWith("non") && !v.Contains("non détect") || v.Contains("désactivé"))
+                    return "☒";
+                
+                // États d'avertissement
+                if (v.Contains("⚠️"))
+                    return "⚠";
+                
+                // Inconnu
+                if (v.Contains("inconnu") || v.Contains("unknown") || v.Contains("non détect"))
+                    return "❓";
+                
+                return "";
+            }
+        }
+    }
+    
     /// <summary>
     /// Problème/finding détecté
     /// </summary>

@@ -10,8 +10,30 @@ namespace PCDiagnosticPro.Services
 {
     public class HardwareSensorsCollector
     {
+        /// <summary>
+        /// Use safe mode by default to avoid Windows Defender WinRing0 alerts.
+        /// Safe mode uses WMI, Performance Counters, and NVML (for NVIDIA) instead of kernel drivers.
+        /// Set to false only if user explicitly wants full sensor access and has whitelisted the app.
+        /// </summary>
+        public static bool UseSafeModeByDefault { get; set; } = true;
+        
+        /// <summary>
+        /// Force unsafe mode (LibreHardwareMonitor with WinRing0) for this collection.
+        /// Use only when user has explicitly configured exclusion in Windows Defender.
+        /// </summary>
+        public bool ForceUnsafeMode { get; set; } = false;
+        
         public Task<HardwareSensorsResult> CollectAsync(CancellationToken ct)
         {
+            // Use safe collector by default to avoid Defender alerts
+            if (UseSafeModeByDefault && !ForceUnsafeMode)
+            {
+                App.LogMessage("[HardwareSensors] Using SAFE mode (no kernel drivers) to avoid Defender alerts");
+                var safeCollector = new SafeHardwareSensorsCollector();
+                return safeCollector.CollectAsync(ct);
+            }
+            
+            App.LogMessage("[HardwareSensors] Using FULL mode (LibreHardwareMonitor with WinRing0) - may trigger Defender");
             return Task.Run(() => CollectInternal(ct), ct);
         }
 
@@ -260,20 +282,56 @@ namespace PCDiagnosticPro.Services
 
                 // VRAM Used: CRITICAL FIX - Prioritize "D3D Dedicated Memory Used" (matches Task Manager)
                 // over "GPU Memory Used" (which shows committed/allocated memory, not actual usage)
+                // IMPORTANT: "D3D Dedicated Memory Used" = what Task Manager shows (actual usage ~3GB typically)
+                //            "GPU Memory Used" = committed/allocated memory (can show 10-11GB on RTX cards)
                 // Order matters: first match wins
-                var vramUsed = FindSensorValue(sensors, 
+                var vramUsedSensorNames = new[] {
                     "D3D Dedicated Memory Used",  // Task Manager value - actual dedicated VRAM in use
                     "Dedicated Memory Used",       // Alternative naming
                     "Memory Used",                 // Fallback - may be allocated/committed
                     "VRAM Used", 
-                    "GPU Memory Used");
+                    "GPU Memory Used"
+                };
+                
+                double? vramUsed = null;
+                string vramUsedSource = "N/A";
+                
+                // Search for VRAM sensor in priority order, tracking which one was found
+                foreach (var sensorName in vramUsedSensorNames)
+                {
+                    var matchingSensor = sensors.FirstOrDefault(s => 
+                        s.Name.IndexOf(sensorName, StringComparison.OrdinalIgnoreCase) >= 0 && 
+                        s.Value.HasValue);
+                    
+                    if (matchingSensor != null)
+                    {
+                        vramUsed = matchingSensor.Value;
+                        vramUsedSource = matchingSensor.Name;
+                        break;
+                    }
+                }
+                
                 if (vramUsed.HasValue)
+                {
                     result.Gpu.VramUsedMB = Available(vramUsed.Value);
+                    result.Gpu.VramUsedSource = vramUsedSource;
+                    
+                    // Log warning if using fallback sensor (not D3D Dedicated)
+                    if (!vramUsedSource.Contains("D3D", StringComparison.OrdinalIgnoreCase) &&
+                        !vramUsedSource.Contains("Dedicated", StringComparison.OrdinalIgnoreCase))
+                    {
+                        App.LogMessage($"[VRAM WARNING] Using fallback sensor '{vramUsedSource}' - value may be higher than Task Manager shows");
+                    }
+                }
                 else
+                {
                     result.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisee indisponible");
+                    result.Gpu.VramUsedSource = "N/A";
+                }
                 
                 // Debug: Log all GPU memory sensors found for verification
                 LogGpuMemorySensors(sensors, vramTotal, vramUsed);
+                App.LogMessage($"[VRAM] Selected sensor: '{vramUsedSource}' = {vramUsed:F0} MB");
 
                 // GPU Load - look for "GPU Core" load sensor (percentage)
                 var gpuLoad = FindSensorValueByType(sensors, SensorType.Load, "GPU Core", "D3D 3D", "Core");

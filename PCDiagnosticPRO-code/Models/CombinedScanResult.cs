@@ -59,6 +59,14 @@ namespace PCDiagnosticPro.Models
         public WindowsUpdateResult? UpdatesCsharp { get; set; }
         
         /// <summary>
+        /// Security info collected via C# (BitLocker, RDP, SMBv1)
+        /// Fills gaps where PowerShell doesn't collect this data
+        /// </summary>
+        [JsonPropertyName("security_info_csharp")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SecurityInfoCollector.SecurityInfoResult? SecurityInfoCsharp { get; set; }
+        
+        /// <summary>
         /// P0.2: WMI/CIM errors with full context (namespace, query, HRESULT, duration)
         /// NO MORE "Unknown / No message"
         /// </summary>

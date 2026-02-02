@@ -20,6 +20,7 @@ using System.Windows.Data;
 using PCDiagnosticPro.Models;
 using PCDiagnosticPro.Services;
 using PCDiagnosticPro.Services.NetworkDiagnostics;
+using PCDiagnosticPro.Views;
 
 namespace PCDiagnosticPro.ViewModels
 {
@@ -65,6 +66,12 @@ namespace PCDiagnosticPro.ViewModels
         // Résultat Windows Update (C#)
         private WindowsUpdateResult? _lastWindowsUpdateResult;
 
+        // Résultat Security Info (C# - BitLocker, RDP, SMBv1)
+        private SecurityInfoCollector.SecurityInfoResult? _lastSecurityInfo;
+
+        // Combined JSON data for applications window (from scan_result_combined.json)
+        private string? _lastCombinedJsonContent;
+
         // Chemins relatifs
         private readonly string _baseDir = AppContext.BaseDirectory;
         private readonly string _appDataDir = Path.Combine(
@@ -105,6 +112,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ConfigsScannedLabel"] = "Configurations scannées",
                 ["CurrentSectionLabel"] = "Section courante",
                 ["LiveFeedLabel"] = "Flux en direct",
+                ["LiveFeedPauseLabel"] = "Pause défilement",
                 ["ReportButtonText"] = "Rapport intégrale",
                 ["ExportButtonText"] = "Exporter",
                 ["ScanButtonText"] = "ANALYSER",
@@ -184,7 +192,33 @@ namespace PCDiagnosticPro.ViewModels
                 ["ScoreGradeD"] = "• 💀 ≥ 50 : D (Critique - Intervention)",
                 ["ScoreGradeF"] = "• 🧨 < 50 : F (Critique - Urgence)",
                 ["DeleteScanConfirmTitle"] = "Confirmation",
-                ["DeleteScanConfirmMessage"] = "Voulez-vous vraiment supprimer ce scan ?"
+                ["DeleteScanConfirmMessage"] = "Voulez-vous vraiment supprimer ce scan ?",
+                // Scan phases labels (localized)
+                ["PhaseLabel_PowerShell"] = "PowerShell",
+                ["PhaseLabel_Capteurs"] = "Capteurs",
+                ["PhaseLabel_Compteurs"] = "Compteurs",
+                ["PhaseLabel_Signaux"] = "Signaux",
+                ["PhaseLabel_Telemetrie"] = "Télémetrie",
+                ["PhaseLabel_Reseau"] = "Réseau",
+                ["PhaseLabel_Rapport"] = "Rapport",
+                // Live feed messages for phases
+                ["LiveFeed_PhaseStart_PowerShell"] = "▶ Démarrage du scan PowerShell...",
+                ["LiveFeed_PhaseEnd_PowerShell"] = "✅ Scan PowerShell terminé",
+                ["LiveFeed_PhaseStart_Capteurs"] = "🔧 Collecte des capteurs matériels...",
+                ["LiveFeed_PhaseEnd_Capteurs"] = "✅ Capteurs collectés",
+                ["LiveFeed_PhaseStart_Compteurs"] = "📊 Collecte des compteurs de performance...",
+                ["LiveFeed_PhaseEnd_Compteurs"] = "✅ Compteurs collectés",
+                ["LiveFeed_PhaseStart_Signaux"] = "📡 Collecte des signaux de diagnostic...",
+                ["LiveFeed_PhaseEnd_Signaux"] = "✅ Signaux collectés",
+                ["LiveFeed_PhaseStart_Telemetrie"] = "📈 Collecte de la télémétrie processus...",
+                ["LiveFeed_PhaseEnd_Telemetrie"] = "✅ Télémétrie collectée",
+                ["LiveFeed_PhaseStart_Reseau"] = "🌐 Diagnostic réseau en cours...",
+                ["LiveFeed_PhaseEnd_Reseau"] = "✅ Diagnostic réseau terminé",
+                ["LiveFeed_PhaseStart_Rapport"] = "📄 Génération du rapport...",
+                ["LiveFeed_PhaseEnd_Rapport"] = "✅ Rapport généré",
+                // Scan status fallbacks
+                ["ScanStatus_Preparation"] = "Préparation...",
+                ["ScanStatus_Finalization"] = "Finalisation..."
             },
             ["en"] = new Dictionary<string, string>
             {
@@ -205,6 +239,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ConfigsScannedLabel"] = "Scanned configurations",
                 ["CurrentSectionLabel"] = "Current section",
                 ["LiveFeedLabel"] = "Live Feed",
+                ["LiveFeedPauseLabel"] = "Pause scroll",
                 ["ReportButtonText"] = "Report",
                 ["ExportButtonText"] = "Export",
                 ["ScanButtonText"] = "SCAN",
@@ -284,7 +319,33 @@ namespace PCDiagnosticPro.ViewModels
                 ["ScoreGradeD"] = "• 💀 ≥ 50 : D (Critical - Intervention)",
                 ["ScoreGradeF"] = "• 🧨 < 50 : F (Critical - Urgent)",
                 ["DeleteScanConfirmTitle"] = "Confirmation",
-                ["DeleteScanConfirmMessage"] = "Do you really want to delete this scan?"
+                ["DeleteScanConfirmMessage"] = "Do you really want to delete this scan?",
+                // Scan phases labels (localized)
+                ["PhaseLabel_PowerShell"] = "PowerShell",
+                ["PhaseLabel_Capteurs"] = "Sensors",
+                ["PhaseLabel_Compteurs"] = "Counters",
+                ["PhaseLabel_Signaux"] = "Signals",
+                ["PhaseLabel_Telemetrie"] = "Telemetry",
+                ["PhaseLabel_Reseau"] = "Network",
+                ["PhaseLabel_Rapport"] = "Report",
+                // Live feed messages for phases
+                ["LiveFeed_PhaseStart_PowerShell"] = "▶ Starting PowerShell scan...",
+                ["LiveFeed_PhaseEnd_PowerShell"] = "✅ PowerShell scan completed",
+                ["LiveFeed_PhaseStart_Capteurs"] = "🔧 Collecting hardware sensors...",
+                ["LiveFeed_PhaseEnd_Capteurs"] = "✅ Sensors collected",
+                ["LiveFeed_PhaseStart_Compteurs"] = "📊 Collecting performance counters...",
+                ["LiveFeed_PhaseEnd_Compteurs"] = "✅ Counters collected",
+                ["LiveFeed_PhaseStart_Signaux"] = "📡 Collecting diagnostic signals...",
+                ["LiveFeed_PhaseEnd_Signaux"] = "✅ Signals collected",
+                ["LiveFeed_PhaseStart_Telemetrie"] = "📈 Collecting process telemetry...",
+                ["LiveFeed_PhaseEnd_Telemetrie"] = "✅ Telemetry collected",
+                ["LiveFeed_PhaseStart_Reseau"] = "🌐 Network diagnostics in progress...",
+                ["LiveFeed_PhaseEnd_Reseau"] = "✅ Network diagnostics completed",
+                ["LiveFeed_PhaseStart_Rapport"] = "📄 Generating report...",
+                ["LiveFeed_PhaseEnd_Rapport"] = "✅ Report generated",
+                // Scan status fallbacks
+                ["ScanStatus_Preparation"] = "Preparing...",
+                ["ScanStatus_Finalization"] = "Finalizing..."
             },
             ["es"] = new Dictionary<string, string>
             {
@@ -305,6 +366,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ConfigsScannedLabel"] = "Configuraciones escaneadas",
                 ["CurrentSectionLabel"] = "Sección actual",
                 ["LiveFeedLabel"] = "Feed en vivo",
+                ["LiveFeedPauseLabel"] = "Pausar desplazamiento",
                 ["ReportButtonText"] = "Informe",
                 ["ExportButtonText"] = "Exportar",
                 ["ScanButtonText"] = "ESCANEAR",
@@ -384,7 +446,33 @@ namespace PCDiagnosticPro.ViewModels
                 ["ScoreGradeD"] = "• 💀 ≥ 40 y < 60 : D",
                 ["ScoreGradeF"] = "• 🧨 < 40 : F",
                 ["DeleteScanConfirmTitle"] = "Confirmación",
-                ["DeleteScanConfirmMessage"] = "¿Desea eliminar este escaneo?"
+                ["DeleteScanConfirmMessage"] = "¿Desea eliminar este escaneo?",
+                // Scan phases labels (localized)
+                ["PhaseLabel_PowerShell"] = "PowerShell",
+                ["PhaseLabel_Capteurs"] = "Sensores",
+                ["PhaseLabel_Compteurs"] = "Contadores",
+                ["PhaseLabel_Signaux"] = "Señales",
+                ["PhaseLabel_Telemetrie"] = "Telemetría",
+                ["PhaseLabel_Reseau"] = "Red",
+                ["PhaseLabel_Rapport"] = "Informe",
+                // Live feed messages for phases
+                ["LiveFeed_PhaseStart_PowerShell"] = "▶ Iniciando escaneo PowerShell...",
+                ["LiveFeed_PhaseEnd_PowerShell"] = "✅ Escaneo PowerShell completado",
+                ["LiveFeed_PhaseStart_Capteurs"] = "🔧 Recopilando sensores de hardware...",
+                ["LiveFeed_PhaseEnd_Capteurs"] = "✅ Sensores recopilados",
+                ["LiveFeed_PhaseStart_Compteurs"] = "📊 Recopilando contadores de rendimiento...",
+                ["LiveFeed_PhaseEnd_Compteurs"] = "✅ Contadores recopilados",
+                ["LiveFeed_PhaseStart_Signaux"] = "📡 Recopilando señales de diagnóstico...",
+                ["LiveFeed_PhaseEnd_Signaux"] = "✅ Señales recopiladas",
+                ["LiveFeed_PhaseStart_Telemetrie"] = "📈 Recopilando telemetría de procesos...",
+                ["LiveFeed_PhaseEnd_Telemetrie"] = "✅ Telemetría recopilada",
+                ["LiveFeed_PhaseStart_Reseau"] = "🌐 Diagnóstico de red en progreso...",
+                ["LiveFeed_PhaseEnd_Reseau"] = "✅ Diagnóstico de red completado",
+                ["LiveFeed_PhaseStart_Rapport"] = "📄 Generando informe...",
+                ["LiveFeed_PhaseEnd_Rapport"] = "✅ Informe generado",
+                // Scan status fallbacks
+                ["ScanStatus_Preparation"] = "Preparando...",
+                ["ScanStatus_Finalization"] = "Finalizando..."
             }
         };
 
@@ -604,9 +692,13 @@ namespace PCDiagnosticPro.ViewModels
                     OnPropertyChanged(nameof(SystemStabilityIndex));
                     OnPropertyChanged(nameof(CpuPerformanceTier));
                     OnPropertyChanged(nameof(NetworkDownloadMbps));
+                    OnPropertyChanged(nameof(NetworkUploadMbps));
                     OnPropertyChanged(nameof(NetworkLatencyMs));
                     OnPropertyChanged(nameof(NetworkSpeedTier));
                     OnPropertyChanged(nameof(NetworkRecommendation));
+                    OnPropertyChanged(nameof(NetworkDownloadColor));
+                    OnPropertyChanged(nameof(NetworkUploadColor));
+                    OnPropertyChanged(nameof(NetworkLatencyColor));
                     UpdateUdisSectionsSummary();
                     UpdateHealthSections();
                 }
@@ -654,11 +746,39 @@ namespace PCDiagnosticPro.ViewModels
         public int SystemStabilityIndex => HealthReport?.UdisReport?.SystemStabilityIndex ?? 100;
         public string CpuPerformanceTier => HealthReport?.UdisReport?.CpuPerformanceTier ?? "N/A";
 
-        // === UDIS — NETWORK SPEED TEST ===
+        // === UDIS — NETWORK SPEED TEST (amélioré pour affichage speedtest.net style) ===
         public double? NetworkDownloadMbps => HealthReport?.UdisReport?.DownloadMbps;
+        public double? NetworkUploadMbps => HealthReport?.UdisReport?.UploadMbps;
         public double? NetworkLatencyMs => HealthReport?.UdisReport?.LatencyMs;
         public string NetworkSpeedTier => HealthReport?.UdisReport?.NetworkSpeedTier ?? "Non mesuré";
         public string NetworkRecommendation => HealthReport?.UdisReport?.NetworkRecommendation ?? "";
+        
+        // Couleur pour le débit Download (vert > 100, jaune 25-100, rouge < 25)
+        public string NetworkDownloadColor => NetworkDownloadMbps switch
+        {
+            >= 100 => "#22C55E",  // Vert
+            >= 25 => "#F59E0B",   // Orange
+            > 0 => "#EF4444",     // Rouge
+            _ => "#6B7280"        // Gris si non mesuré
+        };
+        
+        // Couleur pour le débit Upload (vert > 50, jaune 10-50, rouge < 10)
+        public string NetworkUploadColor => NetworkUploadMbps switch
+        {
+            >= 50 => "#22C55E",   // Vert
+            >= 10 => "#F59E0B",   // Orange
+            > 0 => "#EF4444",     // Rouge
+            _ => "#6B7280"        // Gris si non mesuré
+        };
+        
+        // Couleur pour la latence (vert < 30, jaune 30-100, rouge > 100)
+        public string NetworkLatencyColor => NetworkLatencyMs switch
+        {
+            <= 30 => "#22C55E",   // Vert
+            <= 100 => "#F59E0B",  // Orange
+            > 100 => "#EF4444",   // Rouge
+            _ => "#6B7280"        // Gris si non mesuré
+        };
         
         // === PROCESS TELEMETRY — UI DISPLAY ===
         public bool HasProcessTelemetry => _lastProcessTelemetry?.Available ?? false;
@@ -670,6 +790,34 @@ namespace PCDiagnosticPro.ViewModels
         public string ProcessTelemetryDisplay => HasProcessTelemetry 
             ? $"{ProcessCount} processus | Top CPU: {TopCpuProcess} ({TopCpuPercent:F1}%) | Top RAM: {TopMemoryProcess} ({TopMemoryMB:F0} MB)"
             : "Données non disponibles";
+        
+        /// <summary>
+        /// TÂCHE 6: Top 5 processus RAM comme collection pour tableau visuel
+        /// </summary>
+        public IEnumerable<ProcessDisplayItem> Top5RamProcesses => 
+            _lastProcessTelemetry?.TopByMemory?.Take(5).Select((p, i) => new ProcessDisplayItem
+            {
+                Rank = i + 1,
+                ProcessName = p.Name,
+                RamUsedMB = p.WorkingSetMB,
+                RamUsedDisplay = p.WorkingSetMB >= 1024 
+                    ? $"{p.WorkingSetMB / 1024:F1} GB" 
+                    : $"{p.WorkingSetMB:F0} MB",
+                // RAM % not calculated here (would need total RAM from HealthReport)
+                RamPercent = 0
+            }) ?? Enumerable.Empty<ProcessDisplayItem>();
+        
+        /// <summary>
+        /// TÂCHE 6: Top 5 processus CPU comme collection
+        /// </summary>
+        public IEnumerable<ProcessDisplayItem> Top5CpuProcesses =>
+            _lastProcessTelemetry?.TopByCpu?.Take(5).Select((p, i) => new ProcessDisplayItem
+            {
+                Rank = i + 1,
+                ProcessName = p.Name,
+                CpuPercent = p.CpuPercent,
+                CpuDisplay = $"{p.CpuPercent:F1}%"
+            }) ?? Enumerable.Empty<ProcessDisplayItem>();
         
         // === SENSOR BLOCKING STATUS — UI DISPLAY ===
         public bool IsSensorBlocked => _lastSensorsResult?.BlockedBySecurity ?? false;
@@ -764,6 +912,8 @@ namespace PCDiagnosticPro.ViewModels
             OnPropertyChanged(nameof(TopMemoryProcess));
             OnPropertyChanged(nameof(TopMemoryMB));
             OnPropertyChanged(nameof(ProcessTelemetryDisplay));
+            OnPropertyChanged(nameof(Top5RamProcesses));
+            OnPropertyChanged(nameof(Top5CpuProcesses));
         }
         
         /// <summary>
@@ -824,10 +974,14 @@ namespace PCDiagnosticPro.ViewModels
                     var updatedUdis = await UnifiedDiagnosticScoreEngine.AddNetworkSpeedTestAsync(HealthReport.UdisReport, cts.Token);
                     // Notifier la UI
                     OnPropertyChanged(nameof(NetworkDownloadMbps));
+                    OnPropertyChanged(nameof(NetworkUploadMbps));
                     OnPropertyChanged(nameof(NetworkLatencyMs));
                     OnPropertyChanged(nameof(NetworkSpeedTier));
                     OnPropertyChanged(nameof(NetworkRecommendation));
-                    App.LogMessage($"[SpeedTest] Terminé: Download={updatedUdis.DownloadMbps:F1} Mbps, Tier={updatedUdis.NetworkSpeedTier}");
+                    OnPropertyChanged(nameof(NetworkDownloadColor));
+                    OnPropertyChanged(nameof(NetworkUploadColor));
+                    OnPropertyChanged(nameof(NetworkLatencyColor));
+                    App.LogMessage($"[SpeedTest] Terminé: Download={updatedUdis.DownloadMbps:F1} Mbps, Upload={updatedUdis.UploadMbps:F1} Mbps, Latence={updatedUdis.LatencyMs:F0} ms");
                 }
             }
             catch (Exception ex)
@@ -1077,6 +1231,60 @@ namespace PCDiagnosticPro.ViewModels
 
         // Collections
         public ObservableCollection<string> LiveFeedItems { get; } = new ObservableCollection<string>();
+        public ObservableCollection<LiveFeedEntry> LiveFeedEntries { get; } = new ObservableCollection<LiveFeedEntry>();
+        
+        /// <summary>Pluie de 0 et 1 pour le fond du live feed (style matrix).</summary>
+        private static readonly string[] LiveFeedBackgroundBitsSource = CreateLiveFeedBackgroundBits();
+        private static string[] CreateLiveFeedBackgroundBits()
+        {
+            var r = new Random(42);
+            var a = new string[240];
+            for (int i = 0; i < a.Length; i++) a[i] = r.Next(2) == 0 ? "0" : "1";
+            return a;
+        }
+        public IEnumerable<string> LiveFeedBackgroundBits => LiveFeedBackgroundBitsSource;
+        private ICollectionView? _filteredLiveFeedView;
+        public ICollectionView FilteredLiveFeedItems => _filteredLiveFeedView ??= CreateFilteredLiveFeedView();
+        
+        private ICollectionView CreateFilteredLiveFeedView()
+        {
+            var view = CollectionViewSource.GetDefaultView(LiveFeedEntries);
+            view.Filter = o => o is LiveFeedEntry e && MatchesLiveFeedFilter(e);
+            return view;
+        }
+        
+        private bool MatchesLiveFeedFilter(LiveFeedEntry e)
+        {
+            var f = LiveFeedFilterSelected ?? "Tout";
+            if (f == "Tout") return true;
+            if (f == "Erreurs" && e.IsError) return true;
+            if (f == "Avertissements" && e.IsWarning) return true;
+            if (f == "Important" && (e.IsError || e.IsWarning)) return true;
+            return false;
+        }
+        
+        public IEnumerable<string> LiveFeedFilterOptions { get; } = new[] { "Tout", "Erreurs", "Avertissements", "Important" };
+        private string _liveFeedFilterSelected = "Tout";
+        public string LiveFeedFilterSelected
+        {
+            get => _liveFeedFilterSelected;
+            set { _liveFeedFilterSelected = value; OnPropertyChanged(); _filteredLiveFeedView?.Refresh(); }
+        }
+        public bool LiveFeedFilterVisible => true;
+        private bool _liveFeedPaused;
+        public bool LiveFeedPaused
+        {
+            get => _liveFeedPaused;
+            set { _liveFeedPaused = value; OnPropertyChanged(); }
+        }
+        public string LiveFeedPauseLabel => GetString("LiveFeedPauseLabel");
+        
+        public string CurrentSectionDisplay => !string.IsNullOrWhiteSpace(CurrentSection) 
+            ? CurrentSection 
+            : (IsScanning ? (ProgressPercent >= 90 ? GetString("ScanStatus_Finalization") : GetString("ScanStatus_Preparation")) : "—");
+        
+        public ObservableCollection<SectionPhaseItem> SectionPhases { get; } = new ObservableCollection<SectionPhaseItem>();
+        
         public ObservableCollection<ScanItem> ScanItems { get; } = new ObservableCollection<ScanItem>();
         public ObservableCollection<ScanHistoryItem> ScanHistory { get; } = new ObservableCollection<ScanHistoryItem>();
         public ObservableCollection<ScanHistoryItem> ArchivedScanHistory { get; } = new ObservableCollection<ScanHistoryItem>();
@@ -1104,6 +1312,13 @@ namespace PCDiagnosticPro.ViewModels
         public ICommand NavigateToArchivesCommand { get; }
         public ICommand ArchiveScanCommand { get; }
         public ICommand DeleteScanCommand { get; }
+        
+        // Commands for detail windows (Drivers and Applications)
+        public ICommand OpenDriversDetailsCommand { get; }
+        public ICommand OpenAppsDetailsCommand { get; }
+        
+        // Command for collector errors details
+        public ICommand ShowCollectorErrorsCommand { get; }
 
         #endregion
 
@@ -1181,6 +1396,13 @@ namespace PCDiagnosticPro.ViewModels
             NavigateToArchivesCommand = new RelayCommand(NavigateToArchives, () => ScanHistory.Count > 0 || ArchivedScanHistory.Count > 0);
             ArchiveScanCommand = new RelayCommand<ScanHistoryItem>(ArchiveScan, item => item != null);
             DeleteScanCommand = new RelayCommand<ScanHistoryItem>(DeleteScan, item => item != null);
+            
+            // Commands for detail windows
+            OpenDriversDetailsCommand = new RelayCommand(OpenDriversDetails, () => _lastDriverInventory?.Available == true);
+            OpenAppsDetailsCommand = new RelayCommand(OpenAppsDetails, () => !string.IsNullOrEmpty(_lastCombinedJsonContent));
+            
+            // Command for collector errors details
+            ShowCollectorErrorsCommand = new RelayCommand(ShowCollectorErrorsDetails, () => IsCollectionPartialOrFailed);
 
             ScanHistory.CollectionChanged += OnHistoryCollectionChanged;
             ArchivedScanHistory.CollectionChanged += OnHistoryCollectionChanged;
@@ -1301,12 +1523,16 @@ namespace PCDiagnosticPro.ViewModels
                 ProgressCount = 0;
                 CurrentStep = GetString("InitStep");
                 CurrentSection = string.Empty;
+                OnPropertyChanged(nameof(CurrentSectionDisplay));
                 StatusMessage = GetString("StatusScanning");
                 ErrorMessage = string.Empty;
                 ResultsMessage = string.Empty;
                 LiveFeedItems.Clear();
+                LiveFeedEntries.Clear();
+                _filteredLiveFeedView?.Refresh();
                 ScanItems.Clear();
                 ResultSections.Clear();
+                InitializeSectionPhases();
                 OnPropertyChanged(nameof(HasResultSections));
                 ScanResult = null;
                 _cancelHandled = false;
@@ -1316,12 +1542,13 @@ namespace PCDiagnosticPro.ViewModels
                 _scanStartTime = DateTimeOffset.Now;
                 _jsonPathFromOutput = null;
 
-                AddLiveFeedItem("▶ Démarrage du scan...");
+                AddLiveFeedItem(GetString("LiveFeed_PhaseStart_PowerShell"));
 
                 App.LogMessage("Démarrage du scan");
                 App.LogMessage($"Start scan timestamp: {_scanStartTime:O}");
                 App.LogMessage($"Scan output directory: {outputDir}");
-                UpdateProgress(5, "Scan started");
+                // Phase 0 (PowerShell) starts - progress = 0, will increase as it runs
+                UpdateProgress(GetProgressForPhaseInProgress(0, 0.1), GetString("PhaseLabel_PowerShell"));
 
                 // Créer CancellationTokenSource
                 _scanCts = new CancellationTokenSource();
@@ -1383,8 +1610,10 @@ namespace PCDiagnosticPro.ViewModels
                 _scanProcess.Start();
                 _scanProcess.BeginOutputReadLine();
                 _scanProcess.BeginErrorReadLine();
-                StartScanProgressTimer(85);
-                UpdateProgress(15, "Process launched");
+                // Phase 0 PowerShell runs - ceiling at end of phase 0 (~14%)
+                StartScanProgressTimer(GetProgressForCompletedPhase(0) - 1);
+                UpdateProgress(GetProgressForPhaseInProgress(0, 0.2), GetString("PhaseLabel_PowerShell"));
+                SetSectionPhase(0, "Running");
 
                 // Attendre la fin du processus
                 var timedOut = false;
@@ -1409,7 +1638,7 @@ namespace PCDiagnosticPro.ViewModels
 
                 _scanStopwatch.Stop();
                 _liveFeedTimer.Stop();
-                StopScanProgressTimer();
+                // Ne pas arrêter le timer ici : progression graduelle jusqu'à 100%
 
                 if (timedOut)
                 {
@@ -1432,9 +1661,16 @@ namespace PCDiagnosticPro.ViewModels
                     App.LogMessage($"Script terminé avec erreur: {errorBuilder}");
                 }
 
-                AddLiveFeedItem("✅ Scan terminé");
+                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_PowerShell"));
                 App.LogMessage($"Scan terminé. ExitCode={exitCode}");
-                UpdateProgress(85, "PowerShell scan completed");
+                // Phase 0 done = 14%, plafond suivant = 28% (progression graduelle)
+                UpdateProgress(GetProgressForCompletedPhase(0), GetString("PhaseLabel_PowerShell"));
+                SetSectionPhase(0, "Done");
+                UpdateScanProgressCeiling(GetProgressForCompletedPhase(1));
+                
+                // Phase 1: Capteurs (Sensors)
+                AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Capteurs"));
+                SetSectionPhase(1, "Running");
 
                 HardwareSensorsResult sensorsResult;
                 try
@@ -1460,7 +1696,14 @@ namespace PCDiagnosticPro.ViewModels
                     App.LogMessage($"Erreur collecte capteurs: {ex.Message}");
                 }
 
-                UpdateProgress(88, "Hardware sensors collected");
+                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Capteurs"));
+                UpdateProgress(GetProgressForCompletedPhase(1), GetString("PhaseLabel_Capteurs"));
+                SetSectionPhase(1, "Done");
+                UpdateScanProgressCeiling(GetProgressForCompletedPhase(2));
+                
+                // Phase 2: Compteurs (Performance Counters)
+                AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Compteurs"));
+                SetSectionPhase(2, "Running");
 
                 // === PHASE 2B: Collecte PerfCounters robustes ===
                 try
@@ -1473,12 +1716,19 @@ namespace PCDiagnosticPro.ViewModels
                     _lastPerfCounterResult = null;
                     App.LogMessage($"[PerfCounters] Erreur: {ex.Message}");
                 }
-                UpdateProgress(90, "Performance counters collected");
+                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Compteurs"));
+                UpdateProgress(GetProgressForCompletedPhase(2), GetString("PhaseLabel_Compteurs"));
+                SetSectionPhase(2, "Done");
+                UpdateScanProgressCeiling(GetProgressForCompletedPhase(3));
+                
+                // Phase 3: Signaux (Diagnostic Signals)
+                AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Signaux"));
+                SetSectionPhase(3, "Running");
 
                 // === PHASE 2C: Collecte des signaux diagnostiques avancés (11 mesures GOD TIER + Internet speed test) ===
                 try
                 {
-                    UpdateProgress(91, "Collecting diagnostic signals...");
+                    UpdateProgress(GetProgressForPhaseInProgress(3, 0.5), GetString("PhaseLabel_Signaux"));
                     var signalsOrchestrator = new DiagnosticsSignals.SignalsOrchestrator();
                     // FIX 7: Enable internet speed test only if user opted in
                     signalsOrchestrator.SetAllowExternalNetworkTests(_allowExternalNetworkTests);
@@ -1490,12 +1740,19 @@ namespace PCDiagnosticPro.ViewModels
                     _lastDiagnosticSignals = null;
                     App.LogMessage($"[DiagnosticSignals] Erreur: {ex.Message}");
                 }
-                UpdateProgress(93, "Diagnostic signals collected");
+                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Signaux"));
+                UpdateProgress(GetProgressForCompletedPhase(3), GetString("PhaseLabel_Signaux"));
+                SetSectionPhase(3, "Done");
+                UpdateScanProgressCeiling(GetProgressForCompletedPhase(4));
+                
+                // Phase 4: Télémetrie (Process Telemetry)
+                AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Telemetrie"));
+                SetSectionPhase(4, "Running");
 
                 // === PHASE 2D: Process Telemetry C# Fallback (si PS a échoué) ===
                 try
                 {
-                    UpdateProgress(94, "Collecting process telemetry...");
+                    UpdateProgress(GetProgressForPhaseInProgress(4, 0.5), GetString("PhaseLabel_Telemetrie"));
                     var processCollector = new ProcessTelemetryCollector();
                     _lastProcessTelemetry = await processCollector.CollectAsync(_scanCts.Token);
                     App.LogMessage($"[ProcessTelemetry] Collected: {_lastProcessTelemetry.TotalProcessCount} processes, available={_lastProcessTelemetry.Available}");
@@ -1512,7 +1769,15 @@ namespace PCDiagnosticPro.ViewModels
                 // === PHASE 2E: Network Diagnostics Complets (internet autorisé) ===
                 try
                 {
-                    UpdateProgress(95, "Running network diagnostics...");
+                    AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Telemetrie"));
+                    UpdateProgress(GetProgressForCompletedPhase(4), GetString("PhaseLabel_Telemetrie"));
+                    SetSectionPhase(4, "Done");
+                    UpdateScanProgressCeiling(GetProgressForCompletedPhase(5));
+                    
+                    // Phase 5: Réseau (Network)
+                    AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Reseau"));
+                    SetSectionPhase(5, "Running");
+                    UpdateProgress(GetProgressForPhaseInProgress(5, 0.5), GetString("PhaseLabel_Reseau"));
                     var networkCollector = new NetworkDiagnosticsCollector();
                     _lastNetworkDiagnostics = await networkCollector.CollectAsync(_scanCts.Token);
                     App.LogMessage($"[NetworkDiagnostics] Completed: latency={_lastNetworkDiagnostics.OverallLatencyMsP50}ms, loss={_lastNetworkDiagnostics.OverallLossPercent}%");
@@ -1525,12 +1790,19 @@ namespace PCDiagnosticPro.ViewModels
                     _lastNetworkDiagnostics = null;
                     App.LogMessage($"[NetworkDiagnostics] Erreur: {ex.Message}");
                 }
-                UpdateProgress(96, "Network diagnostics completed");
+                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Reseau"));
+                UpdateProgress(GetProgressForCompletedPhase(5), GetString("PhaseLabel_Reseau"));
+                SetSectionPhase(5, "Done");
+                UpdateScanProgressCeiling(GetProgressForCompletedPhase(6));
+                
+                // Phase 6: Rapport (Report generation)
+                AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Rapport"));
+                SetSectionPhase(6, "Running");
 
                 // === PHASE 2F: Inventaire pilotes (C#) ===
                 try
                 {
-                    UpdateProgress(96, "Collecting driver inventory...");
+                    UpdateProgress(GetProgressForPhaseInProgress(6, 0.2), GetString("PhaseLabel_Rapport"));
                     var driverCollector = new DriverInventoryCollector();
                     _lastDriverInventory = await driverCollector.CollectAsync(
                         _scanCts.Token,
@@ -1556,6 +1828,20 @@ namespace PCDiagnosticPro.ViewModels
                 {
                     _lastWindowsUpdateResult = null;
                     App.LogMessage($"[WindowsUpdate] Erreur: {ex.Message}");
+                }
+
+                // === PHASE 2H: Security Info (C# - BitLocker/RDP/SMBv1) ===
+                try
+                {
+                    UpdateProgress(98, "Collecting security info...");
+                    var securityCollector = new SecurityInfoCollector();
+                    _lastSecurityInfo = await securityCollector.CollectAsync(_scanCts.Token);
+                    App.LogMessage($"[SecurityInfo] Completed: BitLocker={_lastSecurityInfo.BitLockerStatus}, RDP={_lastSecurityInfo.RdpStatus}, SMBv1={_lastSecurityInfo.SmbV1Status}");
+                }
+                catch (Exception ex)
+                {
+                    _lastSecurityInfo = null;
+                    App.LogMessage($"[SecurityInfo] Erreur: {ex.Message}");
                 }
 
                 _resultJsonPath = await ResolveResultJsonPathAsync(outputDir, _scanStartTime, _scanCts.Token);
@@ -1802,7 +2088,10 @@ namespace PCDiagnosticPro.ViewModels
                 CurrentStep = statusMessage;
             }
             NavigateToResults();
-            UpdateProgress(100, "Fin de scan confirmée");
+            AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Rapport"));
+            UpdateProgress(100, GetString("PhaseLabel_Rapport"));
+            SetSectionPhase(6, "Done");
+            StopScanProgressTimer();
             App.LogMessage("Progress=100 / IsScanning=false");
         }
 
@@ -1855,9 +2144,24 @@ namespace PCDiagnosticPro.ViewModels
                 // ===== CONSTRUCTION HEALTH REPORT INDUSTRIEL AVEC CAPTEURS =====
                 try
                 {
+                    // FIX: Utiliser le JSON combiné (contient diagnostic_signals, network_diagnostics, sensors_csharp)
+                    // au lieu du JSON PowerShell brut qui ne contient pas les données C#
+                    var healthReportJsonContent = !string.IsNullOrEmpty(_lastCombinedJsonContent) 
+                        ? _lastCombinedJsonContent 
+                        : jsonContent;
+                    
+                    if (!string.IsNullOrEmpty(_lastCombinedJsonContent))
+                    {
+                        App.LogMessage("[HealthReport] Utilisation du JSON combiné (avec diagnostic_signals, network_diagnostics)");
+                    }
+                    else
+                    {
+                        App.LogMessage("[HealthReport] WARN: JSON combiné non disponible, fallback sur PS brut");
+                    }
+                    
                     // Passer les capteurs hardware pour injection dans EvidenceData
                     var healthReport = HealthReportBuilder.Build(
-                        jsonContent,
+                        healthReportJsonContent,
                         _lastSensorsResult,
                         _lastDriverInventory,
                         _lastWindowsUpdateResult);
@@ -2201,7 +2505,8 @@ namespace PCDiagnosticPro.ViewModels
                     NetworkDiagnostics = _lastNetworkDiagnostics,
                     CollectorDiagnostics = collectorDiagnostics,
                     DriverInventory = _lastDriverInventory,
-                    UpdatesCsharp = _lastWindowsUpdateResult
+                    UpdatesCsharp = _lastWindowsUpdateResult,
+                    SecurityInfoCsharp = _lastSecurityInfo
                 };
                 
                 // === EXTRACTION DES NŒUDS EXPLICITES (missingData, metadata, findings, errors, sections, paths) ===
@@ -2213,6 +2518,7 @@ namespace PCDiagnosticPro.ViewModels
                 App.LogMessage($"Rapport combiné généré: {combinedPath} (schemaVersion={diagnosticSnapshot.SchemaVersion})");
                 
                 _combinedJsonPath = combinedPath;
+                _lastCombinedJsonContent = combinedJson; // Store for detail windows
             }
             catch (Exception ex)
             {
@@ -2741,6 +3047,141 @@ namespace PCDiagnosticPro.ViewModels
         }
 
         /// <summary>
+        /// Ouvre la fenêtre de détails des pilotes
+        /// </summary>
+        private void OpenDriversDetails()
+        {
+            try
+            {
+                if (_lastDriverInventory == null || !_lastDriverInventory.Available)
+                {
+                    System.Windows.MessageBox.Show(
+                        "Aucune donnée de pilotes disponible.\n\n" +
+                        "Lancez d'abord un scan pour collecter les informations.",
+                        "Données non disponibles",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                    return;
+                }
+
+                var window = new DriversDetailsWindow(_lastDriverInventory)
+                {
+                    Owner = Application.Current.MainWindow
+                };
+                window.ShowDialog();
+                
+                App.LogMessage($"[DriversDetails] Fenêtre ouverte: {_lastDriverInventory.TotalCount} pilotes");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[DriversDetails] Erreur: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Ouvre la fenêtre de détails des applications
+        /// </summary>
+        private void OpenAppsDetails()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_lastCombinedJsonContent))
+                {
+                    System.Windows.MessageBox.Show(
+                        "Aucune donnée d'applications disponible.\n\n" +
+                        "Lancez d'abord un scan pour collecter les informations.",
+                        "Données non disponibles",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                    return;
+                }
+
+                // Parse the JSON to extract InstalledApplications and StartupPrograms sections
+                JsonElement? appsData = null;
+                JsonElement? startupData = null;
+                
+                try
+                {
+                    using var doc = JsonDocument.Parse(_lastCombinedJsonContent);
+                    var root = doc.RootElement;
+                    
+                    // Try scan_powershell.sections first
+                    if (root.TryGetProperty("scan_powershell", out var ps) &&
+                        ps.TryGetProperty("sections", out var sections))
+                    {
+                        if (sections.TryGetProperty("InstalledApplications", out var apps))
+                        {
+                            appsData = apps.TryGetProperty("data", out var appsDataEl) ? appsDataEl : apps;
+                        }
+                        if (sections.TryGetProperty("StartupPrograms", out var startup))
+                        {
+                            startupData = startup.TryGetProperty("data", out var startupDataEl) ? startupDataEl : startup;
+                        }
+                    }
+                    
+                    // Fallback to direct sections
+                    if (!appsData.HasValue && root.TryGetProperty("sections", out var directSections))
+                    {
+                        if (directSections.TryGetProperty("InstalledApplications", out var apps))
+                        {
+                            appsData = apps.TryGetProperty("data", out var appsDataEl) ? appsDataEl : apps;
+                        }
+                        if (directSections.TryGetProperty("StartupPrograms", out var startup))
+                        {
+                            startupData = startup.TryGetProperty("data", out var startupDataEl) ? startupDataEl : startup;
+                        }
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    App.LogMessage($"[AppsDetails] JSON parse error: {ex.Message}");
+                }
+
+                var window = new AppsDetailsWindow(appsData, startupData)
+                {
+                    Owner = Application.Current.MainWindow
+                };
+                window.ShowDialog();
+                
+                App.LogMessage("[AppsDetails] Fenêtre ouverte");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[AppsDetails] Erreur: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Affiche les détails des erreurs collecteur dans une fenêtre modale
+        /// PARTIE 2: Fenêtre WPF structurée avec tableau (remplace MessageBox)
+        /// </summary>
+        private void ShowCollectorErrorsDetails()
+        {
+            try
+            {
+                var errors = HealthReport?.Errors ?? new List<Models.ScanErrorInfo>();
+                var missing = HealthReport?.MissingData ?? new List<string>();
+                var collectorErrors = HealthReport?.CollectorErrorsLogical ?? 0;
+                
+                var window = new Views.CollectorErrorsWindow(errors, missing, collectorErrors)
+                {
+                    Owner = Application.Current?.MainWindow
+                };
+                window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ShowCollectorErrors] Erreur: {ex.Message}");
+                // Fallback to simple message if window fails
+                System.Windows.MessageBox.Show(
+                    $"Erreurs détectées: {HealthReport?.CollectorErrorsLogical ?? 0}\nDonnées manquantes: {HealthReport?.MissingData?.Count ?? 0}",
+                    "Erreurs collecteur",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+            }
+        }
+
+        /// <summary>
         /// Recherche le fichier Rapport.txt le plus récent (priorité au TXT unifié)
         /// </summary>
         private string? FindReportTxtPath()
@@ -3077,6 +3518,7 @@ namespace PCDiagnosticPro.ViewModels
                 nameof(ConfigsScannedLabel),
                 nameof(CurrentSectionLabel),
                 nameof(LiveFeedLabel),
+                nameof(LiveFeedPauseLabel),
                 nameof(ReportButtonText),
                 nameof(ExportButtonText),
                 nameof(ScanButtonText),
@@ -3174,10 +3616,84 @@ namespace PCDiagnosticPro.ViewModels
         {
             Application.Current?.Dispatcher.Invoke(() =>
             {
-                LiveFeedItems.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {item}");
+                var timestamp = $"[{DateTime.Now:HH:mm:ss}]";
+                var displayText = $"{timestamp} {item}";
+                LiveFeedItems.Insert(0, displayText);
                 while (LiveFeedItems.Count > 100)
                 {
                     LiveFeedItems.RemoveAt(LiveFeedItems.Count - 1);
+                }
+                
+                var level = InferLiveFeedLevel(item);
+                var entry = new LiveFeedEntry
+                {
+                    DisplayText = displayText,
+                    IsError = level == "Error",
+                    IsWarning = level == "Warning"
+                };
+                LiveFeedEntries.Insert(0, entry);
+                while (LiveFeedEntries.Count > 200)
+                {
+                    LiveFeedEntries.RemoveAt(LiveFeedEntries.Count - 1);
+                }
+                _filteredLiveFeedView?.Refresh();
+            });
+        }
+        
+        private static string InferLiveFeedLevel(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return "Info";
+            var m = message.ToUpperInvariant();
+            if (m.Contains("ERROR") || m.Contains("ERREUR") || m.Contains("EXCEPTION") || m.Contains("ÉCHEC")) return "Error";
+            if (m.Contains("WARN") || m.Contains("ATTENTION") || m.Contains("⚠")) return "Warning";
+            return "Info";
+        }
+        
+        // Constants for step-based progress (7 phases, each ~14.3%)
+        private const int TOTAL_PHASES = 7;
+        private const double PROGRESS_PER_PHASE = 100.0 / TOTAL_PHASES; // ~14.28%
+        
+        /// <summary>
+        /// Get progress percentage for a completed phase (0-6)
+        /// Phase 0 done = 14%, Phase 1 done = 28%, ..., Phase 6 done = 100%
+        /// </summary>
+        private int GetProgressForCompletedPhase(int phaseIndex)
+        {
+            return (int)Math.Round((phaseIndex + 1) * PROGRESS_PER_PHASE);
+        }
+        
+        /// <summary>
+        /// Get progress percentage for a phase in progress (partial)
+        /// </summary>
+        private int GetProgressForPhaseInProgress(int phaseIndex, double internalProgress = 0.5)
+        {
+            var baseProgress = phaseIndex * PROGRESS_PER_PHASE;
+            var phaseContribution = PROGRESS_PER_PHASE * internalProgress;
+            return (int)Math.Round(baseProgress + phaseContribution);
+        }
+        
+        private void InitializeSectionPhases()
+        {
+            SectionPhases.Clear();
+            // Use localized labels for phases
+            var phaseKeys = new[] { "PowerShell", "Capteurs", "Compteurs", "Signaux", "Telemetrie", "Reseau", "Rapport" };
+            foreach (var key in phaseKeys)
+            {
+                var label = GetString($"PhaseLabel_{key}");
+                // Fallback to key if localization not found
+                if (string.IsNullOrEmpty(label) || label.StartsWith("PhaseLabel_"))
+                    label = key;
+                SectionPhases.Add(new SectionPhaseItem { Label = label, Status = "Pending" });
+            }
+        }
+        
+        private void SetSectionPhase(int index, string status)
+        {
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                if (index >= 0 && index < SectionPhases.Count)
+                {
+                    SectionPhases[index].Status = status;
                 }
             });
         }
@@ -3198,13 +3714,24 @@ namespace PCDiagnosticPro.ViewModels
 
             Progress = normalized;
             ProgressPercent = normalized;
+            CurrentSection = reason;
+            OnPropertyChanged(nameof(CurrentSection));
+            OnPropertyChanged(nameof(CurrentSectionDisplay));
             App.LogMessage($"Progress update: {ProgressPercent}% - {reason}");
         }
 
         private void StartScanProgressTimer(int ceiling)
         {
-            _scanProgressCeiling = Math.Max(0, Math.Min(99, ceiling));
+            _scanProgressCeiling = Math.Max(0, Math.Min(100, ceiling));
             _scanProgressTimer.Start();
+        }
+
+        /// <summary>
+        /// Met à jour le plafond de progression pour la phase en cours (timer continue, progression graduelle).
+        /// </summary>
+        private void UpdateScanProgressCeiling(int newCeiling)
+        {
+            _scanProgressCeiling = Math.Max(ProgressPercent, Math.Min(100, newCeiling));
         }
 
         private void StopScanProgressTimer()
@@ -3224,7 +3751,8 @@ namespace PCDiagnosticPro.ViewModels
                 return;
             }
 
-            var increment = ProgressPercent < 30 ? 2 : 1;
+            // Slower increment within phase ceiling (step-based progress)
+            var increment = 1;
             UpdateProgress(Math.Min(_scanProgressCeiling, ProgressPercent + increment), "Progression timer");
         }
 
@@ -3287,5 +3815,57 @@ namespace PCDiagnosticPro.ViewModels
         public string DayDisplay => ScanDate.ToString("dd", CultureInfo.CurrentCulture);
         public string MonthYearDisplay => ScanDate.ToString("MMMM yyyy", CultureInfo.CurrentCulture);
         public string ScoreDisplay => $"{Score}/100 ({Grade})";
+    }
+    
+    /// <summary>
+    /// TÂCHE 6: Item pour affichage tableau des processus (Top RAM / Top CPU)
+    /// </summary>
+    public class ProcessDisplayItem
+    {
+        public int Rank { get; set; }
+        public string ProcessName { get; set; } = "";
+        public double RamUsedMB { get; set; }
+        public string RamUsedDisplay { get; set; } = "";
+        public double RamPercent { get; set; }
+        public double CpuPercent { get; set; }
+        public string CpuDisplay { get; set; } = "";
+        
+        /// <summary>Affichage formaté pour le tableau</summary>
+        public string RamPercentDisplay => RamPercent > 0 ? $"{RamPercent:F1}%" : "-";
+    }
+    
+    /// <summary>
+    /// Entrée du live feed avec niveau (Info/Warning/Error) pour filtrage et couleur
+    /// </summary>
+    public class LiveFeedEntry
+    {
+        public string DisplayText { get; set; } = "";
+        public bool IsError { get; set; }
+        public bool IsWarning { get; set; }
+    }
+    
+    /// <summary>
+    /// Étape de progression du scan (PowerShell, Capteurs, etc.) avec état
+    /// </summary>
+    public class SectionPhaseItem : INotifyPropertyChanged
+    {
+        private string _status = "Pending";
+        public string Status
+        {
+            get => _status;
+            set { _status = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Status))); 
+                  PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusIcon)));
+                  PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusBrush))); }
+        }
+        public string Label { get; set; } = "";
+        public string StatusIcon => _status switch { "Done" => "●", "Running" => "◐", "Warning" => "⚠", _ => "○" };
+        public Brush StatusBrush => _status switch
+        {
+            "Done" => new SolidColorBrush(Color.FromRgb(0x2E, 0xD5, 0x73)),
+            "Running" => new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)),
+            "Warning" => new SolidColorBrush(Color.FromRgb(0xFF, 0xA5, 0x02)),
+            _ => new SolidColorBrush(Color.FromRgb(0x8B, 0x94, 0x9E))
+        };
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }

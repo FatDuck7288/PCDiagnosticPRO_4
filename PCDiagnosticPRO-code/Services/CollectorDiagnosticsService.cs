@@ -117,6 +117,13 @@ namespace PCDiagnosticPro.Services
         {
             var missing = new List<string>();
             
+            // FIX: Guard against non-Object root before TryGetProperty
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                App.LogMessage($"[CollectorDiagnostics] missingData: root is not Object (is {root.ValueKind})");
+                return missing;
+            }
+            
             if (!root.TryGetProperty("missingData", out var mdElement))
             {
                 App.LogMessage("[CollectorDiagnostics] missingData: propriété absente");
@@ -203,11 +210,19 @@ namespace PCDiagnosticPro.Services
         {
             var penalties = new List<PenaltyInfo>();
             
+            // FIX: Guard against non-Object root before TryGetProperty
+            if (root.ValueKind != JsonValueKind.Object)
+                return penalties;
+            
             // Chercher dans scoreV2.topPenalties
             if (!root.TryGetProperty("scoreV2", out var scoreV2))
             {
                 return penalties;
             }
+            
+            // FIX: Guard against non-Object scoreV2 before TryGetProperty
+            if (scoreV2.ValueKind != JsonValueKind.Object)
+                return penalties;
             
             if (!scoreV2.TryGetProperty("topPenalties", out var tpElement))
             {
@@ -327,10 +342,18 @@ namespace PCDiagnosticPro.Services
         {
             var errors = new List<ScanErrorInfo>();
             
+            // FIX: Guard against non-Object root before TryGetProperty
+            if (root.ValueKind != JsonValueKind.Object)
+                return errors;
+            
             if (root.TryGetProperty("errors", out var errArray) && errArray.ValueKind == JsonValueKind.Array)
             {
                 foreach (var err in errArray.EnumerateArray())
                 {
+                    // FIX: Only process if err is an Object
+                    if (err.ValueKind != JsonValueKind.Object)
+                        continue;
+                    
                     var error = new ScanErrorInfo();
                     if (err.TryGetProperty("code", out var c)) error.Code = c.GetString() ?? "";
                     if (err.TryGetProperty("message", out var m)) error.Message = m.GetString() ?? "";

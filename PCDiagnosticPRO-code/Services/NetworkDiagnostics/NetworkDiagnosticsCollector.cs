@@ -21,18 +21,26 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
         private const int PingCount = 30;
         private const int PingTimeoutMs = 1000;
         private const int OperationTimeoutMs = 8000;
-        private const int ThroughputTestBytes = 10 * 1024 * 1024; // 10 MB max
+        private const int ThroughputTestBytes = 25 * 1024 * 1024; // 25 MB max for accurate measurement
         private const int RunCount = 3; // 3 runs, take median
+        private const int UploadTestBytes = 2 * 1024 * 1024; // 2 MB for upload test
 
         private static readonly string[] PingTargets = { "1.1.1.1", "8.8.8.8" };
         private static readonly string[] DnsTestDomains = { 
             "microsoft.com", "cloudflare.com", "google.com", "windows.com", "example.com" 
         };
         
-        // Stable download test URLs (small files, fast mirrors)
+        // Stable download test URLs - use larger files (10MB+) for accurate speed measurement
         private static readonly string[] DownloadTestUrls = {
-            "http://speedtest.tele2.net/1MB.zip",
-            "http://proof.ovh.net/files/1Mb.dat"
+            "http://speedtest.tele2.net/10MB.zip",      // 10 MB - primary
+            "http://proof.ovh.net/files/10Mb.dat",      // 10 Mb = 1.25 MB - fallback
+            "http://speedtest.tele2.net/1MB.zip"       // 1 MB - last resort
+        };
+        
+        // Upload test endpoints that accept POST data
+        private static readonly string[] UploadTestUrls = {
+            "https://httpbin.org/post",
+            "https://postman-echo.com/post"
         };
 
         public async Task<NetworkDiagnosticsResult> CollectAsync(CancellationToken ct = default)
@@ -203,13 +211,14 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
         {
             var result = new ThroughputResult { Available = false };
             var downloadSamples = new List<double>();
+            var uploadSamples = new List<double>();
 
             using var httpClient = new HttpClient
             {
-                Timeout = TimeSpan.FromMilliseconds(OperationTimeoutMs)
+                Timeout = TimeSpan.FromMilliseconds(OperationTimeoutMs * 2) // More time for larger files
             };
 
-            // Try each URL until we get a valid result
+            // === DOWNLOAD TEST ===
             foreach (var url in DownloadTestUrls)
             {
                 if (ct.IsCancellationRequested) break;
@@ -219,7 +228,7 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
                     try
                     {
                         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                        cts.CancelAfter(OperationTimeoutMs);
+                        cts.CancelAfter(OperationTimeoutMs * 2); // 16 seconds for larger files
 
                         var sw = Stopwatch.StartNew();
                         
@@ -229,7 +238,7 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
                         if (!response.IsSuccessStatusCode) continue;
 
                         using var stream = await response.Content.ReadAsStreamAsync();
-                        var buffer = new byte[81920]; // 80KB buffer
+                        var buffer = new byte[131072]; // 128KB buffer for better throughput
                         long totalRead = 0;
                         int bytesRead;
 
@@ -241,10 +250,12 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
 
                         sw.Stop();
 
-                        if (totalRead > 0 && sw.ElapsedMilliseconds > 0)
+                        // Only count if we downloaded at least 500KB (to avoid TCP slow-start distortion)
+                        if (totalRead >= 512 * 1024 && sw.ElapsedMilliseconds > 100)
                         {
                             double mbps = (totalRead * 8.0) / (sw.ElapsedMilliseconds * 1000.0); // Mbps
                             downloadSamples.Add(Math.Round(mbps, 2));
+                            App.LogMessage($"[NetworkDiagnostics] Download sample: {totalRead / 1024}KB in {sw.ElapsedMilliseconds}ms = {mbps:F2} Mbps");
                         }
                     }
                     catch (Exception ex)
@@ -268,9 +279,59 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
                 result.Reason = "download_test_failed";
             }
 
-            // Upload: not available without stable endpoint
-            result.UploadMbpsMedian = null;
-            result.UploadReason = "no_stable_endpoint";
+            // === UPLOAD TEST ===
+            foreach (var url in UploadTestUrls)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                for (int run = 0; run < RunCount && !ct.IsCancellationRequested; run++)
+                {
+                    try
+                    {
+                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        cts.CancelAfter(OperationTimeoutMs);
+
+                        // Generate random data for upload
+                        var uploadData = new byte[UploadTestBytes];
+                        new Random().NextBytes(uploadData);
+
+                        var sw = Stopwatch.StartNew();
+                        
+                        using var content = new ByteArrayContent(uploadData);
+                        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+                        
+                        using var response = await httpClient.PostAsync(url, content, cts.Token);
+                        
+                        sw.Stop();
+
+                        if (response.IsSuccessStatusCode && sw.ElapsedMilliseconds > 100)
+                        {
+                            double mbps = (UploadTestBytes * 8.0) / (sw.ElapsedMilliseconds * 1000.0); // Mbps
+                            uploadSamples.Add(Math.Round(mbps, 2));
+                            App.LogMessage($"[NetworkDiagnostics] Upload sample: {UploadTestBytes / 1024}KB in {sw.ElapsedMilliseconds}ms = {mbps:F2} Mbps");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        App.LogMessage($"[NetworkDiagnostics] Upload test failed ({url}): {ex.Message}");
+                    }
+                }
+
+                if (uploadSamples.Count >= RunCount) break;
+            }
+
+            if (uploadSamples.Count > 0)
+            {
+                uploadSamples.Sort();
+                result.UploadMbpsMedian = uploadSamples[uploadSamples.Count / 2];
+                result.UploadSamples = uploadSamples;
+                result.UploadReason = null; // Success
+            }
+            else
+            {
+                result.UploadMbpsMedian = null;
+                result.UploadReason = "upload_test_failed";
+            }
 
             return result;
         }
@@ -467,6 +528,7 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
         public double? DownloadMbpsMedian { get; set; }
         public List<double>? DownloadSamples { get; set; }
         public double? UploadMbpsMedian { get; set; }
+        public List<double>? UploadSamples { get; set; }
         public string? UploadReason { get; set; }
     }
 

@@ -15,16 +15,16 @@ namespace PCDiagnosticPro.Services
 
             if (sensors != null)
             {
-                metrics.Add(CreateMetric("CPU Temperature (C#)", sensors.Cpu.CpuTempC, sensors.Cpu.CpuTempSource, sensors.CollectedAt));
-                metrics.Add(CreateMetric("GPU Temperature (C#)", sensors.Gpu.GpuTempC, sensors.Gpu.GpuTempC.Source ?? "LibreHardwareMonitor", sensors.CollectedAt));
-                metrics.Add(CreateMetric("GPU Load (C#)", sensors.Gpu.GpuLoadPercent, sensors.Gpu.GpuLoadPercent.Source ?? "LibreHardwareMonitor", sensors.CollectedAt));
-                metrics.Add(CreateMetric("VRAM Total (C#)", sensors.Gpu.VramTotalMB, sensors.Gpu.VramTotalMB.Source ?? "LibreHardwareMonitor", sensors.CollectedAt));
-                metrics.Add(CreateMetric("VRAM Used (C#)", sensors.Gpu.VramUsedMB, sensors.Gpu.VramUsedMB.Source ?? "LibreHardwareMonitor", sensors.CollectedAt));
+                metrics.Add(CreateMetric("CPU Temperature (C#)", "°C", sensors.Cpu.CpuTempC, sensors.Cpu.CpuTempSource, sensors.CollectedAt));
+                metrics.Add(CreateMetric("GPU Temperature (C#)", "°C", sensors.Gpu.GpuTempC, "LibreHardwareMonitor", sensors.CollectedAt));
+                metrics.Add(CreateMetric("GPU Load (C#)", "%", sensors.Gpu.GpuLoadPercent, "LibreHardwareMonitor", sensors.CollectedAt));
+                metrics.Add(CreateMetric("VRAM Total (C#)", "MB", sensors.Gpu.VramTotalMB, "LibreHardwareMonitor", sensors.CollectedAt));
+                metrics.Add(CreateMetric("VRAM Used (C#)", "MB", sensors.Gpu.VramUsedMB, "LibreHardwareMonitor", sensors.CollectedAt));
 
                 foreach (var disk in sensors.Disks)
                 {
                     var diskName = disk.Name.Value ?? "Disk";
-                    metrics.Add(CreateMetric($"Disk Temp (C#) - {diskName}", disk.TempC, disk.TempC.Source ?? "LibreHardwareMonitor", sensors.CollectedAt));
+                    metrics.Add(CreateMetric($"Disk Temp (C#) - {diskName}", "°C", disk.TempC, "LibreHardwareMonitor", sensors.CollectedAt));
                 }
             }
 
@@ -33,12 +33,13 @@ namespace PCDiagnosticPro.Services
             {
                 metrics.Add(new NormalizedMetric
                 {
-                    Name = "Disk Queue Length (PS)",
+                    Notes = "Disk Queue Length (PS)",
                     Value = queueLength?.ToString("F2"),
                     Available = queueLength.HasValue,
                     Source = queueSource ?? "PowerShell",
                     Reason = queueReason,
-                    Timestamp = now
+                    Timestamp = now.ToString("o"),
+                    Unit = "count"
                 });
             }
 
@@ -48,22 +49,24 @@ namespace PCDiagnosticPro.Services
             {
                 metrics.Add(new NormalizedMetric
                 {
-                    Name = "Process List (PS)",
+                    Notes = "Process List (PS)",
                     Available = false,
                     Source = "PowerShell",
                     Reason = processMissingReason,
-                    Timestamp = now
+                    Timestamp = now.ToString("o"),
+                    Unit = "count"
                 });
             }
             else if (TryGetProcessesSource(psRoot, out var processSource))
             {
                 metrics.Add(new NormalizedMetric
                 {
-                    Name = "Process List (PS)",
+                    Notes = "Process List (PS)",
                     Value = "Collected",
                     Available = true,
                     Source = processSource,
-                    Timestamp = now
+                    Timestamp = now.ToString("o"),
+                    Unit = "count"
                 });
             }
 
@@ -73,37 +76,40 @@ namespace PCDiagnosticPro.Services
                 var udis = report.UdisReport;
                 metrics.Add(new NormalizedMetric
                 {
-                    Name = "Network Download (UDIS)",
+                    Notes = "Network Download (UDIS)",
                     Value = udis.DownloadMbps?.ToString("F1"),
                     Available = udis.DownloadMbps.HasValue,
                     Source = "NetworkRealSpeedAnalyzer",
                     Reason = udis.DownloadMbps.HasValue ? null : udis.NetworkRecommendation,
-                    Timestamp = now
+                    Timestamp = now.ToString("o"),
+                    Unit = "Mbps"
                 });
                 metrics.Add(new NormalizedMetric
                 {
-                    Name = "Network Latency (UDIS)",
+                    Notes = "Network Latency (UDIS)",
                     Value = udis.LatencyMs?.ToString("F0"),
                     Available = udis.LatencyMs.HasValue,
                     Source = "NetworkRealSpeedAnalyzer",
                     Reason = udis.LatencyMs.HasValue ? null : udis.NetworkRecommendation,
-                    Timestamp = now
+                    Timestamp = now.ToString("o"),
+                    Unit = "ms"
                 });
             }
 
             return metrics;
         }
 
-        private static NormalizedMetric CreateMetric(string name, MetricValue<double> metric, string source, DateTimeOffset fallbackTimestamp)
+        private static NormalizedMetric CreateMetric(string name, string unit, MetricValue<double> metric, string source, DateTimeOffset fallbackTimestamp)
         {
             return new NormalizedMetric
             {
-                Name = name,
-                Value = metric.Available ? metric.Value?.ToString("F1") : null,
+                Notes = name,
+                Unit = unit,
+                Value = metric.Available ? metric.Value.ToString("F1") : null,
                 Available = metric.Available,
-                Source = metric.Source ?? source,
+                Source = source,
                 Reason = metric.Available ? null : metric.Reason,
-                Timestamp = metric.Timestamp ?? fallbackTimestamp
+                Timestamp = fallbackTimestamp.ToString("o")
             };
         }
 

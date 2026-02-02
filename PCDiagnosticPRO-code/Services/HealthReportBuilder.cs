@@ -226,9 +226,43 @@ namespace PCDiagnosticPro.Services
                     Code = "PARSE_ERROR", 
                     Message = ex.Message 
                 });
+                // Garder le tableau visible : remplir Sections avec des sections minimales
+                // pour que la liste dépliable (Processeur, GPU, etc.) reste affichée.
+                report.Sections = BuildMinimalSections(ex.Message);
             }
             
             return report;
+        }
+
+        /// <summary>
+        /// Construit des sections minimales (une par domaine) quand le parsing JSON échoue,
+        /// pour que le tableau dépliable reste visible dans l'UI au lieu de disparaître.
+        /// </summary>
+        private static List<HealthSection> BuildMinimalSections(string errorMessage)
+        {
+            var sections = new List<HealthSection>();
+            foreach (HealthDomain domain in Enum.GetValues<HealthDomain>())
+            {
+                sections.Add(new HealthSection
+                {
+                    Domain = domain,
+                    DisplayName = DomainDisplayNames[domain],
+                    Icon = DomainIcons[domain],
+                    HasData = false,
+                    Score = 0,
+                    Severity = HealthSeverity.Unknown,
+                    StatusMessage = "Données non disponibles",
+                    CollectionStatus = "PARSE_ERROR",
+                    DetailedExplanation = "L'analyse du rapport a échoué. Les données détaillées ne sont pas disponibles pour ce domaine.",
+                    EvidenceData = new Dictionary<string, string>
+                    {
+                        ["Erreur"] = errorMessage.Length > 200 ? errorMessage.Substring(0, 200) + "…" : errorMessage,
+                        ["Recommandation"] = "Relancer un scan ou vérifier le fichier scan_result_combined.json."
+                    },
+                    SectionRecommendations = new List<string> { "Relancer le diagnostic." }
+                });
+            }
+            return sections;
         }
 
         /// <summary>
@@ -530,7 +564,11 @@ namespace PCDiagnosticPro.Services
         {
             var metadata = new ScanMetadata();
             
-            if (root.TryGetProperty("metadata", out var metaElement))
+            // FIX: Guard against non-Object root before TryGetProperty
+            if (root.ValueKind != JsonValueKind.Object)
+                return metadata;
+            
+            if (root.TryGetProperty("metadata", out var metaElement) && metaElement.ValueKind == JsonValueKind.Object)
             {
                 try
                 {
@@ -539,10 +577,10 @@ namespace PCDiagnosticPro.Services
                     if (metaElement.TryGetProperty("timestamp", out var t) && DateTime.TryParse(t.GetString(), out var dt)) metadata.Timestamp = dt;
                     if (metaElement.TryGetProperty("isAdmin", out var a)) metadata.IsAdmin = a.GetBoolean();
                     if (metaElement.TryGetProperty("redactLevel", out var rl)) metadata.RedactLevel = rl.GetString() ?? "standard";
-                    if (metaElement.TryGetProperty("quickScan", out var q)) metadata.QuickScan = q.GetBoolean();
-                    if (metaElement.TryGetProperty("monitorSeconds", out var m)) metadata.MonitorSeconds = m.GetInt32();
-                    if (metaElement.TryGetProperty("durationSeconds", out var d)) metadata.DurationSeconds = d.GetDouble();
-                    if (metaElement.TryGetProperty("partialFailure", out var p)) metadata.PartialFailure = p.GetBoolean();
+                    if (metaElement.TryGetProperty("quickScan", out var q) && (q.ValueKind == JsonValueKind.True || q.ValueKind == JsonValueKind.False)) metadata.QuickScan = q.GetBoolean();
+                    if (metaElement.TryGetProperty("monitorSeconds", out var m)) metadata.MonitorSeconds = SafeGetInt(m, 0);
+                    if (metaElement.TryGetProperty("durationSeconds", out var d)) metadata.DurationSeconds = SafeGetDouble(d, 0);
+                    if (metaElement.TryGetProperty("partialFailure", out var p) && (p.ValueKind == JsonValueKind.True || p.ValueKind == JsonValueKind.False)) metadata.PartialFailure = p.GetBoolean();
                 }
                 catch (Exception ex)
                 {
@@ -557,25 +595,29 @@ namespace PCDiagnosticPro.Services
         {
             var scoreV2 = new ScoreV2Data();
             
-            if (root.TryGetProperty("scoreV2", out var scoreElement))
+            // FIX: Guard against non-Object root before TryGetProperty
+            if (root.ValueKind != JsonValueKind.Object)
+                return scoreV2;
+            
+            if (root.TryGetProperty("scoreV2", out var scoreElement) && scoreElement.ValueKind == JsonValueKind.Object)
             {
                 try
                 {
-                    if (scoreElement.TryGetProperty("score", out var s)) scoreV2.Score = s.GetInt32();
-                    if (scoreElement.TryGetProperty("baseScore", out var bs)) scoreV2.BaseScore = bs.GetInt32();
-                    if (scoreElement.TryGetProperty("totalPenalty", out var tp)) scoreV2.TotalPenalty = tp.GetInt32();
+                    if (scoreElement.TryGetProperty("score", out var s)) scoreV2.Score = SafeGetInt(s, 100);
+                    if (scoreElement.TryGetProperty("baseScore", out var bs)) scoreV2.BaseScore = SafeGetInt(bs, 100);
+                    if (scoreElement.TryGetProperty("totalPenalty", out var tp)) scoreV2.TotalPenalty = SafeGetInt(tp, 0);
                     if (scoreElement.TryGetProperty("grade", out var g)) scoreV2.Grade = g.GetString() ?? "N/A";
                     
-                    // Breakdown
-                    if (scoreElement.TryGetProperty("breakdown", out var bdElement))
+                    // Breakdown - FIX: check ValueKind before TryGetProperty
+                    if (scoreElement.TryGetProperty("breakdown", out var bdElement) && bdElement.ValueKind == JsonValueKind.Object)
                     {
                         var bd = new ScoreBreakdown();
-                        if (bdElement.TryGetProperty("critical", out var c)) bd.Critical = c.GetInt32();
-                        if (bdElement.TryGetProperty("collectorErrors", out var ce)) bd.CollectorErrors = ce.GetInt32();
-                        if (bdElement.TryGetProperty("warnings", out var w)) bd.Warnings = w.GetInt32();
-                        if (bdElement.TryGetProperty("timeouts", out var to)) bd.Timeouts = to.GetInt32();
-                        if (bdElement.TryGetProperty("infoIssues", out var ii)) bd.InfoIssues = ii.GetInt32();
-                        if (bdElement.TryGetProperty("excludedLimitations", out var el)) bd.ExcludedLimitations = el.GetInt32();
+                        if (bdElement.TryGetProperty("critical", out var c)) bd.Critical = SafeGetInt(c, 0);
+                        if (bdElement.TryGetProperty("collectorErrors", out var ce)) bd.CollectorErrors = SafeGetInt(ce, 0);
+                        if (bdElement.TryGetProperty("warnings", out var w)) bd.Warnings = SafeGetInt(w, 0);
+                        if (bdElement.TryGetProperty("timeouts", out var to)) bd.Timeouts = SafeGetInt(to, 0);
+                        if (bdElement.TryGetProperty("infoIssues", out var ii)) bd.InfoIssues = SafeGetInt(ii, 0);
+                        if (bdElement.TryGetProperty("excludedLimitations", out var el)) bd.ExcludedLimitations = SafeGetInt(el, 0);
                         scoreV2.Breakdown = bd;
                     }
                     
@@ -584,10 +626,14 @@ namespace PCDiagnosticPro.Services
                     {
                         foreach (var penalty in tpArray.EnumerateArray())
                         {
+                            // FIX: check ValueKind before TryGetProperty
+                            if (penalty.ValueKind != JsonValueKind.Object)
+                                continue;
+                            
                             var p = new PenaltyInfo();
                             if (penalty.TryGetProperty("type", out var pt)) p.Type = pt.GetString() ?? "";
                             if (penalty.TryGetProperty("source", out var ps)) p.Source = ps.GetString() ?? "";
-                            if (penalty.TryGetProperty("penalty", out var pp)) p.Penalty = pp.GetInt32();
+                            if (penalty.TryGetProperty("penalty", out var pp)) p.Penalty = SafeGetInt(pp, 0);
                             if (penalty.TryGetProperty("msg", out var pm)) p.Message = pm.GetString() ?? "";
                             scoreV2.TopPenalties.Add(p);
                         }
@@ -614,12 +660,16 @@ namespace PCDiagnosticPro.Services
             // Fallback: calculer depuis summary ou sections
             var score = new ScoreV2Data { Score = 100, BaseScore = 100, Grade = "A" };
             
-            if (root.TryGetProperty("summary", out var summary))
+            // FIX: Guard against non-Object root before TryGetProperty
+            if (root.ValueKind != JsonValueKind.Object)
+                return score;
+            
+            if (root.TryGetProperty("summary", out var summary) && summary.ValueKind == JsonValueKind.Object)
             {
-                if (summary.TryGetProperty("score", out var s)) score.Score = s.GetInt32();
+                if (summary.TryGetProperty("score", out var s)) score.Score = SafeGetInt(s, 100);
                 if (summary.TryGetProperty("grade", out var g)) score.Grade = g.GetString() ?? "A";
-                if (summary.TryGetProperty("criticalCount", out var cc)) score.Breakdown.Critical = cc.GetInt32();
-                if (summary.TryGetProperty("warningCount", out var wc)) score.Breakdown.Warnings = wc.GetInt32();
+                if (summary.TryGetProperty("criticalCount", out var cc)) score.Breakdown.Critical = SafeGetInt(cc, 0);
+                if (summary.TryGetProperty("warningCount", out var wc)) score.Breakdown.Warnings = SafeGetInt(wc, 0);
             }
             
             score.TotalPenalty = 100 - score.Score;
@@ -630,10 +680,18 @@ namespace PCDiagnosticPro.Services
         {
             var errors = new List<ScanErrorInfo>();
             
+            // FIX: Guard against non-Object root before TryGetProperty
+            if (root.ValueKind != JsonValueKind.Object)
+                return errors;
+            
             if (root.TryGetProperty("errors", out var errArray) && errArray.ValueKind == JsonValueKind.Array)
             {
                 foreach (var err in errArray.EnumerateArray())
                 {
+                    // FIX: check ValueKind before TryGetProperty
+                    if (err.ValueKind != JsonValueKind.Object)
+                        continue;
+                    
                     var error = new ScanErrorInfo();
                     if (err.TryGetProperty("code", out var c)) error.Code = c.GetString() ?? "";
                     if (err.TryGetProperty("message", out var m)) error.Message = m.GetString() ?? "";
@@ -649,6 +707,10 @@ namespace PCDiagnosticPro.Services
         private static List<string> ExtractMissingData(JsonElement root)
         {
             var missing = new List<string>();
+            
+            // FIX: Guard against non-Object root before TryGetProperty
+            if (root.ValueKind != JsonValueKind.Object)
+                return missing;
             
             if (root.TryGetProperty("missingData", out var mdArray) && mdArray.ValueKind == JsonValueKind.Array)
             {
@@ -673,12 +735,35 @@ namespace PCDiagnosticPro.Services
                 domainData[domain] = new List<(string, JsonElement, string)>();
             }
             
+            // FIX: Guard against non-Object root elements before calling TryGetProperty
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                App.LogMessage($"[HealthReportBuilder] Warning: root is not Object (is {root.ValueKind}), skipping section parsing");
+                // Return minimal sections for all domains
+                foreach (HealthDomain domain in Enum.GetValues<HealthDomain>())
+                {
+                    sections.Add(new HealthSection
+                    {
+                        Domain = domain,
+                        DisplayName = DomainDisplayNames[domain],
+                        Icon = DomainIcons[domain],
+                        HasData = false,
+                        Score = 0,
+                        Severity = HealthSeverity.Unknown,
+                        StatusMessage = "Données non disponibles",
+                        CollectionStatus = "INVALID_ROOT"
+                    });
+                }
+                return sections;
+            }
+            
             // Parser les sections JSON (scan_powershell.sections ou sections directement)
             JsonElement sectionsElement = default;
             bool hasSections = false;
             
-            // Try scan_powershell.sections first
+            // Try scan_powershell.sections first - FIX: check ValueKind before TryGetProperty
             if (root.TryGetProperty("scan_powershell", out var psRoot) && 
+                psRoot.ValueKind == JsonValueKind.Object &&
                 psRoot.TryGetProperty("sections", out var psSections) && 
                 psSections.ValueKind == JsonValueKind.Object)
             {
@@ -703,10 +788,22 @@ namespace PCDiagnosticPro.Services
                     if (SectionToDomain.TryGetValue(sectionName, out var domain))
                     {
                         var status = "OK";
-                        if (sectionData.TryGetProperty("status", out var statusProp))
-                            status = statusProp.GetString() ?? "OK";
+                        JsonElement data;
+                        
+                        // FIX: Guard against non-Object sectionData - TryGetProperty throws on Arrays
+                        if (sectionData.ValueKind == JsonValueKind.Object)
+                        {
+                            if (sectionData.TryGetProperty("status", out var statusProp))
+                                status = statusProp.GetString() ?? "OK";
                             
-                        var data = sectionData.TryGetProperty("data", out var dataProp) ? dataProp : sectionData;
+                            data = sectionData.TryGetProperty("data", out var dataProp) ? dataProp : sectionData;
+                        }
+                        else
+                        {
+                            // sectionData is Array or other - use as-is
+                            data = sectionData;
+                        }
+                        
                         domainData[domain].Add((sectionName, data, status));
                     }
                 }
@@ -755,17 +852,37 @@ namespace PCDiagnosticPro.Services
                     
                     // === NOUVEAU: Utiliser ComprehensiveEvidenceExtractor pour données complètes ===
                     // Extrait données de: PS sections, sensors C#, diagnostic_signals, network_diagnostics, etc.
-                    var comprehensiveEvidence = ComprehensiveEvidenceExtractor.Extract(domain, root, sensors);
-                    
-                    if (comprehensiveEvidence.Count > 0)
+                    // FIX: Wrap in try-catch to isolate extraction errors per section
+                    try
                     {
-                        section.EvidenceData = comprehensiveEvidence;
-                        section.HasData = true;
+                        var comprehensiveEvidence = ComprehensiveEvidenceExtractor.Extract(domain, root, sensors);
+                        
+                        if (comprehensiveEvidence.Count > 0)
+                        {
+                            section.EvidenceData = comprehensiveEvidence;
+                            section.HasData = true;
+                        }
+                        else if (section.EvidenceData.Count == 0)
+                        {
+                            // Fallback sur l'ancienne méthode si le nouvel extracteur n'a rien trouvé
+                            section.EvidenceData = ExtractEvidenceData(domain, domainData[domain]);
+                        }
                     }
-                    else if (section.EvidenceData.Count == 0)
+                    catch (Exception exEvidence)
                     {
-                        // Fallback sur l'ancienne méthode si le nouvel extracteur n'a rien trouvé
-                        section.EvidenceData = ExtractEvidenceData(domain, domainData[domain]);
+                        App.LogMessage($"[HealthReportBuilder] Warning: Extraction evidence {domain} failed: {exEvidence.Message}");
+                        // Fallback: try the old method
+                        try
+                        {
+                            section.EvidenceData = ExtractEvidenceData(domain, domainData[domain]);
+                        }
+                        catch
+                        {
+                            section.EvidenceData = new Dictionary<string, string>
+                            {
+                                ["Note"] = "Extraction des données impossible pour cette section"
+                            };
+                        }
                     }
                     
                     // Générer le message de statut
@@ -950,11 +1067,11 @@ namespace PCDiagnosticPro.Services
                                         // Charge actuelle (currentLoad or load)
                                         if (firstCpu.TryGetProperty("currentLoad", out var load))
                                         {
-                                            evidence["Charge actuelle"] = $"{load.GetDouble():F0} %";
+                                            evidence["Charge actuelle"] = $"{SafeGetDouble(load, 0):F0} %";
                                         }
                                         else if (firstCpu.TryGetProperty("load", out var load2))
                                         {
-                                            evidence["Charge actuelle"] = $"{load2.GetDouble():F0} %";
+                                            evidence["Charge actuelle"] = $"{SafeGetDouble(load2, 0):F0} %";
                                         }
                                     }
                                 }
@@ -1142,7 +1259,7 @@ namespace PCDiagnosticPro.Services
                                     foreach (var disk in disks.EnumerateArray())
                                     {
                                         diskCount++;
-                                        if (disk.TryGetProperty("sizeGB", out var size)) totalSpace += size.GetDouble();
+                                        if (disk.TryGetProperty("sizeGB", out var size)) totalSpace += SafeGetDouble(size, 0);
                                     }
                                     evidence["Disques"] = diskCount.ToString();
                                     evidence["Capacité totale"] = $"{totalSpace:F0} GB";
@@ -1160,8 +1277,8 @@ namespace PCDiagnosticPro.Services
                                         double sizeGB = 0, freeGB = 0;
                                         
                                         if (vol.TryGetProperty("driveLetter", out var dl)) letter = dl.GetString() ?? "";
-                                        if (vol.TryGetProperty("sizeGB", out var s)) sizeGB = s.GetDouble();
-                                        if (vol.TryGetProperty("freeSpaceGB", out var f)) freeGB = f.GetDouble();
+                                        if (vol.TryGetProperty("sizeGB", out var s)) sizeGB = SafeGetDouble(s, 0);
+                                        if (vol.TryGetProperty("freeSpaceGB", out var f)) freeGB = SafeGetDouble(f, 0);
                                         
                                         double freePercent = sizeGB > 0 ? (freeGB / sizeGB * 100) : 0;
                                         
@@ -1530,6 +1647,22 @@ namespace PCDiagnosticPro.Services
                 return $"{y}-{m}-{d}";
             }
             catch { return wmiDate ?? ""; }
+        }
+        
+        /// <summary>Helper: extrait un int depuis un JsonElement de façon sûre (Number ou String)</summary>
+        private static int SafeGetInt(JsonElement el, int defaultValue = 0)
+        {
+            if (el.ValueKind == JsonValueKind.Number) return el.GetInt32();
+            if (el.ValueKind == JsonValueKind.String && int.TryParse(el.GetString(), out var i)) return i;
+            return defaultValue;
+        }
+        
+        /// <summary>Helper: extrait un double depuis un JsonElement de façon sûre (Number ou String)</summary>
+        private static double SafeGetDouble(JsonElement el, double defaultValue = 0)
+        {
+            if (el.ValueKind == JsonValueKind.Number) return el.GetDouble();
+            if (el.ValueKind == JsonValueKind.String && double.TryParse(el.GetString(), out var d)) return d;
+            return defaultValue;
         }
     }
 }
