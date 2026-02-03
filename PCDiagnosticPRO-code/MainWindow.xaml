@@ -242,8 +242,8 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="100"/>
                         <RowDefinition Height="Auto"/>
-                        <!-- MinHeight=480 pour conteneur ring 450px (RequiredRingSize V2) + marge verticale -->
-                        <RowDefinition Height="*" MinHeight="480"/>
+                        <!-- MinHeight=560 pour conteneur ring 450px + Margin 55 top/bottom pour glow BlurRadius=50 -->
+                        <RowDefinition Height="*" MinHeight="560"/>
                     </Grid.RowDefinitions>
 
                     <!-- ROW 0: Live feed avec pluie de 0/1 en fond, texte au-dessus -->
@@ -310,22 +310,24 @@
                     <!-- ROW 2: ANNEAU DE PROGRESSION - CORRECTION DÉFINITIVE CLIPPING    -->
                     <!-- ================================================================== -->
                     <!-- 
-                    CALCUL REQUIREDRINGSIZE (formule V2 - marge très confortable):
+                    CALCUL REQUIREDRINGSIZE (formule V3 - marge pour BlurRadius hover=50):
                     ─────────────────────────────────────────────────────────────────
                     BaseDiameter     = 300   (rayon 150 × 2)
-                    GlowBlurRadius   = 30    (BlurRadius max sur les effets)
+                    GlowBlurRadius   = 50    (BlurRadius max sur hover effect)
                     StrokeThickMax   = 14    (anneau segmenté)
                     
-                    GlowMargin       = (GlowBlurRadius + StrokeThickMax) × 2 = (30 + 14) × 2 = 88
+                    GlowMargin       = (GlowBlurRadius + StrokeThickMax) × 2 = (50 + 14) × 2 = 128
                     SafetyMargin     = 32    (buffer DPI scaling 150% + arrondis)
                     InternalPadding  = 30    (espace absorbeur dans le Border)
+                    ExternalMargin   = 55    (Margin sur RingRowContainer pour débordement glow)
                     
                     RequiredRingSize = BaseDiameter + GlowMargin + SafetyMargin + InternalPadding
-                                     = 300 + 88 + 32 + 30 = 450
+                                     = 300 + 128 + 32 + 30 = 490 (arrondi à 450 + Margin externe)
+                    RequiredRowHeight = RequiredRingSize + ExternalMargin × 2 = 450 + 110 = 560
                     -->
                     <Grid x:Name="RingRowContainer" Grid.Row="2" ClipToBounds="False" 
                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                          UseLayoutRounding="True">
+                          UseLayoutRounding="True" Margin="55">
                         
                         <!-- CONTENEUR ANTI-CLIPPING: 450x450 = marge très confortable -->
                         <Border x:Name="RingOuterBorder" Width="450" Height="450" 
@@ -554,7 +556,7 @@
                         <TextBlock Grid.Row="0" FontSize="16" FontWeight="Bold"
                                    Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16">
                             <TextBlock.Text>
-                                <MultiBinding StringFormat="📊 {0}">
+                                <MultiBinding StringFormat="{}0}">
                                     <Binding Path="HealthProgressTitle"/>
                                 </MultiBinding>
                             </TextBlock.Text>
@@ -706,7 +708,7 @@
                             <Button Style="{StaticResource FuturisticButton}"
                                     Command="{Binding OpenReportCommand}" Margin="0,0,8,0">
                                 <Button.Content>
-                                    <MultiBinding StringFormat="📄 {0}">
+                                    <MultiBinding StringFormat="{}0}">
                                         <Binding Path="ReportButtonText"/>
                                     </MultiBinding>
                                 </Button.Content>
@@ -714,7 +716,7 @@
                             <Button Style="{StaticResource FuturisticButton}"
                                     Command="{Binding ExportResultsCommand}">
                                 <Button.Content>
-                                    <MultiBinding StringFormat="💾 {0}">
+                                    <MultiBinding StringFormat="{}0}">
                                         <Binding Path="ExportButtonText"/>
                                     </MultiBinding>
                                 </Button.Content>
@@ -750,7 +752,7 @@
                     <TextBlock Grid.Row="0" FontSize="24" FontWeight="Bold"
                                Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,20">
                         <TextBlock.Text>
-                            <MultiBinding StringFormat="📊 {0}">
+                            <MultiBinding StringFormat="{}0}">
                                 <Binding Path="ResultsHistoryTitle"/>
                             </MultiBinding>
                         </TextBlock.Text>
@@ -843,7 +845,7 @@
                             <TextBlock FontSize="24" FontWeight="Bold"
                                        Foreground="{StaticResource TextPrimaryBrush}">
                                 <TextBlock.Text>
-                                    <MultiBinding StringFormat="📊 {0}">
+                                    <MultiBinding StringFormat="{}0}">
                                         <Binding Path="ResultsDetailTitle"/>
                                     </MultiBinding>
                                 </TextBlock.Text>
@@ -942,7 +944,6 @@
                                                     <TextBlock Text="⚠️" FontSize="12" Margin="0,0,4,0"/>
                                                     <TextBlock Text="{Binding CollectionStatusBadgeText}" FontSize="11" FontWeight="SemiBold" Foreground="#E65100"/>
                                                     <TextBlock Text="{Binding CollectorErrorsLogicalDisplay}" FontSize="10" Foreground="#BF360C" Margin="8,0,0,0"/>
-                                                    <TextBlock Text=" 🔍" FontSize="10" Foreground="#E65100" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Button>
                                             <TextBlock Text="{Binding GlobalHealthMessage}" FontSize="12" TextWrapping="Wrap"
@@ -1013,7 +1014,7 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="🌐 Speed Test Réseau" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                <TextBlock Grid.Column="0" Text="Speed Test Réseau" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding NetworkSpeedTier}" FontSize="11" 
                                                            Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                                 <Button Grid.Column="2" Content="🔄 Tester" Command="{Binding RunSpeedTestCommand}" 
@@ -1165,11 +1166,11 @@
                                                                         <ColumnDefinition Width="*"/>
                                                                         <ColumnDefinition Width="Auto"/>
                                                                     </Grid.ColumnDefinitions>
-                                                                    <TextBlock Grid.Column="0" Text="📄 Données analysées" FontWeight="SemiBold" FontSize="11"
+                                                                    <TextBlock Grid.Column="0" Text="Données analysées" FontWeight="SemiBold" FontSize="11"
                                                                                Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                                                                     
                                                                     <!-- Bouton "Voir détails" pour Pilotes -->
-                                                                    <Button Grid.Column="1" Content="🔧 Voir tous les pilotes"
+                                                                    <Button Grid.Column="1" Content="Voir tous les pilotes"
                                                                             Command="{Binding DataContext.OpenDriversDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             Background="{StaticResource AccentBlueBrush}"
                                                                             FontSize="10" Padding="10,4" Cursor="Hand">
@@ -1186,7 +1187,7 @@
                                                                     </Button>
                                                                     
                                                                     <!-- Bouton "Voir détails" pour Applications -->
-                                                                    <Button Grid.Column="1" Content="📦 Voir toutes les apps"
+                                                                    <Button Grid.Column="1" Content="Voir toutes les apps"
                                                                             Command="{Binding DataContext.OpenAppsDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             Background="{StaticResource AccentBlueBrush}"
                                                                             FontSize="10" Padding="10,4" Cursor="Hand">
@@ -1297,7 +1298,7 @@
                                                                         </Style>
                                                                     </Border.Style>
                                                                     <StackPanel>
-                                                                        <TextBlock Text="⚙️ Top 5 processus RAM" FontWeight="SemiBold" FontSize="11"
+                                                                        <TextBlock Text="Top 5 processus RAM" FontWeight="SemiBold" FontSize="11"
                                                                                    Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
                                                                         <Grid>
                                                                             <Grid.ColumnDefinitions>
@@ -1348,7 +1349,7 @@
                                                                         </Style>
                                                                     </Border.Style>
                                                                     <StackPanel>
-                                                                        <TextBlock Text="🔥 Top 5 processus CPU" FontWeight="SemiBold" FontSize="11"
+                                                                        <TextBlock Text="Top 5 processus CPU" FontWeight="SemiBold" FontSize="11"
                                                                                    Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
                                                                         <Grid>
                                                                             <Grid.ColumnDefinitions>
@@ -1386,7 +1387,7 @@
                                                                 </Border>
                                                                 
                                                                 <!-- Recommandations -->
-                                                                <TextBlock Text="💡 Recommandations" FontWeight="SemiBold" FontSize="11"
+                                                                <TextBlock Text="Recommandations" FontWeight="SemiBold" FontSize="11"
                                                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,12,0,6"
                                                                            Visibility="{Binding SectionRecommendations.Count, Converter={StaticResource BoolToVisibility}}"/>
                                                                 <ItemsControl ItemsSource="{Binding SectionRecommendations}">
@@ -1444,7 +1445,7 @@
 
                     <!-- BOUTON RAPPORT INTÉGRALE CENTRÉ EN BAS -->
                     <Border Grid.Row="2" Padding="0,15,0,10">
-                        <Button Content="📄 Rapport intégrale" 
+                        <Button Content="Rapport intégrale" 
                                 Style="{StaticResource FuturisticButton}"
                                 Command="{Binding OpenReportTxtCommand}"
                                 HorizontalAlignment="Center"
@@ -1469,7 +1470,7 @@
                         <TextBlock FontSize="24" FontWeight="Bold"
                                    Foreground="{StaticResource TextPrimaryBrush}">
                             <TextBlock.Text>
-                                <MultiBinding StringFormat="📦 {0}">
+                                <MultiBinding StringFormat="{}0}">
                                     <Binding Path="ArchivesTitle"/>
                                 </MultiBinding>
                             </TextBlock.Text>

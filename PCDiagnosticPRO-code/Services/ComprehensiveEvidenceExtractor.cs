@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Management;
 using System.Text.Json;
 using PCDiagnosticPro.Models;
 
@@ -108,7 +109,7 @@ namespace PCDiagnosticPro.Services
         private static ExtractionResult ExtractOS(JsonElement root, HardwareSensorsResult? sensors)
         {
             var ev = new Dictionary<string, string>();
-            int expected = 10;
+            int expected = 9; // Secure Boot retiré (affiché dans Sécurité)
             
             // === PS: sections.OS ===
             var osData = GetSectionData(root, "OS");
@@ -166,89 +167,9 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "Uptime", "lastBootUpTime absent");
             }
 
-            // 4. Secure Boot (Oui/Non, PAS "—")
-            // MachineIdentity.secureBoot (prioritaire) ou Security (fallback)
-            var secData = GetSectionData(root, "Security");
+            // 4. Secure Boot - RETIRÉ de la section OS (déjà affiché dans section Sécurité)
             var machineIdData = GetSectionData(root, "MachineIdentity");
-            
-            // Priorité: MachineIdentity.secureBoot > Security.secureBootEnabled
-            var secureBoot = GetBool(machineIdData, "secureBoot") ?? 
-                             GetBool(secData, "secureBootEnabled") ?? 
-                             GetBool(secData, "SecureBootEnabled");
-            
-            string secureBootSource = machineIdData.HasValue && GetBool(machineIdData, "secureBoot").HasValue 
-                ? "MachineIdentity.secureBoot" 
-                : "Security.secureBootEnabled";
-            AddYesNo(ev, "Secure Boot", secureBoot, secureBootSource);
-
-            // 5. Antivirus actif + état
-            // antivirusProducts peut être string ou array
-            string? avName = null;
-            string? avStatus = null;
-            
-            if (secData.HasValue && secData.Value.TryGetProperty("antivirusProducts", out var avProductsProp))
-            {
-                // Case 1: String (actual PS output for single AV)
-                if (avProductsProp.ValueKind == JsonValueKind.String)
-                {
-                    avName = avProductsProp.GetString();
-                }
-                // Case 2: Array (multiple AV products)
-                else if (avProductsProp.ValueKind == JsonValueKind.Array)
-                {
-                    var firstAv = avProductsProp.EnumerateArray().FirstOrDefault();
-                    if (firstAv.ValueKind == JsonValueKind.Object)
-                    {
-                        avName = GetString(firstAv, "displayName") ?? GetString(firstAv, "name");
-                        avStatus = GetString(firstAv, "productState") ?? GetString(firstAv, "status");
-                    }
-                    else if (firstAv.ValueKind == JsonValueKind.String)
-                    {
-                        avName = firstAv.GetString();
-                    }
-                }
-            }
-            
-            // Fallback to direct properties
-            if (string.IsNullOrEmpty(avName))
-            {
-                avName = GetString(secData, "antivirusName") ?? GetString(secData, "avName") ?? GetString(secData, "AntivirusName");
-            }
-            if (string.IsNullOrEmpty(avStatus))
-            {
-                avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus") ?? GetString(secData, "AntivirusStatus");
-            }
-            
-            // defenderEnabled/defenderRTP comme indicateurs de statut
-            if (string.IsNullOrEmpty(avStatus) && secData.HasValue)
-            {
-                var defenderEnabled = GetBool(secData, "defenderEnabled");
-                var defenderRTP = GetBool(secData, "defenderRTP");
-                if (defenderEnabled == true || defenderRTP == true)
-                {
-                    avStatus = "Actif";
-                }
-                else if (defenderEnabled == false)
-                {
-                    avStatus = "Désactivé";
-                }
-            }
-            
-            if (!string.IsNullOrEmpty(avName))
-            {
-                var icon = avStatus?.ToLower() switch
-                {
-                    "enabled" or "on" or "actif" or "à jour" => "✅",
-                    "disabled" or "off" or "inactif" or "désactivé" => "⚠️",
-                    _ => "✅" // Default to OK if AV is present
-                };
-                var avInfo = !string.IsNullOrEmpty(avStatus) ? $"{icon} {avName} ({avStatus})" : $"{icon} {avName}";
-                Add(ev, "Antivirus", avInfo, "scan_powershell.sections.Security.data.antivirusProducts");
-            }
-            else
-            {
-                AddUnknown(ev, "Antivirus", "données AV absentes");
-            }
+            // 5. Antivirus - RETIRÉ de la section OS (déjà affiché dans section Sécurité)
 
             // 6. Espace libre C: (total / libre / %)
             // Supporte "letter" (sortie PS) et "driveLetter" comme alias
@@ -291,7 +212,7 @@ namespace PCDiagnosticPro.Services
             
             if (pendingCount.HasValue)
             {
-                var status = pendingCount.Value > 0 ? $"⚠️ {pendingCount.Value} en attente" : "✅ Système à jour";
+                var status = pendingCount.Value > 0 ? $"{pendingCount.Value} en attente" : "Système à jour";
                 Add(ev, "Updates Windows", status, "scan_powershell.sections.WindowsUpdate.data.pendingCount");
             }
             else
@@ -318,11 +239,11 @@ namespace PCDiagnosticPro.Services
             
             if (errorSummary.Count > 0)
             {
-                Add(ev, "Erreurs critiques", $"⚠️ {string.Join(", ", errorSummary)}", "diagnostic_signals.*");
+                Add(ev, "Erreurs critiques", string.Join(", ", errorSummary), "diagnostic_signals.*");
             }
             else if (signals.HasValue)
             {
-                Add(ev, "Erreurs critiques", "✅ Aucune détectée", "diagnostic_signals.*");
+                Add(ev, "Erreurs critiques", "Aucune détectée", "diagnostic_signals.*");
             }
             else
             {
@@ -349,13 +270,34 @@ namespace PCDiagnosticPro.Services
 
             // === SECTION A3: Carte mère (demande user 2026-01-31) ===
             var sysInfo = GetSectionData(root, "SystemInfo");
-            // 12. Modèle carte mère
+            // 12. Modèle carte mère - PS fallback puis WMI
             var mbProduct = GetString(sysInfo, "MotherboardProduct") ?? GetString(sysInfo, "motherboardProduct");
             var mbManufacturer = GetString(sysInfo, "MotherboardManufacturer") ?? GetString(sysInfo, "motherboardManufacturer") ?? GetString(sysInfo, "Manufacturer");
+            
+            // Fallback WMI Win32_BaseBoard si PS n'a pas collecté
+            if (string.IsNullOrEmpty(mbProduct))
+            {
+                try
+                {
+                    using var searcher = new System.Management.ManagementObjectSearcher("SELECT Product, Manufacturer FROM Win32_BaseBoard");
+                    foreach (var obj in searcher.Get())
+                    {
+                        mbProduct = obj["Product"]?.ToString();
+                        if (string.IsNullOrEmpty(mbManufacturer))
+                            mbManufacturer = obj["Manufacturer"]?.ToString();
+                        break;
+                    }
+                }
+                catch { /* WMI fallback silencieux */ }
+            }
+            
             if (!string.IsNullOrEmpty(mbProduct))
             {
                 var mbDisplay = !string.IsNullOrEmpty(mbManufacturer) ? $"{mbManufacturer} {mbProduct}" : mbProduct;
-                Add(ev, "Carte mère", mbDisplay, "scan_powershell.sections.SystemInfo.data.MotherboardProduct");
+                var source = GetString(sysInfo, "MotherboardProduct") != null 
+                    ? "scan_powershell.sections.SystemInfo.data.MotherboardProduct"
+                    : "WMI Win32_BaseBoard";
+                Add(ev, "Carte mère", mbDisplay, source);
             }
             else
                 AddUnknown(ev, "Carte mère", "MotherboardProduct absent");
@@ -459,7 +401,7 @@ namespace PCDiagnosticPro.Services
             if (sensors?.Cpu?.CpuTempC?.Available == true && sensors.Cpu.CpuTempC.Value > 0)
             {
                 var temp = sensors.Cpu.CpuTempC.Value;
-                var status = temp > 85 ? " 🔥 Critique" : temp > 70 ? " ⚠️ Élevée" : " ✅";
+                var status = temp > 85 ? " 🔥 Critique" : temp > 70 ? " ⚠️ Élevée" : "";
                 var source = !string.IsNullOrEmpty(sensors.Cpu.CpuTempSource) ? $" ({sensors.Cpu.CpuTempSource})" : "";
                 Add(ev, "Température CPU", $"{temp:F0}°C{status}{source}", "sensors_csharp.cpu.cpuTempC.value");
             }
@@ -519,11 +461,11 @@ namespace PCDiagnosticPro.Services
                     if (detected)
                     {
                         var reasonStr = !string.IsNullOrEmpty(reason) ? $" ({reason})" : "";
-                        Add(ev, "Throttling", $"⚠️ Oui{reasonStr}", "diagnostic_signals.cpu_throttle");
+                        Add(ev, "Throttling", $"Oui{reasonStr}", "diagnostic_signals.cpu_throttle");
                     }
                     else
                     {
-                        Add(ev, "Throttling", "✅ Non détecté", "diagnostic_signals.cpu_throttle");
+                        Add(ev, "Throttling", "Non détecté", "diagnostic_signals.cpu_throttle");
                     }
                 }
                 else
@@ -773,7 +715,7 @@ namespace PCDiagnosticPro.Services
             if (sensors?.Gpu?.GpuTempC?.Available == true)
             {
                 var temp = sensors.Gpu.GpuTempC.Value;
-                var status = temp > 85 ? " 🔥 Critique" : temp > 75 ? " ⚠️ Élevée" : " ✅";
+                var status = temp > 85 ? " 🔥 Critique" : temp > 75 ? " ⚠️ Élevée" : "";
                 // Affiche la source de température pour debug
                 var source = sensors.Gpu.GpuTempSource ?? "LHM";
                 Add(ev, "Température GPU", $"{temp:F0}°C{status}", $"sensors_csharp.gpu.gpuTempC ({source})");
@@ -795,7 +737,7 @@ namespace PCDiagnosticPro.Services
                 var tdrCount = GetSignalInt(signals.Value, "tdr_video", "count");
                 if (tdrCount.HasValue)
                 {
-                    Add(ev, "TDR (crashes GPU)", tdrCount > 0 ? $"⚠️ {tdrCount} détecté(s)" : "✅ Aucun", "diagnostic_signals.tdr_video.count");
+                    Add(ev, "TDR (crashes GPU)", tdrCount > 0 ? $"{tdrCount} détecté(s)" : "Aucun", "diagnostic_signals.tdr_video.count");
                 }
             }
 
@@ -919,8 +861,8 @@ namespace PCDiagnosticPro.Services
                         if (matchingDisk?.TempC?.Available == true)
                         {
                             var temp = matchingDisk.TempC.Value;
-                            var emoji = temp < 45 ? "✅" : temp < 55 ? "⚡" : "⚠️";
-                            tempInfo = $" {emoji}{temp:F0}°C";
+                            var emoji = temp < 45 ? "" : temp < 55 ? "⚡" : "⚠️";
+                            tempInfo = string.IsNullOrEmpty(emoji) ? $" {temp:F0}°C" : $" {emoji}{temp:F0}°C";
                         }
                     }
                     
@@ -942,10 +884,10 @@ namespace PCDiagnosticPro.Services
                     .Where(d => d.TempC?.Available == true)
                     .Select(d => {
                         var temp = d.TempC.Value;
-                        var emoji = temp < 45 ? "✅" : temp < 55 ? "⚡" : "⚠️";
+                        var emoji = temp < 45 ? "" : temp < 55 ? "⚡" : "⚠️";
                         var shortName = d.Name?.Value?.Split('_')[0] ?? "Disk";
                         if (shortName.Length > 15) shortName = shortName.Substring(0, 15) + "..";
-                        return $"{shortName}: {emoji}{temp:F0}°C";
+                        return string.IsNullOrEmpty(emoji) ? $"{shortName}: {temp:F0}°C" : $"{shortName}: {emoji}{temp:F0}°C";
                     })
                     .Take(5);
                 var tempsStr = string.Join(" | ", tempsWithEmoji);
@@ -960,8 +902,8 @@ namespace PCDiagnosticPro.Services
                     .Max();
                 if (maxTemp > 0)
                 {
-                    var emoji = maxTemp < 45 ? "✅" : maxTemp < 55 ? "⚡" : "⚠️";
-                    Add(ev, "TempMax Disques", $"{emoji} {maxTemp:F0}°C", "sensors_csharp.disks (max)");
+                    var emoji = maxTemp < 45 ? "" : maxTemp < 55 ? "⚡" : "⚠️";
+                    Add(ev, "TempMax Disques", string.IsNullOrEmpty(emoji) ? $"{maxTemp:F0}°C" : $"{emoji} {maxTemp:F0}°C", "sensors_csharp.disks (max)");
                 }
             }
 
@@ -977,7 +919,7 @@ namespace PCDiagnosticPro.Services
                     var predictFailure = GetBool(smartDisks, "predictFailure");
                     if (predictFailure.HasValue)
                     {
-                        var icon = predictFailure.Value ? "⚠️ Défaillance prédite" : "✅ OK";
+                        var icon = predictFailure.Value ? "⚠️ Défaillance prédite" : "OK";
                         Add(ev, "Santé SMART", icon, "scan_powershell.sections.SmartDetails.data.disks.predictFailure");
                         smartFound = true;
                     }
@@ -990,12 +932,12 @@ namespace PCDiagnosticPro.Services
                     {
                         var icon = healthStatus.ToLower() switch
                         {
-                            "ok" or "healthy" or "good" or "passed" => "✅",
+                            "ok" or "healthy" or "good" or "passed" => "",
                             "caution" or "warning" => "⚠️",
                             "bad" or "failed" or "failing" => "❌",
                             _ => "❓"
                         };
-                        Add(ev, "Santé SMART", $"{icon} {healthStatus}", "scan_powershell.sections.SmartDetails.data.overallHealth");
+                        Add(ev, "Santé SMART", string.IsNullOrEmpty(icon) ? healthStatus : $"{icon} {healthStatus}", "scan_powershell.sections.SmartDetails.data.overallHealth");
                         smartFound = true;
                     }
                 }
@@ -1007,7 +949,7 @@ namespace PCDiagnosticPro.Services
                 var predictFailure = GetBool(storageSmart, "predictFailure");
                 if (predictFailure.HasValue)
                 {
-                    var icon = predictFailure.Value ? "⚠️ Défaillance prédite" : "✅ OK";
+                    var icon = predictFailure.Value ? "⚠️ Défaillance prédite" : "OK";
                     Add(ev, "Santé SMART", icon, "scan_powershell.sections.Storage.data.smart.predictFailure");
                     smartFound = true;
                 }
@@ -1016,7 +958,7 @@ namespace PCDiagnosticPro.Services
             if (!smartFound)
             {
                 if (sensors?.Disks?.Count > 0)
-                    Add(ev, "Santé SMART", "✅ Capteurs C# détectés", "sensors_csharp.disks");
+                    Add(ev, "Santé SMART", "Capteurs C# détectés", "sensors_csharp.disks");
                 else
                     AddUnknown(ev, "Santé SMART", "SmartDetails absent");
             }
@@ -1038,9 +980,9 @@ namespace PCDiagnosticPro.Services
                     if (!string.IsNullOrEmpty(letter) && sizeGB.HasValue && sizeGB > 0)
                     {
                         var pct = freeGB.HasValue ? (freeGB.Value / sizeGB.Value * 100) : 0;
-                        var alert = pct < 10 ? "⚠️" : pct < 20 ? "⚡" : "✅";
+                        var alert = pct < 10 ? "⚠️" : pct < 20 ? "⚡" : "";
                         var freeStr = freeGB.HasValue ? $"{freeGB.Value:F0}" : "?";
-                        volList.Add($"{letter}: {freeStr}/{sizeGB.Value:F0}GB {alert}");
+                        volList.Add(string.IsNullOrEmpty(alert) ? $"{letter}: {freeStr}/{sizeGB.Value:F0}GB" : $"{letter}: {freeStr}/{sizeGB.Value:F0}GB {alert}");
                     }
                 }
                 if (volList.Count > 0)
@@ -1276,7 +1218,7 @@ namespace PCDiagnosticPro.Services
                     ?? GetDouble(netQualityValue, "LatencyMsP95");
                 if (latency.HasValue)
                 {
-                    var status = latency > 100 ? " ⚠️ Élevée" : latency > 50 ? " ⚡" : " ✅";
+                    var status = latency > 100 ? " ⚠️ Élevée" : latency > 50 ? " ⚡" : "";
                     Add(ev, "Latence (ping)", $"{latency.Value:F0} ms{status}", "network_diagnostics.LatencyMsP50");
                     hasNetDiagData = true;
                 }
@@ -1297,7 +1239,7 @@ namespace PCDiagnosticPro.Services
                     ?? GetDouble(netQualityValue, "PacketLossPercent");
                 if (loss.HasValue)
                 {
-                    var status = loss > 1 ? " ⚠️" : " ✅";
+                    var status = loss > 1 ? " ⚠️" : "";
                     Add(ev, "Perte paquets", $"{loss.Value:F1}%{status}", "network_diagnostics.PacketLossPercent");
                     hasNetDiagData = true;
                 }
@@ -1327,12 +1269,12 @@ namespace PCDiagnosticPro.Services
                 {
                     var icon = verdict.ToLower() switch
                     {
-                        "excellent" => "✅",
+                        "excellent" => "",
                         "good" or "bon" => "👍",
                         "fair" or "moyen" => "⚡",
                         _ => "⚠️"
                     };
-                    Add(ev, "Qualité connexion", $"{icon} {verdict}", "diagnostic_signals.networkQuality.ConnectionVerdict");
+                    Add(ev, "Qualité connexion", string.IsNullOrEmpty(icon) ? verdict : $"{icon} {verdict}", "diagnostic_signals.networkQuality.ConnectionVerdict");
                     hasNetDiagData = true;
                 }
             }
@@ -1364,7 +1306,7 @@ namespace PCDiagnosticPro.Services
                 var bsodCodes = GetSignalString(signals.Value, "bsod_minidump", "codes");
                 if (bsodCount.HasValue)
                 {
-                    var info = bsodCount == 0 ? "✅ Aucun" : $"⚠️ {bsodCount} crash(es)";
+                    var info = bsodCount == 0 ? "Aucun" : $"{bsodCount} crash(es)";
                     if (bsodCount > 0 && !string.IsNullOrEmpty(bsodCodes) && bsodCodes != "[]")
                         info += $" - Codes: {bsodCodes}";
                     Add(ev, "BSOD", info, "diagnostic_signals.bsod_minidump");
@@ -1377,14 +1319,14 @@ namespace PCDiagnosticPro.Services
                 // 2. WHEA
                 var wheaCount = GetSignalInt(signals.Value, "whea_errors", "count");
                 if (wheaCount.HasValue)
-                    Add(ev, "Erreurs WHEA", wheaCount == 0 ? "✅ Aucune" : $"⚠️ {wheaCount} (30 jours)", "diagnostic_signals.whea_errors");
+                    Add(ev, "Erreurs WHEA", wheaCount == 0 ? "Aucune" : $"{wheaCount} (30 jours)", "diagnostic_signals.whea_errors");
                 else
                     AddUnknown(ev, "Erreurs WHEA", "signal absent");
 
                 // 3. Kernel-Power
                 var kpCount = GetSignalInt(signals.Value, "kernel_power", "count");
                 if (kpCount.HasValue)
-                    Add(ev, "Kernel-Power", kpCount == 0 ? "✅ Aucun" : $"⚠️ {kpCount} événement(s)", "diagnostic_signals.kernel_power");
+                    Add(ev, "Kernel-Power", kpCount == 0 ? "Aucun" : $"{kpCount} événement(s)", "diagnostic_signals.kernel_power");
                 else
                     AddUnknown(ev, "Kernel-Power", "signal absent");
             }
@@ -1649,12 +1591,12 @@ namespace PCDiagnosticPro.Services
         #endregion
 
         #region Applications
-        // Champs: TotalInstallées, Récentes, Démarrage, TopCPU, TopRAM
+        // Champs: TotalInstallées, Récentes, Démarrage (TopCPU/TopRAM retirés car redondants)
 
         private static ExtractionResult ExtractApplications(JsonElement root)
         {
             var ev = new Dictionary<string, string>();
-            int expected = 5;
+            int expected = 3; // Top CPU/RAM retirés
             
             // === PS: InstalledApplications ===
             var appData = GetSectionData(root, "InstalledApplications");
@@ -1726,14 +1668,8 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "Programmes démarrage", "StartupPrograms absent");
             }
 
-            // 4-5. Top CPU/RAM
-            var topCpu = GetTopProcesses(root, "cpu", 5);
-            if (topCpu.Count > 0)
-                Add(ev, "Top CPU", string.Join(", ", topCpu), "process_telemetry.topCpu");
-            
-            var topMem = GetTopProcesses(root, "memory", 5);
-            if (topMem.Count > 0)
-                Add(ev, "Top RAM", string.Join(", ", topMem), "process_telemetry.topMemory");
+            // 4-5. Top CPU/RAM - RETIRÉ car déjà affiché dans les mini-tableaux Top 5 de la section Applications
+            // et "Top RAM" est redondant avec la section Mémoire
 
             return new ExtractionResult { Evidence = ev, ExpectedFields = expected, ActualFields = CountActualFields(ev) };
         }

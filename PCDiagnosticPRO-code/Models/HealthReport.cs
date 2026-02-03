@@ -263,6 +263,12 @@ namespace PCDiagnosticPro.Models
                 "vram" or "vram totale" => "VRAM : Mémoire vidéo dédiée de la carte graphique. Différente de la RAM système. Utilisée pour les textures, rendus 3D, buffers vidéo, etc.",
                 "vram dédiée utilisée" => "VRAM Dédiée : Mémoire GPU réellement utilisée à cet instant. Cette valeur correspond à ce qu'affiche le Gestionnaire des tâches sous 'Mémoire GPU dédiée'. C'est la mémoire physique de votre carte graphique en cours d'utilisation.",
                 "vram allouée (commit)" => "VRAM Allouée/Committed : Mémoire réservée par les applications pour le GPU. Cette valeur peut être significativement plus élevée que la VRAM dédiée car elle inclut les allocations prévues, les buffers, et la mémoire partagée. Pour la valeur exacte de mémoire GPU utilisée, référez-vous au Gestionnaire des tâches ou GPU-Z.",
+                "tdr" or "tdr 30j" or "tdr video" or "tdr (crashes gpu)" => 
+                    "TDR (Timeout Detection and Recovery)\n\n" +
+                    "Définition : Mécanisme Windows qui détecte quand le pilote graphique ne répond plus et tente de le réinitialiser sans redémarrer le système.\n\n" +
+                    "Importance : Des TDR fréquents indiquent un problème avec le pilote graphique, une surchauffe GPU, un overclocking instable, ou un matériel défaillant.\n\n" +
+                    "Risques : Écran noir temporaire, perte de travail non sauvegardé, et dans les cas graves, BSOD.\n\n" +
+                    "Que faire : Mettez à jour le pilote graphique, vérifiez la température GPU, désactivez l'overclocking si présent, ou testez avec une autre carte graphique.",
                 
                 // CPU
                 "température cpu" or "temp cpu" => "Température CPU : <70°C = Normal, 70-85°C = Élevée (surveiller), >85°C = Critique (throttling activé).",
@@ -321,8 +327,7 @@ namespace PCDiagnosticPro.Models
         
         /// <summary>
         /// Détermine si l'icône info "i" doit être affichée.
-        /// Certains champs n'ont pas besoin d'icône explicative (ex: Antivirus, Temp GPU, VRAM).
-        /// Selon Modèle.png, on affiche le "i" uniquement pour les termes de sécurité nécessitant explication.
+        /// On affiche le "i" UNIQUEMENT pour les termes techniques nécessitant une explication détaillée.
         /// </summary>
         public bool ShouldShowInfoIcon
         {
@@ -330,27 +335,27 @@ namespace PCDiagnosticPro.Models
             {
                 if (!HasTooltip) return false;
                 
-                // Liste des clés qui NE doivent PAS afficher l'icône "i" selon les règles métier
-                var keysWithoutInfoIcon = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                // Liste des clés qui DOIVENT afficher l'icône "i" (termes techniques nécessitant explication)
+                var keysWithInfoIcon = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    // Règle C2: Supprimer "i" pour ces champs
-                    "Antivirus",
-                    "Température GPU", "Temp GPU",
-                    "VRAM", "VRAM Totale", "VRAM totale",
-                    "VRAM Dédiée Utilisée", "VRAM dédiée utilisée",
-                    "VRAM Allouée (Commit)", "VRAM allouée (commit)",
-                    // Champs factuels ne nécessitant pas d'explication
-                    "Version Windows", "Architecture", "Uptime",
-                    "Modèle", "Cœurs / Threads", "Cœurs", "Fréquence max", "Fréquence actuelle",
-                    "Charge CPU", "Température CPU",
-                    "Nom", "Fabricant", "Version pilote", "Date pilote", "Résolution", "Charge GPU",
-                    "RAM Totale", "RAM Utilisée", "Pression mémoire", "Top consommateur",
-                    "Type", "Capacité", "Espace libre", "Santé SMART",
-                    "Connexion", "Adresse IP", "Passerelle", "Latence", "Download", "Upload",
-                    "Processus total", "Services"
+                    // Stabilité système - termes techniques
+                    "BSOD", "BSOD 30j", "Erreurs WHEA", "WHEA", "Kernel-Power", 
+                    "Points de restauration", "Âge dernier point",
+                    
+                    // Sécurité - termes techniques
+                    "BitLocker", "Secure Boot", "UAC", "RDP", "SMBv1",
+                    
+                    // GPU - termes techniques
+                    "TDR", "TDR 30j", "TDR (crashes GPU)", "TDR video",
+                    
+                    // CPU - termes techniques  
+                    "Throttling",
+                    
+                    // Performance - termes techniques
+                    "Bottlenecks", "Bottleneck", "RAM pressure", "CPU bound", "Disk saturation"
                 };
                 
-                return !keysWithoutInfoIcon.Contains(Key);
+                return keysWithInfoIcon.Contains(Key);
             }
         }
         
@@ -370,9 +375,19 @@ namespace PCDiagnosticPro.Models
                 // Positif: TDR "Aucun" = pas de crash GPU = vert
                 if (Key.IndexOf("TDR", StringComparison.OrdinalIgnoreCase) >= 0 && v.Contains("aucun"))
                     return "☑";
+                // Positif: Stabilité (BSOD, WHEA, Kernel-Power) "Aucun/Aucune" = vert
+                if ((Key.IndexOf("BSOD", StringComparison.OrdinalIgnoreCase) >= 0 || Key.IndexOf("WHEA", StringComparison.OrdinalIgnoreCase) >= 0 || Key.IndexOf("Kernel-Power", StringComparison.OrdinalIgnoreCase) >= 0) &&
+                    (v == "aucun" || v == "aucune"))
+                    return "☑";
+                // Avertissement: Stabilité avec erreurs (crash, événement, 30 jours)
+                if ((Key.IndexOf("BSOD", StringComparison.OrdinalIgnoreCase) >= 0 || Key.IndexOf("WHEA", StringComparison.OrdinalIgnoreCase) >= 0 || Key.IndexOf("Kernel-Power", StringComparison.OrdinalIgnoreCase) >= 0) &&
+                    (v.Contains("crash") || v.Contains("événement") || v.Contains("jours")))
+                    return "⚠";
                 
-                // États positifs
+                // États positifs (avec ou sans émoji)
                 if (v.Contains("✅") || v.StartsWith("oui") || v == "actif" || v.Contains("activé (tous")) 
+                    return "☑";
+                if (v == "aucune détectée" || v.Contains("système à jour") || v == "ok" || v.Contains("capteurs c# détectés"))
                     return "☑";
                 
                 // États négatifs

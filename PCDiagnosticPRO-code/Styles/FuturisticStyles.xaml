@@ -445,4 +445,34 @@
         <Setter Property="Padding" Value="8,4"/>
     </Style>
 
+    <!-- ==================== TOOLTIP LISIBLE ==================== -->
+    <!-- Même approche que Paramètres / Score de Collecte : fond sombre, texte clair, contraste suffisant -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="#FF1E1E2E"/>
+        <Setter Property="Foreground" Value="#FFE6EDF3"/>
+        <Setter Property="BorderBrush" Value="#FF30363D"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="14,10"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinWidth" Value="300"/>
+        <Setter Property="MaxWidth" Value="560"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <Border.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="3" Opacity="0.4"/>
+                        </Border.Effect>
+                        <ContentPresenter ContentSource="Content"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

@@ -13,8 +13,8 @@
 
   Nom PC                    : DESKTOP-LAKVT49
   Utilisateur               : rams_
-  Date/heure scan           : 2026-02-03 09:10:57
-  Uptime                    : 0j 0h 29m
+  Date/heure scan           : 2026-02-03 14:09:51
+  Uptime                    : 0j 5h 28m
   Version OS                : Microsoft Windows NT 10.0.26200.0
   Architecture              : 64-bit
   Mode Admin                : OUI
@@ -28,30 +28,30 @@
   ▶ SECTION 4 : PERFORMANCE ACTIVITÉ
 ────────────────────────────────────────────────────────────────────────────────
 
-  Charge CPU                : 9%
-  Utilisation RAM           : 19%
-  Débit réseau (test HTTP)  : 17,6 Mbps
+  Charge CPU                : 0%
+  Utilisation RAM           : 24%
+  Débit réseau (test HTTP)  : 31,7 Mbps
 
   Top 5 Processus (CPU):
   ┌────────────────────────────┬──────────┬────────────┐
   │ Processus                  │ CPU %    │ RAM (MB)   │
   ├────────────────────────────┼──────────┼────────────┤
-  │ explorer                   │     2,1% │     578,3 │
-  │ PCDiagnosticPro            │     1,5% │     193,8 │
-  │ System                     │     0,6% │      21,9 │
-  │ dwm                        │     0,6% │     127,1 │
-  │ RazerAppEngine             │     0,4% │     191,1 │
+  │ PCDiagnosticPro            │     1,5% │     194,0 │
+  │ System                     │     0,7% │      22,3 │
+  │ svchost                    │     0,6% │      18,6 │
+  │ uTorrent                   │     0,3% │      58,1 │
+  │ NisSrv                     │     0,3% │      17,5 │
   └────────────────────────────┴──────────┴────────────┘
 
   Top 5 Processus (RAM):
   ┌────────────────────────────┬────────────┬──────────┐
   │ Processus                  │ RAM (MB)   │ CPU %    │
   ├────────────────────────────┼────────────┼──────────┤
-  │ Cursor                     │    1499,5 │     0,0% │
-  │ explorer                   │     578,3 │     2,1% │
-  │ chrome                     │     547,2 │     0,0% │
-  │ Microsoft.CodeAnalysis.... │     465,2 │     0,3% │
-  │ chrome                     │     413,9 │     0,0% │
+  │ Cursor                     │    1552,3 │     0,0% │
+  │ chrome                     │     760,7 │     0,0% │
+  │ explorer                   │     711,2 │     0,0% │
+  │ chrome                     │     542,5 │     0,0% │
+  │ chrome                     │     520,0 │     0,0% │
   └────────────────────────────┴────────────┴──────────┘
 
   ▶ SECTION 5 : MÉMOIRE RAM
@@ -61,12 +61,12 @@
   ┌─────────────────────────────┬────────────┬────────────┬──────────┐
   │ Catégorie                   │ Valeur     │ Total      │ %        │
   ├─────────────────────────────┼────────────┼────────────┼──────────┤
-  │ Physique : Utilisée          │    17,96 GB │    95,93 GB │     19% │
-  │ Physique : Disponible        │    77,97 GB │    95,93 GB │     81% │
-  │ Virtuelle : Utilisée         │  2311,12 GB │ 131072,00 GB │      2% │
-  │ Virtuelle : Disponible       │ 128760,88 GB │ 131072,00 GB │     98% │
-  │ Fichier pagination : Utilisé │    30,45 GB │   143,93 GB │     21% │
-  │ Fichier pagination : Libre   │   113,48 GB │   143,93 GB │     79% │
+  │ Physique : Utilisée          │    22,85 GB │    95,93 GB │     24% │
+  │ Physique : Disponible        │    73,08 GB │    95,93 GB │     76% │
+  │ Virtuelle : Utilisée         │  2311,16 GB │ 131072,00 GB │      2% │
+  │ Virtuelle : Disponible       │ 128760,84 GB │ 131072,00 GB │     98% │
+  │ Fichier pagination : Utilisé │    34,49 GB │   143,93 GB │     24% │
+  │ Fichier pagination : Libre   │   109,44 GB │   143,93 GB │     76% │
   └─────────────────────────────┴────────────┴────────────┴──────────┘
 
   Source : C# (GlobalMemoryStatusEx)
@@ -79,9 +79,9 @@
   ┌───────┬────────────┬────────────┬────────────┬───────────┬──────────┐
   │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Utilisé % │ Alerte   │
   ├───────┼────────────┼────────────┼────────────┼───────────┼──────────┤
-  │ C:    │    952,6 GB │    373,7 GB │    579,0 GB │    60,8 %  │ OK       │
-  │ D:    │   1863,0 GB │   1095,2 GB │    767,9 GB │    41,2 %  │ OK       │
-  │ E:    │   1862,2 GB │   1492,7 GB │    369,5 GB │    19,8 %  │ OK       │
+  │ C:    │    952,6 GB │    374,8 GB │    577,9 GB │    60,7 %  │ OK       │
+  │ D:    │   1863,0 GB │   1095,1 GB │    767,9 GB │    41,2 %  │ OK       │
+  │ E:    │   1862,2 GB │   1492,6 GB │    369,5 GB │    19,8 %  │ OK       │
   │ H:    │   1862,9 GB │    696,0 GB │   1166,9 GB │    62,6 %  │ OK       │
   └───────┴────────────┴────────────┴────────────┴───────────┴──────────┘
 
@@ -97,8 +97,8 @@
 ────────────────────────────────────────────────────────────────────────────────
 
   Temp CPU                  : Non disponible sur ce matériel (capteur non exposé par firmware)
-  Temp GPU                  : 79,0°C
-  Temp max disques          : 32°C
+  Temp GPU                  : 64,0°C
+  Temp max disques          : 34°C
   Statut thermique          : ✅ Normal
 
   ▶ SECTION 8 : BATTERIE ET ALIMENTATION
@@ -113,11 +113,11 @@
 
   Latence et qualité :
     Latence P50    : 2,3 ms
-    Latence P95    : 9,0 ms
+    Latence P95    : 14,0 ms
     Perte paquets  : 0,0%
-    Jitter P95     : 1,82 ms
+    Jitter P95     : 2,82 ms
     Gateway        : 192.168.2.1
-    DNS P95        : 24 ms
+    DNS P95        : 11 ms
 
   ═ Réseau local / configuration ═
   Adaptateur actif          : VMware Virtual Ethernet Adapter for VMnet8
@@ -135,13 +135,13 @@
   ▶ SECTION 11 : MISES À JOUR
 ────────────────────────────────────────────────────────────────────────────────
 
-  Updates en attente        : 3
+  Updates en attente        : 4
 
   ▶ SECTION 12 : PILOTES (DRIVERS)
 ────────────────────────────────────────────────────────────────────────────────
 
-  Pilotes détectés (C#)     : 235
-  Signés                    : 235
+  Pilotes détectés (C#)     : 234
+  Signés                    : 234
   Périph. en erreur         : 1
 
   Inventaire pilotes (C# - WMI) :
@@ -228,7 +228,7 @@
 
   ═ Services Windows ═
   Total services            : 310
-  En cours                  : 127
+  En cours                  : 128
 
   ▶ SECTION 14 : SANTÉ SYSTÈME ET ERREURS
 ────────────────────────────────────────────────────────────────────────────────
@@ -256,7 +256,7 @@
 ────────────────────────────────────────────────────────────────────────────────
 
   [WindowsUpdate]
-    pendingCount: 3
+    pendingCount: 4
 
   [StartupPrograms]
     startupCount: 10
@@ -289,6 +289,6 @@
     ✓ Tests réseau locaux (sans speedtest externe)
     ✓ Processus temps réel (CPU % mesuré sur 750ms)
 
-  Généré le 2026-02-03 à 09:10:59
+  Généré le 2026-02-03 à 14:09:52
   PC Diagnostic PRO — Rapport Unifié v2.0
 ════════════════════════════════════════════════════════════════════════════════

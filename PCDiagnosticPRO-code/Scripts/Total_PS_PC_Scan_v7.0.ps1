@@ -192,7 +192,7 @@ $Script:JsonOutputPath = Join-Path $Script:OutputDir "Scan_$($Script:RunId)_$tim
 $Script:ReportWritten = $false
 $Script:JsonWritten = $false
 $Script:RedactionStats = @{ TotalRedactions = 0 }
-$Script:AllowExternalNetworkTests = $AllowExternalNetworkTests.IsPresent
+$Script:AllowExternalNetworkTests = $true
 $Script:NetworkTestTargets = $NetworkTestTargets
 $Script:DnsTestTargets = $DnsTestTargets
 $Script:ExternalCommandTimeoutSeconds = [math]::Max(1, $ExternalCommandTimeoutSeconds)
@@ -2493,11 +2493,65 @@ function Collect-RestorePoints {
         $content += "POINTS DE RESTAURATION"; $content += ("-" * 50)
         if ($Script:IsAdmin) {
             try {
-                $rp = Get-ComputerRestorePoint -ErrorAction Stop | Select-Object -First 5
+                $rp = Get-ComputerRestorePoint -ErrorAction Stop | Sort-Object CreationTime -Descending | Select-Object -First 10
                 $rpArray = @($rp)
                 $data['restorePointCount'] = Get-SafeCount $rpArray
-                if ((Get-SafeDictValue $data 'restorePointCount' 0) -gt 0) { $content += "Points disponibles: $(Get-SafeDictValue $data 'restorePointCount' 0)" }
-                else { $content += "[INFO] Aucun point de restauration" }
+
+                if ((Get-SafeDictValue $data 'restorePointCount' 0) -gt 0) {
+                    $content += "Points disponibles: $(Get-SafeDictValue $data 'restorePointCount' 0)"
+
+                    $pointsList = @()
+                    foreach ($point in $rpArray) {
+                        $creationDate = $null
+                        try {
+                            # CreationTime peut être un objet ManagementDateTime ou une string WMI
+                            if ($point.CreationTime -is [System.Management.ManagementDateTime]) {
+                                $creationDate = [System.Management.ManagementDateTimeConverter]::ToDateTime($point.CreationTime).ToString("yyyy-MM-ddTHH:mm:ss")
+                            }
+                            elseif ($point.CreationTime -is [System.DateTime]) {
+                                $creationDate = $point.CreationTime.ToString("yyyy-MM-ddTHH:mm:ss")
+                            }
+                            else {
+                                $creationDate = [System.Management.ManagementDateTimeConverter]::ToDateTime($point.CreationTime.ToString()).ToString("yyyy-MM-ddTHH:mm:ss")
+                            }
+                        }
+                        catch {
+                            $creationDate = $null
+                        }
+
+                        $pointsList += [ordered]@{
+                            sequenceNumber = $point.SequenceNumber
+                            description    = Get-SafeString $point.Description
+                            creationTime   = $creationDate
+                        }
+
+                        $content += "[$($point.SequenceNumber)] $($point.Description) | Date: $creationDate"
+                    }
+
+                    $data['points'] = $pointsList
+
+                    # Alerte si dernier point ancien (plus de 30 jours)
+                    $latestDate = $null
+                    if ($pointsList.Count -gt 0 -and $pointsList[0].creationTime) {
+                        try {
+                            $latestDate = [DateTime]::Parse($pointsList[0].creationTime)
+                            if ($latestDate -lt (Get-Date).AddDays(-30)) {
+                                Add-Finding -Severity 'WARN' -Code 'BAK-001' -Category 'Sauvegarde' `
+                                    -Title 'Point de restauration ancien' `
+                                    -Details "Dernier point de restauration: $($pointsList[0].creationTime)" `
+                                    -Recommendation "Creer un nouveau point de restauration"
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                else {
+                    $content += "[INFO] Aucun point de restauration"
+                    Add-Finding -Severity 'WARN' -Code 'BAK-001' -Category 'Sauvegarde' `
+                        -Title 'Aucun point de restauration' `
+                        -Details "Aucun point de restauration systeme disponible" `
+                        -Recommendation "Activer la protection systeme et creer des points"
+                }
             }
             catch { $data['restorePointCount'] = -1; $content += "[INFO] Get-ComputerRestorePoint non disponible" }
         } else { $data['restorePointCount'] = -1; $content += "[INFO] Admin requis" }
