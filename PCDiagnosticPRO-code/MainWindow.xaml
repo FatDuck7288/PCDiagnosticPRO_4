@@ -242,8 +242,8 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="100"/>
                         <RowDefinition Height="Auto"/>
-                        <!-- MinHeight=420 pour conteneur ring 370px + marge verticale (aucun clipping) -->
-                        <RowDefinition Height="*" MinHeight="420"/>
+                        <!-- MinHeight=480 pour conteneur ring 450px (RequiredRingSize V2) + marge verticale -->
+                        <RowDefinition Height="*" MinHeight="480"/>
                     </Grid.RowDefinitions>
 
                     <!-- ROW 0: Live feed avec pluie de 0/1 en fond, texte au-dessus -->
@@ -264,23 +264,7 @@
                                 </TextBlock.Text>
                             </TextBlock>
                             <Grid Grid.Row="1" ClipToBounds="True">
-                                <!-- Pluie de 0 et 1 en arrière-plan -->
-                                <ItemsControl ItemsSource="{Binding LiveFeedBackgroundBits}"
-                                              Background="Transparent" IsHitTestVisible="False">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <UniformGrid Columns="20" Rows="12"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="8"
-                                                       Foreground="#30363D" Opacity="0.35"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <!-- Texte du live feed au-dessus -->
+                                <!-- Live feed simplifié (pluie binaire supprimée) -->
                                 <ListBox ItemsSource="{Binding FilteredLiveFeedItems}"
                                          Background="Transparent" BorderThickness="0"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -320,40 +304,34 @@
                         </Grid>
                     </Border>
 
-                    <!-- ROW 1: Animation scan retirée (trop gadget) - espace réservé -->
-                    <Border Grid.Row="1" Height="Auto" Margin="0,0,0,12"
-                            Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}">
-                        <!-- Indicateur textuel sobre -->
-                        <TextBlock Text="{Binding CurrentSectionDisplay}" 
-                                   FontSize="12" FontStyle="Italic"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
+                    <!-- ROW 1: Espace réservé (indicateur section supprimé) -->
 
                     <!-- ================================================================== -->
-                    <!-- ROW 2: ANNEAU DE PROGRESSION - AUDIT LAYOUT + CORRECTION CLIPPING -->
+                    <!-- ROW 2: ANNEAU DE PROGRESSION - CORRECTION DÉFINITIVE CLIPPING    -->
                     <!-- ================================================================== -->
                     <!-- 
-                    AUDIT LAYOUT — Contrôles qui dessinent le ring:
-                    • Path (Converter ProgressToArc) + Ellipse, StrokeThickness 2 à 14, rayon 150
-                    • DropShadowEffect sur couche 2 (arc glow): BlurRadius=20
-                    • Pas de Viewbox. Parents: Grid Row2 → Grid conteneur → éléments centrés.
+                    CALCUL REQUIREDRINGSIZE (formule V2 - marge très confortable):
+                    ─────────────────────────────────────────────────────────────────
+                    BaseDiameter     = 300   (rayon 150 × 2)
+                    GlowBlurRadius   = 30    (BlurRadius max sur les effets)
+                    StrokeThickMax   = 14    (anneau segmenté)
                     
-                    CAUSE DU CLIPPING: conteneur trop petit pour Diameter + Stroke + Blur.
-                    Formule: safeMargin = (StrokeThickness/2) + GlowBlurRadius + 8
-                             = (14/2) + 20 + 8 = 35
-                    containerSize = RingDiameter + 2*safeMargin = 300 + 70 = 370
+                    GlowMargin       = (GlowBlurRadius + StrokeThickMax) × 2 = (30 + 14) × 2 = 88
+                    SafetyMargin     = 32    (buffer DPI scaling 150% + arrondis)
+                    InternalPadding  = 30    (espace absorbeur dans le Border)
                     
-                    CORRECTION:
-                    A. ClipToBounds="False" sur le conteneur du ring et ses parents (déjà en place).
-                    B. Conteneur agrandi à 370x370 pour inclure glow sans coupe.
-                    C. MinHeight row suffisant pour 370 + marge.
+                    RequiredRingSize = BaseDiameter + GlowMargin + SafetyMargin + InternalPadding
+                                     = 300 + 88 + 32 + 30 = 450
                     -->
-                    <Grid Grid.Row="2" ClipToBounds="False" 
-                          HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid x:Name="RingRowContainer" Grid.Row="2" ClipToBounds="False" 
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          UseLayoutRounding="True">
                         
-                        <!-- CONTENEUR ANTI-CLIPPING: 370x370 = RingDiameter 300 + 2*safeMargin(35) -->
-                        <Grid Width="370" Height="370" ClipToBounds="False">
+                        <!-- CONTENEUR ANTI-CLIPPING: 450x450 = marge très confortable -->
+                        <Border x:Name="RingOuterBorder" Width="450" Height="450" 
+                                ClipToBounds="False" Padding="25"
+                                UseLayoutRounding="True" SnapsToDevicePixels="True">
+                        <Grid x:Name="RingInnerContainer" ClipToBounds="False">
                             <Grid.Resources>
                                 <Storyboard x:Key="ScanSpinnerRotation">
                                     <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
@@ -556,8 +534,9 @@
                                 </StackPanel>
                             </Grid>
                         </Grid>
-                        </Grid><!-- Fermeture conteneur anti-clipping 370x370 -->
-                    </Grid>
+                        </Grid><!-- Fermeture RingInnerContainer -->
+                        </Border><!-- Fermeture RingOuterBorder 400x400 -->
+                    </Grid><!-- Fermeture RingRowContainer -->
                 </Grid>
 
                 <!-- Panneau droit : progression informative -->
@@ -566,7 +545,6 @@
                         Padding="20,24">
                     <Grid>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*" MinHeight="120"/>
@@ -591,17 +569,9 @@
                             </StackPanel>
                         </Border>
                         
-                        <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="{Binding CurrentSectionLabel}" FontSize="11"
-                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
-                                <TextBlock Text="{Binding CurrentSectionDisplay}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
+                        <!-- Section courante supprimée (inutile) -->
 
-                        <Border Grid.Row="3" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
+                        <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
                             <StackPanel>
                                 <TextBlock Text="Étapes" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
@@ -731,7 +701,7 @@
                             </StackPanel>
                         </Border>
 
-                        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Center" 
+                        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" 
                                     Visibility="{Binding ShowScanButtons, Converter={StaticResource BoolToVisibility}}">
                             <Button Style="{StaticResource FuturisticButton}"
                                     Command="{Binding OpenReportCommand}" Margin="0,0,8,0">
@@ -1122,33 +1092,49 @@
                                                             <Grid Margin="8,8,8,8">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="Auto"/>
-                                                                    <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
                                                                 
-                                                                <!-- Icône domaine -->
-                                                                <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="20" 
+                                                                <!-- Indicateur expansion : ▲ quand ouvert, ▼ quand fermé (comme maquette) -->
+                                                                <TextBlock Grid.Column="0" FontSize="12" 
+                                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                                           VerticalAlignment="Center" Margin="0,0,8,0">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Text" Value="▼"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
+                                                                                    <Setter Property="Text" Value="▲"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                                
+                                                                <!-- Icône domaine (ex: 🖥️ Système d'exploitation) -->
+                                                                <TextBlock Grid.Column="1" Text="{Binding Icon}" FontSize="20" 
                                                                            VerticalAlignment="Center" Margin="0,0,12,0"/>
                                                                 
-                                                                <!-- Nom domaine + message -->
-                                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                <!-- Nom domaine + message (ex: "Système d'exploitation" / "Excellent état") -->
+                                                                <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                                                     <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13"
                                                                                Foreground="{StaticResource TextPrimaryBrush}"/>
                                                                     <TextBlock Text="{Binding StatusMessage}" FontSize="11"
                                                                                Foreground="{StaticResource TextSecondaryBrush}"/>
                                                                 </StackPanel>
                                                                 
-                                                                <!-- Score -->
-                                                                <TextBlock Grid.Column="2" Text="{Binding Score, StringFormat={}{0}/100}" 
+                                                                <!-- Score (ex: 100/100) -->
+                                                                <TextBlock Grid.Column="3" Text="{Binding Score, StringFormat={}{0}/100}" 
                                                                            FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
                                                                            Foreground="{Binding Severity, Converter={StaticResource SeverityToColor}}"
                                                                            Margin="10,0,10,0"/>
                                                                 
-                                                                <!-- Icône état -->
-                                                                <Border Grid.Column="3" Width="28" Height="28" CornerRadius="14"
+                                                                <!-- Icône état : cercle avec coche (comme maquette) -->
+                                                                <Border Grid.Column="4" Width="28" Height="28" CornerRadius="14"
                                                                         Background="{Binding Severity, Converter={StaticResource SeverityToColor}}"
                                                                         VerticalAlignment="Center">
                                                                     <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityToIcon}}" 
@@ -1157,14 +1143,9 @@
                                                                 </Border>
                                                                 
                                                                 <!-- Alerte ! si critique -->
-                                                                <TextBlock Grid.Column="4" Text="!" FontSize="18" FontWeight="Bold"
+                                                                <TextBlock Grid.Column="5" Text="!" FontSize="18" FontWeight="Bold"
                                                                            Foreground="#FF4757" VerticalAlignment="Center" Margin="8,0,0,0"
                                                                            Visibility="{Binding Severity, Converter={StaticResource SeverityToAlertVisibility}}"/>
-                                                                
-                                                                <!-- Indicateur expansion -->
-                                                                <TextBlock Grid.Column="5" Text="▼" FontSize="10" 
-                                                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
                                                             </Grid>
                                                         </Expander.Header>
                                                         
@@ -1184,7 +1165,7 @@
                                                                         <ColumnDefinition Width="*"/>
                                                                         <ColumnDefinition Width="Auto"/>
                                                                     </Grid.ColumnDefinitions>
-                                                                    <TextBlock Grid.Column="0" Text="📊 Données analysées" FontWeight="SemiBold" FontSize="11"
+                                                                    <TextBlock Grid.Column="0" Text="📄 Données analysées" FontWeight="SemiBold" FontSize="11"
                                                                                Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                                                                     
                                                                     <!-- Bouton "Voir détails" pour Pilotes -->
@@ -1222,49 +1203,81 @@
                                                                     </Button>
                                                                 </Grid>
                                                                 
-                                                                <!-- Evidence data avec info-bulles explicatives et indicateurs de statut (Modèle.png) -->
+                                                                <!-- Evidence data : icône info (i bleu), libellé, valeur, indicateur statut (carré/cercle comme maquette) -->
                                                                 <ItemsControl ItemsSource="{Binding EvidenceDataWithTooltips}">
                                                                     <ItemsControl.ItemTemplate>
                                                                         <DataTemplate>
-                                                                            <Grid Margin="0,2">
+                                                                            <Grid Margin="0,3">
                                                                                 <Grid.ColumnDefinitions>
-                                                                                    <ColumnDefinition Width="20"/>
-                                                                                    <ColumnDefinition Width="130"/>
+                                                                                    <ColumnDefinition Width="24"/>
+                                                                                    <ColumnDefinition Width="140"/>
                                                                                     <ColumnDefinition Width="*"/>
-                                                                                    <ColumnDefinition Width="Auto"/>
+                                                                                    <ColumnDefinition Width="28"/>
                                                                                 </Grid.ColumnDefinitions>
-                                                                                <!-- Colonne 0: Icône info "i" selon ShouldShowInfoIcon (pas HasTooltip) -->
-                                                                                <TextBlock Grid.Column="0" Text="ℹ️" FontSize="10" 
-                                                                                           VerticalAlignment="Center" HorizontalAlignment="Center"
-                                                                                           Cursor="Help" ToolTip="{Binding Tooltip}"
-                                                                                           Visibility="{Binding ShouldShowInfoIcon, Converter={StaticResource BoolToVisibility}}"/>
+                                                                                <!-- Colonne 0: Cercle bleu avec "i" (info) selon ShouldShowInfoIcon -->
+                                                                                <Border Grid.Column="0" Width="20" Height="20" CornerRadius="10"
+                                                                                        Background="#2196F3" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                                                                        Cursor="Help" ToolTip="{Binding Tooltip}"
+                                                                                        Visibility="{Binding ShouldShowInfoIcon, Converter={StaticResource BoolToVisibility}}">
+                                                                                    <TextBlock Text="i" FontSize="11" FontWeight="SemiBold" Foreground="White"
+                                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                                </Border>
                                                                                 <!-- Colonne 1: Clé (nom du champ) -->
                                                                                 <TextBox Grid.Column="1" Text="{Binding Key, Mode=OneWay}" 
                                                                                          Style="{StaticResource SelectableTextSecondaryStyle}"/>
                                                                                 <!-- Colonne 2: Valeur -->
                                                                                 <TextBox Grid.Column="2" Text="{Binding Value, Mode=OneWay}" 
                                                                                          Style="{StaticResource SelectableTextStyle}"/>
-                                                                                <!-- Colonne 3: Indicateur de statut (☑/☒/⚠) comme sur Modèle.png -->
-                                                                                <TextBlock Grid.Column="3" Text="{Binding StatusIcon}" FontSize="14" 
-                                                                                           VerticalAlignment="Center" HorizontalAlignment="Center"
-                                                                                           Margin="4,0,0,0">
-                                                                                    <TextBlock.Style>
-                                                                                        <Style TargetType="TextBlock">
-                                                                                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                                                <!-- Colonne 3: Indicateur statut (carré rouge X, vert ✓, jaune !, cercle gris ?) comme maquette -->
+                                                                                <Border Grid.Column="3" Width="24" Height="24" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                                                                        Margin="4,0,0,0">
+                                                                                    <Border.Style>
+                                                                                        <Style TargetType="Border">
+                                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                            <Setter Property="CornerRadius" Value="2"/>
+                                                                                            <Setter Property="Background" Value="#9E9E9E"/>
                                                                                             <Style.Triggers>
                                                                                                 <DataTrigger Binding="{Binding StatusIcon}" Value="☑">
-                                                                                                    <Setter Property="Foreground" Value="#22C55E"/>
+                                                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                                                    <Setter Property="Background" Value="#22C55E"/>
                                                                                                 </DataTrigger>
                                                                                                 <DataTrigger Binding="{Binding StatusIcon}" Value="☒">
-                                                                                                    <Setter Property="Foreground" Value="#EF4444"/>
+                                                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                                                    <Setter Property="Background" Value="#EF4444"/>
                                                                                                 </DataTrigger>
                                                                                                 <DataTrigger Binding="{Binding StatusIcon}" Value="⚠">
-                                                                                                    <Setter Property="Foreground" Value="#F59E0B"/>
+                                                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                                                    <Setter Property="Background" Value="#F59E0B"/>
+                                                                                                </DataTrigger>
+                                                                                                <DataTrigger Binding="{Binding StatusIcon}" Value="❓">
+                                                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                                                    <Setter Property="CornerRadius" Value="12"/>
+                                                                                                    <Setter Property="Background" Value="#9E9E9E"/>
                                                                                                 </DataTrigger>
                                                                                             </Style.Triggers>
                                                                                         </Style>
-                                                                                    </TextBlock.Style>
-                                                                                </TextBlock>
+                                                                                    </Border.Style>
+                                                                                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" FontSize="12" FontWeight="SemiBold">
+                                                                                        <TextBlock.Style>
+                                                                                            <Style TargetType="TextBlock">
+                                                                                                <Style.Triggers>
+                                                                                                    <DataTrigger Binding="{Binding StatusIcon}" Value="☑">
+                                                                                                        <Setter Property="Text" Value="✓"/>
+                                                                                                    </DataTrigger>
+                                                                                                    <DataTrigger Binding="{Binding StatusIcon}" Value="☒">
+                                                                                                        <Setter Property="Text" Value="✗"/>
+                                                                                                    </DataTrigger>
+                                                                                                    <DataTrigger Binding="{Binding StatusIcon}" Value="⚠">
+                                                                                                        <Setter Property="Text" Value="!"/>
+                                                                                                    </DataTrigger>
+                                                                                                    <DataTrigger Binding="{Binding StatusIcon}" Value="❓">
+                                                                                                        <Setter Property="Text" Value="?"/>
+                                                                                                    </DataTrigger>
+                                                                                                </Style.Triggers>
+                                                                                            </Style>
+                                                                                        </TextBlock.Style>
+                                                                                    </TextBlock>
+                                                                                </Border>
                                                                             </Grid>
                                                                         </DataTemplate>
                                                                     </ItemsControl.ItemTemplate>
@@ -1284,7 +1297,7 @@
                                                                         </Style>
                                                                     </Border.Style>
                                                                     <StackPanel>
-                                                                        <TextBlock Text="🏆 Top 5 processus RAM" FontWeight="SemiBold" FontSize="11"
+                                                                        <TextBlock Text="⚙️ Top 5 processus RAM" FontWeight="SemiBold" FontSize="11"
                                                                                    Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
                                                                         <Grid>
                                                                             <Grid.ColumnDefinitions>

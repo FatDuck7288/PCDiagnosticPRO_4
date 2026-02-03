@@ -37,6 +37,8 @@ namespace PCDiagnosticPro.ViewModels
         private readonly HardwareSensorsCollector _hardwareSensorsCollector;
         private readonly DispatcherTimer _liveFeedTimer;
         private readonly DispatcherTimer _scanProgressTimer;
+        private readonly DispatcherTimer _rainBitsTimer;
+        private readonly Random _rainBitsRandom = new Random();
         private readonly Stopwatch _scanStopwatch;
 
         // Process management pour Cancel
@@ -197,13 +199,13 @@ namespace PCDiagnosticPro.ViewModels
                 ["DeleteScanConfirmTitle"] = "Confirmation",
                 ["DeleteScanConfirmMessage"] = "Voulez-vous vraiment supprimer ce scan ?",
                 // Scan phases labels (localized)
-                ["PhaseLabel_PowerShell"] = "PowerShell",
-                ["PhaseLabel_Capteurs"] = "Capteurs",
-                ["PhaseLabel_Compteurs"] = "Compteurs",
-                ["PhaseLabel_Signaux"] = "Signaux",
-                ["PhaseLabel_Telemetrie"] = "Télémetrie",
-                ["PhaseLabel_Reseau"] = "Réseau",
-                ["PhaseLabel_Rapport"] = "Rapport",
+                ["PhaseLabel_PowerShell"] = "Pilotes et périphériques",
+                ["PhaseLabel_Capteurs"] = "Températures composants",
+                ["PhaseLabel_Compteurs"] = "Compteurs performances",
+                ["PhaseLabel_Signaux"] = "Signaux diagnostiques",
+                ["PhaseLabel_Telemetrie"] = "Télémétrie processus",
+                ["PhaseLabel_Reseau"] = "Diagnostic réseau",
+                ["PhaseLabel_Rapport"] = "Génération rapport",
                 // Live feed messages for phases
                 ["LiveFeed_PhaseStart_PowerShell"] = "▶ Démarrage du scan PowerShell...",
                 ["LiveFeed_PhaseEnd_PowerShell"] = "✅ Scan PowerShell terminé",
@@ -519,6 +521,10 @@ namespace PCDiagnosticPro.ViewModels
             {
                 if (SetProperty(ref _scanState, value))
                 {
+                    if (value == "Scanning")
+                        _rainBitsTimer.Start();
+                    else
+                        _rainBitsTimer.Stop();
                     OnPropertyChanged(nameof(IsIdle));
                     OnPropertyChanged(nameof(IsScanning));
                     OnPropertyChanged(nameof(IsCompleted));
@@ -1270,16 +1276,29 @@ namespace PCDiagnosticPro.ViewModels
         public ObservableCollection<string> LiveFeedItems { get; } = new ObservableCollection<string>();
         public ObservableCollection<LiveFeedEntry> LiveFeedEntries { get; } = new ObservableCollection<LiveFeedEntry>();
         
-        /// <summary>Pluie de 0 et 1 pour le fond du live feed (style matrix).</summary>
-        private static readonly string[] LiveFeedBackgroundBitsSource = CreateLiveFeedBackgroundBits();
-        private static string[] CreateLiveFeedBackgroundBits()
+        /// <summary>Pluie de 0 et 1 pour le fond du live feed (style matrix), animée en temps réel.</summary>
+        public ObservableCollection<string> LiveFeedBackgroundBits { get; } = new ObservableCollection<string>();
+
+        private void InitializeRainBits()
         {
-            var r = new Random(42);
-            var a = new string[240];
-            for (int i = 0; i < a.Length; i++) a[i] = r.Next(2) == 0 ? "0" : "1";
-            return a;
+            LiveFeedBackgroundBits.Clear();
+            for (int i = 0; i < 240; i++)
+                LiveFeedBackgroundBits.Add(_rainBitsRandom.Next(2) == 0 ? "0" : "1");
         }
-        public IEnumerable<string> LiveFeedBackgroundBits => LiveFeedBackgroundBitsSource;
+
+        private void TickRainBits()
+        {
+            if (LiveFeedBackgroundBits.Count != 240) return;
+            // Décaler d'une ligne vers le bas : lignes 1..11 deviennent 0..10, nouvelle ligne en 11
+            var next = new List<string>();
+            for (int i = 20; i < 240; i++)
+                next.Add(LiveFeedBackgroundBits[i]);
+            for (int i = 0; i < 20; i++)
+                next.Add(_rainBitsRandom.Next(2) == 0 ? "0" : "1");
+            LiveFeedBackgroundBits.Clear();
+            foreach (var s in next)
+                LiveFeedBackgroundBits.Add(s);
+        }
         private ICollectionView? _filteredLiveFeedView;
         public ICollectionView FilteredLiveFeedItems => _filteredLiveFeedView ??= CreateFilteredLiveFeedView();
         
@@ -1384,6 +1403,13 @@ namespace PCDiagnosticPro.ViewModels
                 Interval = TimeSpan.FromMilliseconds(500)
             };
             _scanProgressTimer.Tick += (s, e) => TickScanProgress();
+
+            _rainBitsTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(220)
+            };
+            _rainBitsTimer.Tick += (s, e) => TickRainBits();
+            InitializeRainBits();
 
             // Initialiser les chemins relatifs
             _scriptPath = ResolveScriptPath()
@@ -3199,12 +3225,8 @@ namespace PCDiagnosticPro.ViewModels
                 var errors = HealthReport?.Errors ?? new List<Models.ScanErrorInfo>();
                 var missing = HealthReport?.MissingData ?? new List<string>();
                 var collectorErrors = HealthReport?.CollectorErrorsLogical ?? 0;
-                var machineHealth = HealthReport?.MachineHealthScore ?? 0;
-                var dataReliability = HealthReport?.DataReliabilityScore ?? 0;
-                var autoFixAllowed = HealthReport?.AutoFixAllowed ?? false;
 
-                var window = new Views.CollectorErrorsWindow(errors, missing, collectorErrors,
-                    machineHealth, dataReliability, autoFixAllowed)
+                var window = new Views.CollectorErrorsWindow(errors, missing, collectorErrors)
                 {
                     Owner = Application.Current?.MainWindow
                 };
@@ -3213,13 +3235,12 @@ namespace PCDiagnosticPro.ViewModels
             catch (Exception ex)
             {
                 App.LogMessage($"[ShowCollectorErrors] Erreur: {ex.Message}");
-                var errCount = HealthReport?.CollectorErrorsLogical ?? 0;
-                var missCount = HealthReport?.MissingData?.Count ?? 0;
-                var mh = HealthReport?.MachineHealthScore ?? 0;
-                var dr = HealthReport?.DataReliabilityScore ?? 0;
-                var af = HealthReport?.AutoFixAllowed ?? false;
+                var errors = HealthReport?.Errors ?? new List<Models.ScanErrorInfo>();
+                var missing = HealthReport?.MissingData ?? new List<string>();
+                var errLine = errors.Count == 0 ? "Erreurs détectées: 0" : "Erreurs: " + string.Join(" ; ", errors.Select(e => $"[{e.Section}] {e.Message ?? e.Code}"));
+                var missLine = missing.Count == 0 ? "Données manquantes: 0" : "Données manquantes: " + string.Join(" ; ", missing);
                 System.Windows.MessageBox.Show(
-                    $"Erreurs détectées: {errCount}\nDonnées manquantes: {missCount}\n\nContexte: Santé machine {mh}/100, Fiabilité UDIS {dr}/100, AutoFix {(af ? "Autorisé" : "Bloqué")}",
+                    errLine + "\n" + missLine,
                     "Erreurs collecteur",
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Warning);
@@ -3759,10 +3780,25 @@ namespace PCDiagnosticPro.ViewModels
 
             Progress = normalized;
             ProgressPercent = normalized;
-            CurrentSection = reason;
-            OnPropertyChanged(nameof(CurrentSection));
-            OnPropertyChanged(nameof(CurrentSectionDisplay));
+            // Ne pas écraser la section courante par le timer : garder la vraie section (PowerShell ou C#).
+            if (reason != "Progression timer")
+            {
+                CurrentSection = reason;
+                OnPropertyChanged(nameof(CurrentSection));
+                OnPropertyChanged(nameof(CurrentSectionDisplay));
+            }
             App.LogMessage($"Progress update: {ProgressPercent}% - {reason}");
+        }
+
+        /// <summary>Met à jour uniquement le pourcentage de progression (pour le timer), sans toucher à la section courante.</summary>
+        private void SetProgressPercentOnly(int percent)
+        {
+            var normalized = Math.Max(0, Math.Min(100, percent));
+            if (normalized < ProgressPercent) return;
+            Progress = normalized;
+            ProgressPercent = normalized;
+            OnPropertyChanged(nameof(Progress));
+            OnPropertyChanged(nameof(ProgressPercent));
         }
 
         private void StartScanProgressTimer(int ceiling)
@@ -3796,9 +3832,9 @@ namespace PCDiagnosticPro.ViewModels
                 return;
             }
 
-            // Slower increment within phase ceiling (step-based progress)
+            // Incrémenter uniquement le pourcentage, sans écraser la section courante (PowerShell ou C#).
             var increment = 1;
-            UpdateProgress(Math.Min(_scanProgressCeiling, ProgressPercent + increment), "Progression timer");
+            SetProgressPercentOnly(Math.Min(_scanProgressCeiling, ProgressPercent + increment));
         }
 
         private void UpdateScanButtonText()

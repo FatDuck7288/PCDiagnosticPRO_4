@@ -440,14 +440,7 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "Fréquence max", "maxClockSpeed absent");
             }
 
-            // 4. Fréquence actuelle
-            var currentClock = GetDouble(firstCpu, "currentClockSpeed");
-            if (currentClock.HasValue && currentClock > 0)
-            {
-                var ghz = currentClock.Value / 1000.0;
-                Add(ev, "Fréquence actuelle", $"{ghz:F2} GHz", "scan_powershell.sections.CPU.data.cpus[0].currentClockSpeed");
-            }
-            // Pas de "Inconnu" si absent - champ optionnel
+            // Fréquence actuelle omise volontairement pour correspondre à la maquette (6 lignes: Modèle, Cœurs/Threads, Fréq max, Charge, Temp, Throttling)
 
             // 5. Charge actuelle (PS + calcul moyenne si possible)
             var loadPS = GetDouble(firstCpu, "currentLoad") ?? GetDouble(firstCpu, "load");
@@ -812,12 +805,12 @@ namespace PCDiagnosticPro.Services
         #endregion
 
         #region RAM - Mémoire vive
-        // Champs attendus: Total, Utilisée, Disponible, %, Virtual, Pagefile, Barrettes, Top5
+        // Champs affichés (maquette): RAM totale, RAM utilisée, RAM disponible, Barrettes. Top 5 dans bloc dédié.
 
         private static ExtractionResult ExtractRAM(JsonElement root, HardwareSensorsResult? sensors)
         {
             var ev = new Dictionary<string, string>();
-            int expected = 8;
+            int expected = 4;
             
             var memData = GetSectionData(root, "Memory");
             
@@ -845,32 +838,14 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "RAM utilisée", "données manquantes");
             }
 
-            // 5. Mémoire virtuelle
-            var virtualTotal = GetDouble(memData, "virtualTotalGB") ?? GetDouble(memData, "commitLimitGB");
-            var virtualUsed = GetDouble(memData, "virtualUsedGB") ?? GetDouble(memData, "commitUsedGB");
-            if (virtualTotal.HasValue && virtualUsed.HasValue)
-                Add(ev, "Mémoire virtuelle", $"{virtualUsed.Value:F1} / {virtualTotal.Value:F1} GB", "scan_powershell.sections.Memory.data.virtual*");
-            // Optionnel
+            // Mémoire virtuelle, Fichier d'échange et Top processus RAM omis volontairement :
+            // la maquette Mémoire vive affiche uniquement RAM totale, utilisée, disponible, Barrettes ;
+            // le Top 5 est affiché dans le bloc dédié "⚙️ Top 5 processus RAM" sous Données analysées.
 
-            // 6. Fichier de pagination
-            var pageSize = GetDouble(memData, "pageFileSizeGB") ?? GetDouble(memData, "pagefileSize");
-            var pageUsed = GetDouble(memData, "pageFileUsedGB") ?? GetDouble(memData, "pagefileUsed");
-            if (pageSize.HasValue && pageUsed.HasValue)
-                Add(ev, "Fichier d'échange", $"{pageUsed.Value:F1} / {pageSize.Value:F1} GB", "scan_powershell.sections.Memory.data.pagefile*");
-            // Optionnel
-
-            // 7. Barrettes
+            // 5. Barrettes
             var modCount = GetInt(memData, "moduleCount") ?? GetInt(memData, "slotCount");
             if (modCount.HasValue && modCount > 0)
                 Add(ev, "Barrettes", modCount.Value.ToString(), "scan_powershell.sections.Memory.data.moduleCount");
-            // Optionnel
-
-            // 8. Top 5 processus RAM
-            var topRam = GetTopProcesses(root, "memory", 5);
-            if (topRam.Count > 0)
-                Add(ev, "Top processus RAM", string.Join(", ", topRam), "process_telemetry.topMemory");
-            else
-                AddUnknown(ev, "Top processus RAM", "process_telemetry absent");
 
             return new ExtractionResult { Evidence = ev, ExpectedFields = expected, ActualFields = CountActualFields(ev) };
         }

@@ -12,15 +12,10 @@ namespace PCDiagnosticPro.Views
     /// </summary>
     public partial class CollectorErrorsWindow : Window
     {
-        /// <param name="machineHealthScore">Santé machine 0-100 (affiché dans la fenêtre pour renseigner l'utilisateur)</param>
-        /// <param name="dataReliabilityScore">Fiabilité UDIS 0-100</param>
-        /// <param name="autoFixAllowed">AutoFix autorisé ou bloqué</param>
-        public CollectorErrorsWindow(List<ScanErrorInfo>? errors, List<string>? missingData, int collectorErrorsLogical,
-            int machineHealthScore = 0, int dataReliabilityScore = 0, bool autoFixAllowed = false)
+        public CollectorErrorsWindow(List<ScanErrorInfo>? errors, List<string>? missingData, int collectorErrorsLogical)
         {
             InitializeComponent();
-            DataContext = new CollectorErrorsViewModel(errors, missingData, collectorErrorsLogical,
-                machineHealthScore, dataReliabilityScore, autoFixAllowed);
+            DataContext = new CollectorErrorsViewModel(errors, missingData, collectorErrorsLogical);
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
@@ -30,12 +25,11 @@ namespace PCDiagnosticPro.Views
     }
 
     /// <summary>
-    /// ViewModel pour la fenêtre d'erreurs collecteur
+    /// ViewModel pour la fenêtre d'erreurs collecteur (format simplifié style MessageBox)
     /// </summary>
     public class CollectorErrorsViewModel
     {
-        public CollectorErrorsViewModel(List<ScanErrorInfo>? errors, List<string>? missingData, int collectorErrorsLogical,
-            int machineHealthScore = 0, int dataReliabilityScore = 0, bool autoFixAllowed = false)
+        public CollectorErrorsViewModel(List<ScanErrorInfo>? errors, List<string>? missingData, int collectorErrorsLogical)
         {
             var errorList = errors ?? new List<ScanErrorInfo>();
             var missingList = missingData ?? new List<string>();
@@ -43,12 +37,17 @@ namespace PCDiagnosticPro.Views
             ErrorCount = errorList.Count;
             MissingCount = missingList.Count;
             CollectorErrorsLogical = collectorErrorsLogical;
-            MachineHealthDisplay = $"{machineHealthScore}/100";
-            DataReliabilityDisplay = $"{dataReliabilityScore}/100";
-            AutoFixDisplay = autoFixAllowed ? "Autorisé" : "Bloqué";
-            AutoFixAllowed = autoFixAllowed;
             
-            // Build error items for DataGrid
+            // Format simplifié pour l'affichage style MessageBox
+            // Erreurs: "1  [] Message ; 2  [] Message"
+            ErrorListSimple = errorList.Select((e, i) => 
+                $"{i + 1}  [{e.Section ?? ""}] {e.Message ?? e.Code ?? "Unknown error"}"
+            ).ToList();
+            
+            // Données manquantes: "NomDonnée ; timestamp ; détails"
+            MissingListSimple = missingList.Select(m => m).ToList();
+
+            // Legacy properties for compatibility
             var items = new List<ErrorDisplayItem>();
             int num = 1;
             
@@ -66,23 +65,10 @@ namespace PCDiagnosticPro.Views
                 });
             }
             
-            // Add missing data as warning items
-            foreach (var missing in missingList)
-            {
-                items.Add(new ErrorDisplayItem
-                {
-                    Number = num++,
-                    TypeIcon = "⚠️",
-                    Section = ExtractSectionFromMissing(missing),
-                    Code = "MISSING",
-                    Message = missing,
-                    Source = "Collecte",
-                    SuggestedAction = "Relancer en mode Admin"
-                });
-            }
-            
             ErrorItems = items;
             MissingDataItems = missingList.Select(m => $"• {m}").ToList();
+            ErrorNamesSummary = errorList.Count == 0 ? "" : "Erreurs détectées : " + string.Join(" ; ", errorList.Select((e, i) => $"{i + 1}. [{e.Section ?? "N/A"}] {e.Message ?? e.Code ?? "—"}"));
+            MissingDataNamesSummary = missingList.Count == 0 ? "" : "Données manquantes : " + string.Join(" ; ", missingList);
         }
 
         public int ErrorCount { get; }
@@ -90,11 +76,15 @@ namespace PCDiagnosticPro.Views
         public int CollectorErrorsLogical { get; }
         public bool HasErrors => ErrorCount > 0;
         public bool HasMissing => MissingCount > 0;
+        
+        // Format simplifié pour style MessageBox
+        public List<string> ErrorListSimple { get; }
+        public List<string> MissingListSimple { get; }
+        
+        // Legacy
         public string SummaryText => $"{ErrorCount + MissingCount} problème(s) de collecte identifié(s)";
-        public string MachineHealthDisplay { get; }
-        public string DataReliabilityDisplay { get; }
-        public string AutoFixDisplay { get; }
-        public bool AutoFixAllowed { get; }
+        public string ErrorNamesSummary { get; }
+        public string MissingDataNamesSummary { get; }
         public string CollectionScoreDisplay => $"{Math.Max(0, 100 - (ErrorCount * 10) - (MissingCount * 5))}/100";
         public List<ErrorDisplayItem> ErrorItems { get; }
         public List<string> MissingDataItems { get; }

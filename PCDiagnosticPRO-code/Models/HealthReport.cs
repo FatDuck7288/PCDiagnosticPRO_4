@@ -364,6 +364,12 @@ namespace PCDiagnosticPro.Models
             {
                 if (string.IsNullOrEmpty(Value)) return "";
                 var v = Value.ToLower();
+                // Positif: Throttling "Non détecté" = pas de throttling = vert
+                if (Key.IndexOf("Throttling", StringComparison.OrdinalIgnoreCase) >= 0 && (v.Contains("non détecté") || v.Contains("non détect")))
+                    return "☑";
+                // Positif: TDR "Aucun" = pas de crash GPU = vert
+                if (Key.IndexOf("TDR", StringComparison.OrdinalIgnoreCase) >= 0 && v.Contains("aucun"))
+                    return "☑";
                 
                 // États positifs
                 if (v.Contains("✅") || v.StartsWith("oui") || v == "actif" || v.Contains("activé (tous")) 

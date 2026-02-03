@@ -4,181 +4,62 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Détails des erreurs de collecte" 
-        Height="500" Width="700"
-        MinHeight="350" MinWidth="500"
-        Background="{StaticResource BackgroundDarkBrush}"
-        WindowStartupLocation="CenterOwner">
+        Title="Erreurs collecteur" 
+        Height="300" Width="500"
+        MinHeight="200" MinWidth="400"
+        ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterOwner"
+        Background="#F0F0F0">
 
-    <Grid Margin="20">
+    <!-- Fenêtre style MessageBox simple comme demandé -->
+    <Grid Margin="15">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,15">
-            <TextBlock Text="⚠️ Erreurs de collecte détectées" FontSize="24" FontWeight="Bold"
-                       Foreground="{StaticResource TextPrimaryBrush}"/>
-            <TextBlock Text="{Binding SummaryText}" FontSize="12"
-                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0"/>
+        <!-- Icône warning (triangle jaune avec !) -->
+        <Canvas Grid.Column="0" Grid.Row="0" Width="48" Height="48" 
+                VerticalAlignment="Top" Margin="0,0,15,0">
+            <Path Fill="#D4A017" Data="M 24 2 L 46 44 L 2 44 Z"/>
+            <Path Fill="Black" Data="M 22 18 L 26 18 L 26 30 L 22 30 Z M 22 34 L 26 34 L 26 38 L 22 38 Z"/>
+        </Canvas>
+
+        <!-- Contenu textuel -->
+        <StackPanel Grid.Column="1" Grid.Row="0" VerticalAlignment="Top">
+            <!-- Erreurs -->
+            <TextBlock Text="Erreurs:" FontWeight="Bold" Margin="0,0,0,5"
+                       Visibility="{Binding HasErrors, Converter={StaticResource BoolToVisibility}}"/>
+            <ItemsControl ItemsSource="{Binding ErrorListSimple}" Margin="0,0,0,10"
+                          Visibility="{Binding HasErrors, Converter={StaticResource BoolToVisibility}}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            
+            <!-- Données manquantes -->
+            <TextBlock Text="Données manquantes:" FontWeight="Bold" Margin="0,0,0,5"
+                       Visibility="{Binding HasMissing, Converter={StaticResource BoolToVisibility}}"/>
+            <ItemsControl ItemsSource="{Binding MissingListSimple}" Margin="0,0,0,10"
+                          Visibility="{Binding HasMissing, Converter={StaticResource BoolToVisibility}}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </StackPanel>
 
-        <!-- Contexte du scan : Santé machine, Fiabilité UDIS, AutoFix (pour bien renseigner l'utilisateur) -->
-        <Border Grid.Row="1" Background="{StaticResource BackgroundLightBrush}" 
-                CornerRadius="6" Padding="12,10" Margin="0,0,0,10"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Santé machine: " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
-                <TextBlock Text="{Binding MachineHealthDisplay}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                <TextBlock Text="   |   Fiabilité UDIS: " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="12,0,0,0"/>
-                <TextBlock Text="{Binding DataReliabilityDisplay}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                <TextBlock Text="   |   AutoFix: " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="12,0,0,0"/>
-                <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="#4CAF50" Text="{Binding AutoFixDisplay}">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding AutoFixAllowed}" Value="False">
-                                    <Setter Property="Foreground" Value="#F44336"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-            </StackPanel>
-        </Border>
-
-        <!-- Summary Stats -->
-        <Border Grid.Row="1" Background="{StaticResource BackgroundMediumBrush}" 
-                CornerRadius="6" Padding="15" Margin="0,0,0,15">
-            <StackPanel Orientation="Horizontal">
-                <Border Background="#FF4757" CornerRadius="4" Padding="12,6" Margin="0,0,10,0"
-                        Visibility="{Binding HasErrors, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="❌ Erreurs: " Foreground="White" FontSize="12"/>
-                        <TextBlock Text="{Binding ErrorCount}" Foreground="White" FontWeight="Bold" FontSize="12"/>
-                    </StackPanel>
-                </Border>
-                <Border Background="#FFA502" CornerRadius="4" Padding="12,6" Margin="0,0,10,0"
-                        Visibility="{Binding HasMissing, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="⚠️ Données manquantes: " Foreground="White" FontSize="12"/>
-                        <TextBlock Text="{Binding MissingCount}" Foreground="White" FontWeight="Bold" FontSize="12"/>
-                    </StackPanel>
-                </Border>
-                <Border Background="{StaticResource AccentBlueBrush}" CornerRadius="4" Padding="12,6" Margin="0,0,10,0">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📊 Score collecte: " Foreground="White" FontSize="12"/>
-                        <TextBlock Text="{Binding CollectionScoreDisplay}" Foreground="White" FontWeight="Bold" FontSize="12"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </Border>
-
-        <!-- Error List -->
-        <Grid Grid.Row="3">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            
-            <TextBlock Grid.Row="0" Text="Détails des erreurs" FontSize="14" FontWeight="SemiBold"
-                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
-            
-            <DataGrid Grid.Row="1" ItemsSource="{Binding ErrorItems}" 
-                      AutoGenerateColumns="False"
-                      IsReadOnly="True"
-                      Background="{StaticResource BackgroundMediumBrush}"
-                      RowBackground="{StaticResource BackgroundMediumBrush}"
-                      AlternatingRowBackground="{StaticResource BackgroundLightBrush}"
-                      BorderThickness="1"
-                      BorderBrush="{StaticResource BorderBrush}"
-                      GridLinesVisibility="Horizontal"
-                      HorizontalGridLinesBrush="{StaticResource BorderBrush}"
-                      CanUserSortColumns="True"
-                      HeadersVisibility="Column"
-                      SelectionMode="Single"
-                      SelectionUnit="FullRow">
-                <DataGrid.Resources>
-                    <Style TargetType="DataGridColumnHeader">
-                        <Setter Property="Background" Value="{StaticResource BackgroundLightBrush}"/>
-                        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                        <Setter Property="FontWeight" Value="SemiBold"/>
-                        <Setter Property="Padding" Value="8,6"/>
-                        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-                        <Setter Property="BorderThickness" Value="0,0,1,1"/>
-                    </Style>
-                    <Style TargetType="DataGridCell">
-                        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                        <Setter Property="Padding" Value="6,4"/>
-                        <Setter Property="BorderThickness" Value="0"/>
-                        <Setter Property="VerticalAlignment" Value="Center"/>
-                    </Style>
-                    <Style TargetType="DataGridRow">
-                        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-                        <Style.Triggers>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="Background" Value="{StaticResource AccentBlueBrush}"/>
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </DataGrid.Resources>
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="#" Binding="{Binding Number}" Width="40"/>
-                    <DataGridTemplateColumn Header="Type" Width="50">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding TypeIcon}" HorizontalAlignment="Center" FontSize="14"/>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Section" Binding="{Binding Section}" Width="100"/>
-                    <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="80"/>
-                    <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
-                    <DataGridTextColumn Header="Action proposée" Binding="{Binding SuggestedAction}" Width="150"/>
-                </DataGrid.Columns>
-            </DataGrid>
-        </Grid>
-
-        <!-- Missing Data Section -->
-        <Border Grid.Row="3" Background="{StaticResource BackgroundMediumBrush}" 
-                CornerRadius="6" Padding="12" Margin="0,15,0,0"
-                Visibility="{Binding HasMissing, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel>
-                <TextBlock Text="Données manquantes" FontSize="12" FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
-                <ItemsControl ItemsSource="{Binding MissingDataItems}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
-                                       Margin="8,2,0,2"/>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-        </Border>
-
-        <!-- Footer -->
-        <Border Grid.Row="5" Margin="0,15,0,0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" 
-                           Text="💡 Conseil: Relancez le scan en mode Administrateur pour obtenir des données plus complètes."
-                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
-                           TextWrapping="Wrap" VerticalAlignment="Center"/>
-                <Button Grid.Column="1" Content="Fermer" 
-                        Style="{StaticResource FuturisticButton}"
-                        Click="CloseButton_Click"
-                        Padding="20,10" Margin="15,0,0,0"/>
-            </Grid>
-        </Border>
+        <!-- Bouton OK -->
+        <Button Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1" 
+                Content="OK" Width="80" Height="28"
+                HorizontalAlignment="Right"
+                Click="CloseButton_Click"/>
     </Grid>
 </Window>
