@@ -137,9 +137,9 @@ namespace PCDiagnosticPro.Services
         {
             try
             {
-                // Get GPU name from WMI
+                // Get GPU name from WMI first
                 string gpuName = "GPU inconnu";
-                long vramTotalBytes = 0;
+                long vramTotalBytesWmi = 0;
                 
                 using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController"))
                 {
@@ -149,7 +149,7 @@ namespace PCDiagnosticPro.Services
                         var adapterRam = obj["AdapterRAM"];
                         if (adapterRam != null)
                         {
-                            vramTotalBytes = Convert.ToInt64(adapterRam);
+                            vramTotalBytesWmi = Convert.ToInt64(adapterRam);
                         }
                         break; // Take first GPU
                     }
@@ -157,36 +157,71 @@ namespace PCDiagnosticPro.Services
                 
                 result.Gpu.Name = Available(gpuName);
                 
-                // VRAM Total from WMI
-                if (vramTotalBytes > 0)
+                // Tentative NVML pour VRAM total (évite le dépassement UInt32 de WMI)
+                bool nvmlVramSuccess = false;
+                var nvmlMem = NvmlTemperatureReader.TryGetMemoryInfo();
+                if (nvmlMem.HasValue && nvmlMem.Value.Total > 0)
                 {
-                    var vramTotalMB = vramTotalBytes / (1024.0 * 1024.0);
-                    // WMI often shows wrong values for high-VRAM cards, cap display
-                    if (vramTotalMB > 0 && vramTotalMB < 100000)
+                    var totalMB = nvmlMem.Value.Total / (1024.0 * 1024.0);
+                    result.Gpu.VramTotalMB = Available(totalMB);
+                    result.Gpu.VramUsedMB = Available(nvmlMem.Value.Used / (1024.0 * 1024.0));
+                    App.LogMessage($"[SafeSensors→GPU] VRAM via NVML: Total={totalMB:F0} Mo, Used={nvmlMem.Value.Used / (1024.0 * 1024.0):F0} Mo");
+                    nvmlVramSuccess = true;
+                }
+                
+                // Fallback WMI pour VRAM uniquement si NVML a échoué
+                if (!nvmlVramSuccess)
+                {
+                    if (vramTotalBytesWmi > 0)
                     {
-                        result.Gpu.VramTotalMB = Available(vramTotalMB);
+                        var vramTotalMB = vramTotalBytesWmi / (1024.0 * 1024.0);
+                        
+                        // Détection de dépassement UInt32: si vramTotalMB < 8192 et GPU haut de gamme connu
+                        var gpuNameUpper = gpuName.ToUpperInvariant();
+                        bool isHighEndGpu = gpuNameUpper.Contains("3090") || gpuNameUpper.Contains("4090") ||
+                                           gpuNameUpper.Contains("3080") || gpuNameUpper.Contains("4080") ||
+                                           gpuNameUpper.Contains("4070");
+                        
+                        if (isHighEndGpu && vramTotalMB < 8192)
+                        {
+                            // Dépassement UInt32 détecté - ne pas écrire la valeur fausse
+                            App.LogMessage($"[SafeSensors→GPU] VRAM WMI overflow détecté: {vramTotalMB:F0} Mo pour {gpuName} (GPU haut de gamme > 8 Go attendu)");
+                            result.Gpu.VramTotalMB = UnavailableDouble("VRAM overflow WMI (UInt32) - installer NVML pour valeur correcte");
+                        }
+                        else if (vramTotalMB > 0 && vramTotalMB < 100000)
+                        {
+                            result.Gpu.VramTotalMB = Available(vramTotalMB);
+                            App.LogMessage($"[SafeSensors→GPU] VRAM via WMI fallback: {vramTotalMB:F0} Mo");
+                        }
+                        else
+                        {
+                            result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non fiable via WMI");
+                        }
                     }
                     else
                     {
-                        result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non fiable via WMI");
+                        result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non disponible");
+                    }
+                }
+                
+                // VRAM Used: Try Performance Counters "GPU Engine" (Windows 10+) if not already set by NVML
+                if (!nvmlVramSuccess)
+                {
+                    var vramUsed = TryGetGpuVramFromPerfCounters();
+                    if (vramUsed.HasValue)
+                    {
+                        result.Gpu.VramUsedMB = Available(vramUsed.Value);
+                        result.Gpu.VramUsedSource = "Performance Counters (GPU Memory)";
+                    }
+                    else
+                    {
+                        result.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisée: voir Gestionnaire des tâches");
+                        result.Gpu.VramUsedSource = "Non disponible (mode sécurisé)";
                     }
                 }
                 else
                 {
-                    result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non disponible");
-                }
-                
-                // VRAM Used: Try Performance Counters "GPU Engine" (Windows 10+)
-                var vramUsed = TryGetGpuVramFromPerfCounters();
-                if (vramUsed.HasValue)
-                {
-                    result.Gpu.VramUsedMB = Available(vramUsed.Value);
-                    result.Gpu.VramUsedSource = "Performance Counters (GPU Memory)";
-                }
-                else
-                {
-                    result.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisée: voir Gestionnaire des tâches");
-                    result.Gpu.VramUsedSource = "Non disponible (mode sécurisé)";
+                    result.Gpu.VramUsedSource = "NVIDIA NVML (usermode)";
                 }
                 
                 // GPU Load via Performance Counters
@@ -496,6 +531,17 @@ namespace PCDiagnosticPro.Services
         [DllImport(NVML_DLL, CallingConvention = CallingConvention.Cdecl)]
         private static extern int nvmlDeviceGetTemperature(IntPtr device, int sensorType, out uint temp);
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct nvmlMemory_t
+        {
+            public ulong Total;
+            public ulong Free;
+            public ulong Used;
+        }
+
+        [DllImport(NVML_DLL, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int nvmlDeviceGetMemoryInfo(IntPtr device, out nvmlMemory_t mem);
+
         private const int NVML_SUCCESS = 0;
         private const int NVML_TEMPERATURE_GPU = 0; // Core temperature
 
@@ -550,6 +596,66 @@ namespace PCDiagnosticPro.Services
             catch (Exception ex)
             {
                 App.LogMessage($"[NVML] Exception: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Try to get GPU memory info (Total/Used) via NVML.
+        /// Returns null if NVML is not available or fails.
+        /// This avoids the UInt32 overflow from WMI AdapterRAM for GPUs > 4GB.
+        /// </summary>
+        public static (ulong Total, ulong Used)? TryGetMemoryInfo()
+        {
+            try
+            {
+                int result = nvmlInit_v2();
+                if (result != NVML_SUCCESS)
+                {
+                    App.LogMessage($"[NVML] Init failed with code {result} (memory info)");
+                    return null;
+                }
+
+                try
+                {
+                    result = nvmlDeviceGetCount_v2(out uint deviceCount);
+                    if (result != NVML_SUCCESS || deviceCount == 0)
+                    {
+                        App.LogMessage($"[NVML] No devices found for memory info (code {result}, count {deviceCount})");
+                        return null;
+                    }
+
+                    // Get first GPU
+                    result = nvmlDeviceGetHandleByIndex_v2(0, out IntPtr device);
+                    if (result != NVML_SUCCESS)
+                    {
+                        App.LogMessage($"[NVML] GetHandle failed with code {result} (memory info)");
+                        return null;
+                    }
+
+                    result = nvmlDeviceGetMemoryInfo(device, out nvmlMemory_t memInfo);
+                    if (result == NVML_SUCCESS && memInfo.Total > 0)
+                    {
+                        App.LogMessage($"[NVML] GPU memory: Total={memInfo.Total / (1024 * 1024)} MB, Used={memInfo.Used / (1024 * 1024)} MB, Free={memInfo.Free / (1024 * 1024)} MB");
+                        return (memInfo.Total, memInfo.Used);
+                    }
+
+                    App.LogMessage($"[NVML] GetMemoryInfo failed with code {result}");
+                    return null;
+                }
+                finally
+                {
+                    nvmlShutdown();
+                }
+            }
+            catch (DllNotFoundException)
+            {
+                App.LogMessage("[NVML] nvml.dll not found (memory info) - NVIDIA drivers may not be installed");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[NVML] Exception (memory info): {ex.Message}");
                 return null;
             }
         }

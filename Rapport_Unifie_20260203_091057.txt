@@ -5,7 +5,7 @@
   ▶ SECTION 1 : RÉSUMÉ GLOBAL
 ────────────────────────────────────────────────────────────────────────────────
 
-  Score santé global        : 97/100 (Grade A+)
+  Score santé global        : 98/100 (Grade A+)
   Statut                    : ✅ OK
 
   ▶ SECTION 2 : INFOS GÉNÉRALES
@@ -13,8 +13,8 @@
 
   Nom PC                    : DESKTOP-LAKVT49
   Utilisateur               : rams_
-  Date/heure scan           : 2026-02-02 19:41:10
-  Uptime                    : 2j 9h 14m
+  Date/heure scan           : 2026-02-03 09:10:57
+  Uptime                    : 0j 0h 29m
   Version OS                : Microsoft Windows NT 10.0.26200.0
   Architecture              : 64-bit
   Mode Admin                : OUI
@@ -23,35 +23,35 @@
 ────────────────────────────────────────────────────────────────────────────────
 
   GPU                       : NVIDIA GeForce RTX 3090
-  VRAM totale               : 4095 MB
+  VRAM totale               : 24576 MB
 
   ▶ SECTION 4 : PERFORMANCE ACTIVITÉ
 ────────────────────────────────────────────────────────────────────────────────
 
-  Charge CPU                : 1%
-  Utilisation RAM           : 24%
-  Débit réseau (test HTTP)  : 5,5 Mbps
+  Charge CPU                : 9%
+  Utilisation RAM           : 19%
+  Débit réseau (test HTTP)  : 17,6 Mbps
 
   Top 5 Processus (CPU):
   ┌────────────────────────────┬──────────┬────────────┐
   │ Processus                  │ CPU %    │ RAM (MB)   │
   ├────────────────────────────┼──────────┼────────────┤
-  │ PCDiagnosticPro            │     1,5% │     193,2 │
-  │ dwm                        │     0,8% │     160,7 │
-  │ svchost                    │     0,2% │      19,6 │
-  │ chrome                     │     0,2% │     456,2 │
-  │ RazerAppEngine             │     0,2% │     121,0 │
+  │ explorer                   │     2,1% │     578,3 │
+  │ PCDiagnosticPro            │     1,5% │     193,8 │
+  │ System                     │     0,6% │      21,9 │
+  │ dwm                        │     0,6% │     127,1 │
+  │ RazerAppEngine             │     0,4% │     191,1 │
   └────────────────────────────┴──────────┴────────────┘
 
   Top 5 Processus (RAM):
   ┌────────────────────────────┬────────────┬──────────┐
   │ Processus                  │ RAM (MB)   │ CPU %    │
   ├────────────────────────────┼────────────┼──────────┤
-  │ chrome                     │     949,2 │     0,0% │
-  │ Cursor                     │     881,1 │     0,0% │
-  │ chrome                     │     878,9 │     0,0% │
-  │ explorer                   │     854,3 │     0,0% │
-  │ Memory Compression         │     732,8 │     0,0% │
+  │ Cursor                     │    1499,5 │     0,0% │
+  │ explorer                   │     578,3 │     2,1% │
+  │ chrome                     │     547,2 │     0,0% │
+  │ Microsoft.CodeAnalysis.... │     465,2 │     0,3% │
+  │ chrome                     │     413,9 │     0,0% │
   └────────────────────────────┴────────────┴──────────┘
 
   ▶ SECTION 5 : MÉMOIRE RAM
@@ -61,12 +61,12 @@
   ┌─────────────────────────────┬────────────┬────────────┬──────────┐
   │ Catégorie                   │ Valeur     │ Total      │ %        │
   ├─────────────────────────────┼────────────┼────────────┼──────────┤
-  │ Physique : Utilisée          │    22,78 GB │    95,93 GB │     24% │
-  │ Physique : Disponible        │    73,15 GB │    95,93 GB │     76% │
-  │ Virtuelle : Utilisée         │  2311,16 GB │ 131072,00 GB │      2% │
-  │ Virtuelle : Disponible       │ 128760,84 GB │ 131072,00 GB │     98% │
-  │ Fichier pagination : Utilisé │    37,33 GB │   143,93 GB │     26% │
-  │ Fichier pagination : Libre   │   106,60 GB │   143,93 GB │     74% │
+  │ Physique : Utilisée          │    17,96 GB │    95,93 GB │     19% │
+  │ Physique : Disponible        │    77,97 GB │    95,93 GB │     81% │
+  │ Virtuelle : Utilisée         │  2311,12 GB │ 131072,00 GB │      2% │
+  │ Virtuelle : Disponible       │ 128760,88 GB │ 131072,00 GB │     98% │
+  │ Fichier pagination : Utilisé │    30,45 GB │   143,93 GB │     21% │
+  │ Fichier pagination : Libre   │   113,48 GB │   143,93 GB │     79% │
   └─────────────────────────────┴────────────┴────────────┴──────────┘
 
   Source : C# (GlobalMemoryStatusEx)
@@ -79,8 +79,8 @@
   ┌───────┬────────────┬────────────┬────────────┬───────────┬──────────┐
   │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Utilisé % │ Alerte   │
   ├───────┼────────────┼────────────┼────────────┼───────────┼──────────┤
-  │ C:    │    952,6 GB │    376,0 GB │    576,7 GB │    60,5 %  │ OK       │
-  │ D:    │   1863,0 GB │   1095,2 GB │    767,8 GB │    41,2 %  │ OK       │
+  │ C:    │    952,6 GB │    373,7 GB │    579,0 GB │    60,8 %  │ OK       │
+  │ D:    │   1863,0 GB │   1095,2 GB │    767,9 GB │    41,2 %  │ OK       │
   │ E:    │   1862,2 GB │   1492,7 GB │    369,5 GB │    19,8 %  │ OK       │
   │ H:    │   1862,9 GB │    696,0 GB │   1166,9 GB │    62,6 %  │ OK       │
   └───────┴────────────┴────────────┴────────────┴───────────┴──────────┘
@@ -91,13 +91,14 @@
   Micron CT2000X9PROSSD9 SCSI Disk Device : Détecté par capteurs C#
   Samsung SSD 990 PRO with Heatsink 2TB : Détecté par capteurs C#
   TOSHIBA DT01ACA200        : Détecté par capteurs C#
+  SanDisk Cruzer Glide USB Device : Détecté par capteurs C#
 
   ▶ SECTION 7 : TEMPÉRATURES ET REFROIDISSEMENT
 ────────────────────────────────────────────────────────────────────────────────
 
   Temp CPU                  : Non disponible sur ce matériel (capteur non exposé par firmware)
-  Temp GPU                  : 81,0°C
-  Temp max disques          : 37°C
+  Temp GPU                  : 79,0°C
+  Temp max disques          : 32°C
   Statut thermique          : ✅ Normal
 
   ▶ SECTION 8 : BATTERIE ET ALIMENTATION
@@ -111,12 +112,12 @@
   ═ DÉBIT INTERNET (FAI) ═
 
   Latence et qualité :
-    Latence P50    : 2,7 ms
-    Latence P95    : 8,0 ms
+    Latence P50    : 2,3 ms
+    Latence P95    : 9,0 ms
     Perte paquets  : 0,0%
-    Jitter P95     : 1,87 ms
+    Jitter P95     : 1,82 ms
     Gateway        : 192.168.2.1
-    DNS P95        : 7 ms
+    DNS P95        : 24 ms
 
   ═ Réseau local / configuration ═
   Adaptateur actif          : VMware Virtual Ethernet Adapter for VMnet8
@@ -134,13 +135,13 @@
   ▶ SECTION 11 : MISES À JOUR
 ────────────────────────────────────────────────────────────────────────────────
 
-  Updates en attente        : 2
+  Updates en attente        : 3
 
   ▶ SECTION 12 : PILOTES (DRIVERS)
 ────────────────────────────────────────────────────────────────────────────────
 
-  Pilotes détectés (C#)     : 236
-  Signés                    : 236
+  Pilotes détectés (C#)     : 235
+  Signés                    : 235
   Périph. en erreur         : 1
 
   Inventaire pilotes (C# - WMI) :
@@ -155,8 +156,6 @@
       INF: oem13.inf | Statut: Unknown
   │ MEDIA        │ Realtek High Definition Audio (Re... │ 6.0.9857.1 │ 2025-01-07 │
       INF: oem79.inf | Statut: Unknown
-  │ MEDIA        │ USB Audio Device (Microsoft)         │ 10.0.26... │ 2026-01-26 │
-      INF: wdma_usb.inf | Statut: Unknown
   │ NET          │ Bluetooth Device (Personal Area N... │ 10.0.26... │ 2006-06-21 │
       INF: bthpan.inf | Statut: Unknown
   │ NET          │ Microsoft Kernel Debug Network Ad... │ 10.0.26... │ 2006-06-21 │
@@ -171,6 +170,8 @@
       INF: oem58.inf | Statut: Unknown
   │ NET          │ VirtualBox Host-Only Ethernet Ada... │ 7.0.22.... │ 2024-10-14 │
       INF: oem23.inf | Statut: Unknown
+  │ NET          │ VMware Virtual Ethernet Adapter f... │ 14.0.0.8   │ 2023-11-02 │
+      INF: oem57.inf | Statut: Unknown
   │ NET          │ VMware Virtual Ethernet Adapter f... │ 14.0.0.8   │ 2023-11-02 │
       INF: oem57.inf | Statut: Unknown
   │ NET          │ VMware Virtual Ethernet Adapter f... │ 14.0.0.8   │ 2023-11-02 │
@@ -197,7 +198,7 @@
   │ MEDIA              │ NVIDIA High Definition Audio             │ 1.4.5.6     │ 2025-10-25 │
   │ MEDIA              │ NVIDIA Virtual Audio Device (Wave E...   │ 4.65.0.12   │ 2025-05-13 │
   │ MEDIA              │ Realtek High Definition Audio            │ 6.0.9857.1  │ 2025-01-07 │
-  │ MEDIA              │ USB Audio Device                         │ 10.0.261... │ 2026-01-26 │
+  │ NET                │ Bluetooth Device (Personal Area Net...   │ 10.0.261... │ 2006-06-21 │
   └────────────────────┴──────────────────────────────────────────┴─────────────┴────────────┘
 
   Périph. en erreur         : 0 (OK)
@@ -227,7 +228,7 @@
 
   ═ Services Windows ═
   Total services            : 310
-  En cours                  : 134
+  En cours                  : 127
 
   ▶ SECTION 14 : SANTÉ SYSTÈME ET ERREURS
 ────────────────────────────────────────────────────────────────────────────────
@@ -242,7 +243,7 @@
   ▶ SECTION 15 : PÉRIPHÉRIQUES
 ────────────────────────────────────────────────────────────────────────────────
 
-  Périphériques audio       : 4
+  Périphériques audio       : 3
   Imprimantes               : 4
   Périph. en erreur         : 0 ✅
 
@@ -255,7 +256,7 @@
 ────────────────────────────────────────────────────────────────────────────────
 
   [WindowsUpdate]
-    pendingCount: 2
+    pendingCount: 3
 
   [StartupPrograms]
     startupCount: 10
@@ -274,8 +275,8 @@
     printers: [Array 4]
 
   [Audio]
-    deviceCount: 4
-    devices: [Array 4]
+    deviceCount: 3
+    devices: [Array 3]
 
 ════════════════════════════════════════════════════════════════════════════════
 
@@ -288,6 +289,6 @@
     ✓ Tests réseau locaux (sans speedtest externe)
     ✓ Processus temps réel (CPU % mesuré sur 750ms)
 
-  Généré le 2026-02-02 à 19:41:11
+  Généré le 2026-02-03 à 09:10:59
   PC Diagnostic PRO — Rapport Unifié v2.0
 ════════════════════════════════════════════════════════════════════════════════

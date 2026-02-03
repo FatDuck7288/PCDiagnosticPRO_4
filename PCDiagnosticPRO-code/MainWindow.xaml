@@ -1003,7 +1003,7 @@
                                     <!-- NOTE: Santé machine / Fiabilité UDIS / AutoFix déplacés dans la fenêtre "Détails des erreurs de collecte" -->
                                     <!-- NOTE: Métriques Thermal/Boot/IO/Stabilité supprimées du premier écran (redondantes avec sections détaillées) -->
                                     
-                                    <!-- Network Speed Test - Style speedtest.net avec Download/Upload/Ping colorés -->
+                                    <!-- Test de vitesse réseau avec Download/Upload/Ping colorés -->
                                     <Border Background="{StaticResource BackgroundMediumBrush}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
                                         <StackPanel>
                                             <!-- Ligne 1: Titre + Bouton -->
@@ -1031,7 +1031,7 @@
                                                     </Button.Style>
                                                 </Button>
                                             </Grid>
-                                            <!-- Ligne 2: Download / Upload / Ping (style speedtest.net) -->
+                                            <!-- Ligne 2: Download / Upload / Ping -->
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>

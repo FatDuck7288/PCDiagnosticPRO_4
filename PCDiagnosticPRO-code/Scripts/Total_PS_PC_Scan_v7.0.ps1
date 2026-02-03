@@ -23,72 +23,6 @@
     [GPU] Section conservee avec donnees fiables (nom, fabricant, driver, resolution)
     [TEMPERATURES] Disques conserves si disponibles, CPU/GPU neutralises
     [ROBUSTESSE] Aucune erreur bloquante, best effort systematique
-    
-    CHANGELOG v6.6.6:
-    =================
-    [STABLE] Version stabilisee pour integration C# WPF
-    [ROBUSTESSE] Validation renforcee Extract-SmartTemperature (plage 0-125)
-    [FALLBACK] DynamicSignals: validation post-collecte + WMI fallback complet
-    [TRACE] Source documentee sur CPU/RAM/Disk/SMART
-    [SCORE] Score min 10, penalites ponderees, topPenalties[] inclus
-    
-    CHANGELOG v6.6.5:
-    =================
-    [PATCH 1] Load-LibreHardwareMonitor: chemins Virtual IT Pro + fallback WMI explicite
-    [PATCH 2] Calculate-ScoreV2: penalites ponderees, score min 10, top 5 penalites
-    [PATCH 3] Stopwatch global: duree console = duree rapport (unifiee)
-    [PATCH 4] SMART: Extract-SmartTemperature low-byte ameliore (deja v6.6.3)
-    [TRACE] Source documentee sur collectes critiques
-    [LICENCE] Note MPL 2.0 pour LibreHardwareMonitor
-    
-    CHANGELOG v6.6.4:
-    =================
-    [PATCH 1] InstalledApplications: ajout HKCU + fallback Get-Package
-    [PATCH 2] Processes: fallback CIM Win32_Process si Get-Process echoue
-    [PATCH 3] PowerSettings: meilleur parsing powercfg + fallback registre
-    [PATCH 4] DynamicSignals: fallback CIM si Get-Counter echoue
-    [PATCH 5] WMI_ERROR: messages detailles (namespace/classe/exception)
-    [TRACE] Source documentee sur chaque collecte critique
-    
-    CHANGELOG v6.6.3:
-    =================
-    [PATCH 1] Normalize-Temperature: conversion Kelvin auto (200-500K, 1000-5000 dK)
-    [PATCH 2] Extract-SmartTemperature: lecture low byte SMART (attributs 194/190)
-    [PATCH 3] Add-WmiError: journalisation detaillee WMI/CIM (namespace/classe/methode)
-    [PATCH 4] Test-ValidValue: distingue 0 (valide) de null/empty (echec)
-    [PATCH 5] Fallback temperature disque: SMART -> StorageReliability -> unavailable
-    
-    CHANGELOG v6.6.2:
-    =================
-    [ROBUSTESSE] Invoke-WithFallback: execution multi-methodes avec fallback auto
-    [FALLBACK] Temperatures: LHM -> WMI ThermalZone -> registry -> unavailable
-    [FALLBACK] SMART: MSFT_StorageReliability -> Win32_DiskDrive -> unavailable
-    [FALLBACK] WMI: Get-CimInstance -> Get-WmiObject -> unavailable
-    [QUALITE] Champs source/quality/reason sur donnees critiques
-    [TRACE] Tous echecs loggues dans missingData[]
-    
-    CHANGELOG v6.6.1:
-    =================
-    [CRITIQUE] Correction bug JSON "if n'est pas reconnu" (31 occurrences)
-      - Syntaxe "$var = if (...) {...} else {...}" remplacee par if/else classique
-      - Toutes les expressions inline corrigees pour PS 5.1 strict
-    [AJOUT] IA-readiness: champs normalises abnormal/reason/confidence/key_metrics
-    [AJOUT] Tableau global missingData[] pour donnees non collectees
-    [AJOUT] ScoreV2 avec breakdown detaille (CRIT -25, ERROR -10, WARN -3)
-    [ROBUSTESSE] Logging JSON ameliore si echec serialisation
-    [COMPAT] PowerShell 5.1 Desktop strict (pas d'operateur ternaire)
-    
-    CHANGELOG v6.6.0:
-    =================
-    [v6.6.0] Patches "produit final":
-      - Wrapper global anti-crash + generation TXT/JSON minimal garantie.
-      - Contrat JSON immuable (metadata/paths/sections/errors/findings) + conversion JSON safe.
-      - VRAM GPU multi-sources priorisee (NVIDIA-SMI/DXDIAG/REGISTRY/WMI) avec validation stricte.
-      - Ajout temperature CPU + disques best-effort avec bornes de plausibilite.
-      - Temperatures/SMART: rejet des lectures absurdes et notes explicites.
-      - Monitoring dynamique durci (tri CPU sans crash, garde-fous sur acces propriete).
-      - Statuts de sections stables meme en cas d'echec collecteur.
-      - Redaction/encodage UTF-8 BOM conserves pour compatibilite C#.
 
 .PARAMETER Full
     Active export JSON complet dans le rapport TXT
@@ -266,7 +200,7 @@ $Script:MaxTempFiles = $MaxTempFiles
 $Script:HardenOutputAcl = $HardenOutputAcl.IsPresent
 #endregion
 
-#region ============== HELPERS ROBUSTES (v6.4) ==============
+#region ============== HELPERS ROBUSTES ==============
 <#
 .SYNOPSIS
     Recupere une propriete sur un objet de facon 100% securisee
@@ -390,7 +324,7 @@ function Convert-SafeDouble {
 function Get-CimOrWmi {
     <#
     .SYNOPSIS
-        Fallback automatique CIM -> WMI (v6.6.2)
+        Fallback automatique CIM -> WMI
     #>
     param(
         [string]$ClassName,
@@ -528,7 +462,7 @@ function Test-TemperatureValue {
 function Normalize-Temperature {
     <#
     .SYNOPSIS
-        Normalise une temperature avec conversion Kelvin automatique (v6.6.3)
+        Normalise une temperature avec conversion Kelvin automatique
     #>
     param(
         [object]$Value,
@@ -562,7 +496,7 @@ function Normalize-Temperature {
 function Extract-SmartTemperature {
     <#
     .SYNOPSIS
-        Extrait temperature SMART depuis raw value (v6.6.6)
+        Extrait temperature SMART depuis raw value
         Lit le LOW BYTE, pas l'entier complet
         Plage valide: 0-125 degres Celsius
     #>
@@ -914,7 +848,7 @@ $Script:DegreeSymbol = [char]176
 function Load-LibreHardwareMonitor {
     <#
     .SYNOPSIS
-        Charge la DLL LibreHardwareMonitor si disponible localement (v6.6.5)
+        Charge la DLL LibreHardwareMonitor si disponible localement
     .DESCRIPTION
         Recherche dans plusieurs emplacements: app packagée, script, Program Files.
         LICENCE: LibreHardwareMonitor est sous MPL 2.0 - à vérifier par l'équipe.
@@ -1076,7 +1010,7 @@ function Get-GpuTempFallback {
 function Get-SmartTemperatureFromVendorSpecific {
     <#
     .SYNOPSIS
-        Extrait temperature SMART depuis VendorSpecific (v6.6.3)
+        Extrait temperature SMART depuis VendorSpecific
         Attributs 194 (Temperature_Celsius) ou 190 (Airflow_Temperature)
         Lecture du LOW BYTE de la raw value
     #>
@@ -1368,7 +1302,7 @@ function Add-ErrorLog {
 function Add-WmiError {
     <#
     .SYNOPSIS
-        Journalise erreur WMI/CIM avec details complets (v6.6.3)
+        Journalise erreur WMI/CIM avec details complets
     #>
     param(
         [string]$Namespace,
@@ -1391,7 +1325,7 @@ function Add-WmiError {
 function Test-ValidValue {
     <#
     .SYNOPSIS
-        Distingue valeur valide (incluant 0) de null/empty (v6.6.3)
+        Distingue valeur valide (incluant 0) de null/empty
     #>
     param([object]$Value, [switch]$AllowZero)
     if ($null -eq $Value) { return $false }
@@ -1404,7 +1338,7 @@ function Test-ValidValue {
 function Invoke-WithFallback {
     <#
     .SYNOPSIS
-        Execute une liste de methodes avec fallback automatique (v6.6.2)
+        Execute une liste de methodes avec fallback automatique
     #>
     param(
         [scriptblock[]]$Methods,

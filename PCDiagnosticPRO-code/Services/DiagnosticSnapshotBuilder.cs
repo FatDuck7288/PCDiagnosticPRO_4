@@ -367,9 +367,35 @@ namespace PCDiagnosticPro.Services
                 
                 if (TryGetSectionData(sections, out var latency, "NetworkLatency"))
                 {
-                    netMetrics["pingGoogle"] = MetricFromNumber(latency, "PingGoogle", "ms", "PS/NetworkLatency");
-                    netMetrics["pingCloudflare"] = MetricFromNumber(latency, "PingCloudflare", "ms", "PS/NetworkLatency");
-                    netMetrics["avgLatency"] = MetricFromNumber(latency, "AvgLatency", "ms", "PS/NetworkLatency");
+                    // Structure réelle : latency.ping[] = [{target, latencyMs, success, skipped}, ...]
+                    if (latency.TryGetProperty("ping", out var pingArray) && pingArray.ValueKind == JsonValueKind.Array)
+                    {
+                        double? googleLatency = null, cloudflareLatency = null;
+                        var latencies = new List<double>();
+
+                        foreach (var entry in pingArray.EnumerateArray())
+                        {
+                            if (!entry.TryGetProperty("success", out var success) || !success.GetBoolean()) continue;
+                            if (!entry.TryGetProperty("latencyMs", out var lat) || lat.ValueKind != JsonValueKind.Number) continue;
+
+                            var ms = lat.GetDouble();
+                            latencies.Add(ms);
+
+                            if (entry.TryGetProperty("target", out var target))
+                            {
+                                var t = target.GetString() ?? "";
+                                if (t.Contains("8.8.8.8"))  googleLatency = ms;
+                                if (t.Contains("1.1.1.1"))  cloudflareLatency = ms;
+                            }
+                        }
+
+                        if (googleLatency.HasValue)
+                            netMetrics["pingGoogle"] = MetricFactory.CreateAvailable(googleLatency.Value, "ms", "PS/NetworkLatency", 100);
+                        if (cloudflareLatency.HasValue)
+                            netMetrics["pingCloudflare"] = MetricFactory.CreateAvailable(cloudflareLatency.Value, "ms", "PS/NetworkLatency", 100);
+                        if (latencies.Count > 0)
+                            netMetrics["avgLatency"] = MetricFactory.CreateAvailable(latencies.Average(), "ms", "PS/NetworkLatency", 100);
+                    }
                 }
                 
                 if (netMetrics.Count > 0)
@@ -752,33 +778,58 @@ namespace PCDiagnosticPro.Services
             
             try
             {
-                // Event Logs
+                // Event Logs - Structure réelle : events.logs.System.criticalCount / errorCount
+                //                                 events.logs.Application.criticalCount / errorCount
                 if (TryGetSectionData(sections, out var events, "EventLogs", "EventLogInfo"))
                 {
-                    stabMetrics["criticalEvents24h"] = MetricFromNumber(events, "Critical24h", "count", "PS/EventLogs");
-                    stabMetrics["errorEvents24h"] = MetricFromNumber(events, "Error24h", "count", "PS/EventLogs");
-                    stabMetrics["warningEvents24h"] = MetricFromNumber(events, "Warning24h", "count", "PS/EventLogs");
-                    
-                    if (TryGetPropertyCaseInsensitive(events, out var summary, "Summary"))
+                    int totalCritical = 0, totalError = 0;
+
+                    if (events.TryGetProperty("logs", out var logs) && logs.ValueKind == JsonValueKind.Object)
                     {
-                        stabMetrics["appCrashes"] = MetricFromNumber(summary, "AppCrashes", "count", "PS/EventLogs");
-                        stabMetrics["bsods"] = MetricFromNumber(summary, "BSOD", "count", "PS/EventLogs");
+                        foreach (var logSource in logs.EnumerateObject())
+                        {
+                            if (logSource.Value.TryGetProperty("criticalCount", out var cc) && cc.ValueKind == JsonValueKind.Number)
+                                totalCritical += cc.GetInt32();
+                            if (logSource.Value.TryGetProperty("errorCount", out var ec) && ec.ValueKind == JsonValueKind.Number)
+                                totalError += ec.GetInt32();
+                        }
                     }
+
+                    stabMetrics["criticalEvents24h"] = MetricFactory.CreateAvailable(totalCritical, "count", "PS/EventLogs", 100);
+                    stabMetrics["errorEvents24h"] = MetricFactory.CreateAvailable(totalError, "count", "PS/EventLogs", 100);
+
+                    // bsodCount existe à la racine de events
+                    if (events.TryGetProperty("bsodCount", out var bsod) && bsod.ValueKind == JsonValueKind.Number)
+                        stabMetrics["bsods"] = MetricFactory.CreateAvailable(bsod.GetInt32(), "count", "PS/EventLogs", 100);
+
+                    // warningEvents24h : pas collecté par PS → marquer indisponible explicitement
+                    stabMetrics["warningEvents24h"] = MetricFactory.CreateUnavailable("count", "PS/EventLogs", "not_collected_by_ps");
                 }
                 
-                // Reliability History
+                // Reliability History - appCrashes existe → mapper vers appFailures30d
                 if (TryGetSectionData(sections, out var reliability, "ReliabilityHistory"))
                 {
-                    stabMetrics["reliabilityIndex"] = MetricFromNumber(reliability, "ReliabilityIndex", "", "PS/ReliabilityHistory");
-                    stabMetrics["appFailures30d"] = MetricFromNumber(reliability, "AppFailures30d", "count", "PS/ReliabilityHistory");
-                    stabMetrics["hwFailures30d"] = MetricFromNumber(reliability, "HwFailures30d", "count", "PS/ReliabilityHistory");
+                    // appCrashes existe → mapper vers appFailures30d
+                    if (reliability.TryGetProperty("appCrashes", out var ac) && ac.ValueKind == JsonValueKind.Number)
+                        stabMetrics["appFailures30d"] = MetricFactory.CreateAvailable(ac.GetInt32(), "count", "PS/ReliabilityHistory", 100);
+
+                    // eventCount existe comme indicateur général
+                    if (reliability.TryGetProperty("eventCount", out var ec) && ec.ValueKind == JsonValueKind.Number)
+                        stabMetrics["reliabilityEventCount"] = MetricFactory.CreateAvailable(ec.GetInt32(), "count", "PS/ReliabilityHistory", 100);
+
+                    // ReliabilityIndex et HwFailures30d ne sont pas collectés par PS
+                    stabMetrics["reliabilityIndex"] = MetricFactory.CreateUnavailable("", "PS/ReliabilityHistory", "not_collected_by_ps");
+                    stabMetrics["hwFailures30d"] = MetricFactory.CreateUnavailable("count", "PS/ReliabilityHistory", "not_collected_by_ps");
                 }
                 
-                // Minidump Analysis
+                // Minidump Analysis - Propriété réelle : minidumpCount (pas "Count")
                 if (TryGetSectionData(sections, out var minidump, "MinidumpAnalysis"))
                 {
-                    stabMetrics["minidumpCount"] = MetricFromNumber(minidump, "Count", "count", "PS/MinidumpAnalysis");
-                    stabMetrics["lastBsodDate"] = MetricFromString(minidump, "LastBsod", "PS/MinidumpAnalysis");
+                    if (minidump.TryGetProperty("minidumpCount", out var mc) && mc.ValueKind == JsonValueKind.Number)
+                        stabMetrics["minidumpCount"] = MetricFactory.CreateAvailable(mc.GetInt32(), "count", "PS/MinidumpAnalysis", 100);
+
+                    // LastBsod n'est jamais collecté par PS
+                    stabMetrics["lastBsodDate"] = MetricFactory.CreateUnavailable("date", "PS/MinidumpAnalysis", "not_collected_by_ps");
                 }
                 
                 if (stabMetrics.Count > 0)
@@ -973,6 +1024,15 @@ namespace PCDiagnosticPro.Services
             
             if (summary.DownloadMbps.HasValue)
                 netMetrics["downloadMbps"] = MetricFactory.CreateAvailable(summary.DownloadMbps.Value, "Mbps", "NetworkDiagnosticsCollector", 100);
+            
+            // Backfill pingGoogle / pingCloudflare / avgLatency avec données du collecteur C#
+            // uniquement si PS n'a pas réussi à les peupler
+            if (!netMetrics.ContainsKey("pingGoogle") || !netMetrics["pingGoogle"].Available)
+                netMetrics["pingGoogle"] = MetricFactory.CreateAvailable(summary.LatencyP50Ms, "ms", "NetworkDiagnosticsCollector", 80);
+            if (!netMetrics.ContainsKey("pingCloudflare") || !netMetrics["pingCloudflare"].Available)
+                netMetrics["pingCloudflare"] = MetricFactory.CreateAvailable(summary.LatencyP50Ms, "ms", "NetworkDiagnosticsCollector", 80);
+            if (!netMetrics.ContainsKey("avgLatency") || !netMetrics["avgLatency"].Available)
+                netMetrics["avgLatency"] = MetricFactory.CreateAvailable(summary.LatencyP50Ms, "ms", "NetworkDiagnosticsCollector", 80);
             
             LogBuild($"[AddNetworkDiagnostics] Added network summary: latency={summary.LatencyP50Ms}ms, loss={summary.PacketLossPercent}%");
             return this;

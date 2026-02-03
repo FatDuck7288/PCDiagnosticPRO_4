@@ -275,8 +275,7 @@ namespace PCDiagnosticPro.Services
             var gpuSection = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.GPU);
             var storageSection = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.Storage);
 
-            // Injection CPU
-            // FIX: Avoid duplicating temperature if already present from ComprehensiveEvidenceExtractor
+            // Injection CPU (évite les doublons avec ComprehensiveEvidenceExtractor)
             if (cpuSection != null && sensors.Cpu.CpuTempC.Available &&
                 !cpuSection.EvidenceData.ContainsKey("Temperature") &&
                 !cpuSection.EvidenceData.ContainsKey("Température CPU"))
@@ -289,15 +288,13 @@ namespace PCDiagnosticPro.Services
                 App.LogMessage($"[Sensors→CPU] Température injectée: {sensors.Cpu.CpuTempC.Value:F1}°C from {sensors.Cpu.CpuTempSource}");
             }
 
-            // Injection GPU
-            // FIX: Avoid duplicating "Temperature" and "Température GPU" - only inject if not already present
+            // Injection GPU (évite les doublons)
             if (gpuSection != null)
             {
                 if (sensors.Gpu.Name.Available && !gpuSection.EvidenceData.ContainsKey("GPU"))
                     gpuSection.EvidenceData["GPU"] = sensors.Gpu.Name.Value ?? "N/A";
                 
-                // FIX: Only inject temperature if not already present from ComprehensiveEvidenceExtractor
-                // Check for both "Temperature" and "Température GPU" keys to avoid duplicates
+                // Température GPU (vérifie les deux clés pour éviter les doublons)
                 if (sensors.Gpu.GpuTempC.Available && 
                     !gpuSection.EvidenceData.ContainsKey("Temperature") && 
                     !gpuSection.EvidenceData.ContainsKey("Température GPU"))
@@ -310,7 +307,6 @@ namespace PCDiagnosticPro.Services
                     App.LogMessage($"[Sensors→GPU] Température injectée: {sensors.Gpu.GpuTempC.Value:F1}°C from {sensors.Gpu.GpuTempSource}");
                 }
                 
-                // FIX: Only inject if not already present
                 if (sensors.Gpu.GpuLoadPercent.Available && 
                     !gpuSection.EvidenceData.ContainsKey("Load") &&
                     !gpuSection.EvidenceData.ContainsKey("Charge GPU"))
@@ -319,7 +315,6 @@ namespace PCDiagnosticPro.Services
                     App.LogMessage($"[Sensors→GPU] Charge injectée: {sensors.Gpu.GpuLoadPercent.Value:F0}%");
                 }
                 
-                // FIX: Only inject VRAM if not already present
                 if (sensors.Gpu.VramTotalMB.Available && sensors.Gpu.VramUsedMB.Available &&
                     !gpuSection.EvidenceData.ContainsKey("VRAM") &&
                     !gpuSection.EvidenceData.ContainsKey("VRAM totale"))
@@ -564,7 +559,6 @@ namespace PCDiagnosticPro.Services
         {
             var metadata = new ScanMetadata();
             
-            // FIX: Guard against non-Object root before TryGetProperty
             if (root.ValueKind != JsonValueKind.Object)
                 return metadata;
             
@@ -595,7 +589,6 @@ namespace PCDiagnosticPro.Services
         {
             var scoreV2 = new ScoreV2Data();
             
-            // FIX: Guard against non-Object root before TryGetProperty
             if (root.ValueKind != JsonValueKind.Object)
                 return scoreV2;
             
@@ -626,7 +619,6 @@ namespace PCDiagnosticPro.Services
                     {
                         foreach (var penalty in tpArray.EnumerateArray())
                         {
-                            // FIX: check ValueKind before TryGetProperty
                             if (penalty.ValueKind != JsonValueKind.Object)
                                 continue;
                             
@@ -660,7 +652,6 @@ namespace PCDiagnosticPro.Services
             // Fallback: calculer depuis summary ou sections
             var score = new ScoreV2Data { Score = 100, BaseScore = 100, Grade = "A" };
             
-            // FIX: Guard against non-Object root before TryGetProperty
             if (root.ValueKind != JsonValueKind.Object)
                 return score;
             
@@ -680,7 +671,6 @@ namespace PCDiagnosticPro.Services
         {
             var errors = new List<ScanErrorInfo>();
             
-            // FIX: Guard against non-Object root before TryGetProperty
             if (root.ValueKind != JsonValueKind.Object)
                 return errors;
             
@@ -688,7 +678,6 @@ namespace PCDiagnosticPro.Services
             {
                 foreach (var err in errArray.EnumerateArray())
                 {
-                    // FIX: check ValueKind before TryGetProperty
                     if (err.ValueKind != JsonValueKind.Object)
                         continue;
                     
@@ -708,7 +697,6 @@ namespace PCDiagnosticPro.Services
         {
             var missing = new List<string>();
             
-            // FIX: Guard against non-Object root before TryGetProperty
             if (root.ValueKind != JsonValueKind.Object)
                 return missing;
             
@@ -735,7 +723,6 @@ namespace PCDiagnosticPro.Services
                 domainData[domain] = new List<(string, JsonElement, string)>();
             }
             
-            // FIX: Guard against non-Object root elements before calling TryGetProperty
             if (root.ValueKind != JsonValueKind.Object)
             {
                 App.LogMessage($"[HealthReportBuilder] Warning: root is not Object (is {root.ValueKind}), skipping section parsing");
@@ -790,7 +777,6 @@ namespace PCDiagnosticPro.Services
                         var status = "OK";
                         JsonElement data;
                         
-                        // FIX: Guard against non-Object sectionData - TryGetProperty throws on Arrays
                         if (sectionData.ValueKind == JsonValueKind.Object)
                         {
                             if (sectionData.TryGetProperty("status", out var statusProp))
@@ -820,7 +806,7 @@ namespace PCDiagnosticPro.Services
                     HasData = domainData[domain].Count > 0
                 };
                 
-                // FIX: Pour le domaine Drivers, utiliser les données WMI en fallback si PS est vide
+                // Pour le domaine Drivers, utiliser les données WMI en fallback si PS est vide
                 if (domain == HealthDomain.Drivers && !section.HasData)
                 {
                     var wmiDriverData = GetEssentialDriversFromWmiForHealth();
@@ -852,7 +838,6 @@ namespace PCDiagnosticPro.Services
                     
                     // === NOUVEAU: Utiliser ComprehensiveEvidenceExtractor pour données complètes ===
                     // Extrait données de: PS sections, sensors C#, diagnostic_signals, network_diagnostics, etc.
-                    // FIX: Wrap in try-catch to isolate extraction errors per section
                     try
                     {
                         var comprehensiveEvidence = ComprehensiveEvidenceExtractor.Extract(domain, root, sensors);
@@ -1020,7 +1005,7 @@ namespace PCDiagnosticPro.Services
                         case HealthDomain.CPU:
                             if (sectionName == "CPU" && data.ValueKind == JsonValueKind.Object)
                             {
-                                // FIX: Use correct field name 'cpus' (PS script), with 'cpuList' fallback
+                                // Supporte 'cpus' (sortie PS) et 'cpuList' comme alias
                                 JsonElement cpuArray = default;
                                 bool hasCpuArray = false;
                                 
@@ -1396,7 +1381,6 @@ namespace PCDiagnosticPro.Services
                             }
                             break;
                             
-                        // FIX: Ajouter extraction evidence pour le domaine Drivers
                         case HealthDomain.Drivers:
                             if (sectionName == "DevicesDrivers" && data.ValueKind == JsonValueKind.Object)
                             {
@@ -1598,7 +1582,7 @@ namespace PCDiagnosticPro.Services
         }
         
         /// <summary>
-        /// FIX: Récupère les pilotes essentiels via WMI pour le domaine Drivers (fallback quand PS est vide)
+        /// Récupère les pilotes essentiels via WMI pour le domaine Drivers (fallback quand PS est vide)
         /// </summary>
         private static List<(string cls, string? name, string? version, string date)> GetEssentialDriversFromWmiForHealth()
         {

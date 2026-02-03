@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
 {
     /// <summary>
-    /// FIX 7: Optional Internet speed test using Ookla Speedtest CLI.
+    /// Test de vitesse Internet via CLI externe.
     /// ONLY triggered when AllowExternalNetworkTests = true AND user opts in.
     /// Does NOT auto-download any executable.
     /// </summary>
@@ -71,7 +71,7 @@ namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
                         {
                             Available = false,
                             Reason = "tool_not_installed",
-                            Message = "Outil non installé : installez Ookla Speedtest CLI depuis https://www.speedtest.net/apps/cli"
+                            Message = "Outil non installé : installez un outil de test de vitesse CLI compatible"
                         },
                         Available = false,
                         Source = "InternetSpeedTestCollector",

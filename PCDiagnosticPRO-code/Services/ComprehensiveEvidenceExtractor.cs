@@ -167,11 +167,11 @@ namespace PCDiagnosticPro.Services
             }
 
             // 4. Secure Boot (Oui/Non, PAS "—")
-            // FIX: Check MachineIdentity.secureBoot as primary source, Security as fallback
+            // MachineIdentity.secureBoot (prioritaire) ou Security (fallback)
             var secData = GetSectionData(root, "Security");
             var machineIdData = GetSectionData(root, "MachineIdentity");
             
-            // FIX: Priority order: MachineIdentity.secureBoot (most reliable) > Security.secureBootEnabled
+            // Priorité: MachineIdentity.secureBoot > Security.secureBootEnabled
             var secureBoot = GetBool(machineIdData, "secureBoot") ?? 
                              GetBool(secData, "secureBootEnabled") ?? 
                              GetBool(secData, "SecureBootEnabled");
@@ -182,7 +182,7 @@ namespace PCDiagnosticPro.Services
             AddYesNo(ev, "Secure Boot", secureBoot, secureBootSource);
 
             // 5. Antivirus actif + état
-            // FIX: Handle antivirusProducts as string OR array
+            // antivirusProducts peut être string ou array
             string? avName = null;
             string? avStatus = null;
             
@@ -219,7 +219,7 @@ namespace PCDiagnosticPro.Services
                 avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus") ?? GetString(secData, "AntivirusStatus");
             }
             
-            // FIX: Check defenderEnabled/defenderRTP as status indicators
+            // defenderEnabled/defenderRTP comme indicateurs de statut
             if (string.IsNullOrEmpty(avStatus) && secData.HasValue)
             {
                 var defenderEnabled = GetBool(secData, "defenderEnabled");
@@ -251,8 +251,8 @@ namespace PCDiagnosticPro.Services
             }
 
             // 6. Espace libre C: (total / libre / %)
-            // FIX: Support both "letter" (PS actual) and "driveLetter" (legacy)
-            // FIX: Support both "freeGB"/"totalGB" (PS actual) and "freeSpaceGB"/"sizeGB" (legacy)
+            // Supporte "letter" (sortie PS) et "driveLetter" comme alias
+            // Supporte "freeGB"/"totalGB" (PS) et "freeSpaceGB"/"sizeGB" comme alias
             var storageData = GetSectionData(root, "Storage");
             bool foundC = false;
             if (storageData.HasValue && storageData.Value.TryGetProperty("volumes", out var volumes) && 
@@ -260,13 +260,13 @@ namespace PCDiagnosticPro.Services
             {
                 foreach (var vol in volumes.EnumerateArray())
                 {
-                    // FIX: Support both "letter" (actual PS output) and "driveLetter" (expected)
+                    // Supporte "letter" (PS) et "driveLetter" comme alias
                     var letter = GetString(vol, "letter") ?? GetString(vol, "driveLetter");
                     var letterUpper = letter?.ToUpper().TrimEnd(':');
                     
                     if (letterUpper == "C")
                     {
-                        // FIX: Support both freeGB/totalGB (actual) and freeSpaceGB/sizeGB (legacy)
+                        // Supporte freeGB/totalGB et freeSpaceGB/sizeGB comme alias
                         var freeGB = GetDouble(vol, "freeGB") ?? GetDouble(vol, "freeSpaceGB");
                         var sizeGB = GetDouble(vol, "totalGB") ?? GetDouble(vol, "sizeGB");
                         
@@ -403,7 +403,7 @@ namespace PCDiagnosticPro.Services
             
             if (cpuData.HasValue)
             {
-                // FIX: Support both array AND object for cpus/cpuList (PS script may return object for single CPU)
+                // Supporte array et object pour cpus/cpuList
                 firstCpu = GetFirstItemFromArrayOrObject(cpuData, "cpus") ?? GetFirstItemFromArrayOrObject(cpuData, "cpuList");
                 
                 // #region agent log
@@ -455,7 +455,7 @@ namespace PCDiagnosticPro.Services
             }
 
             // 6. Température CPU (capteurs C# - UNE SEULE LIGNE)
-            // FIX: Provide detailed reason when unavailable + check security blocking
+            // Raison détaillée si indisponible + vérification blocage sécurité
             if (sensors?.Cpu?.CpuTempC?.Available == true && sensors.Cpu.CpuTempC.Value > 0)
             {
                 var temp = sensors.Cpu.CpuTempC.Value;
@@ -623,7 +623,7 @@ namespace PCDiagnosticPro.Services
             
             if (gpuData.HasValue)
             {
-                // FIX: Support both array AND object for gpuList/gpus (PS script may return object for single GPU)
+                // Supporte array et object pour gpuList/gpus
                 firstGpu = GetFirstItemFromArrayOrObject(gpuData, "gpuList") ?? GetFirstItemFromArrayOrObject(gpuData, "gpus");
                 
                 // #region agent log
@@ -722,7 +722,7 @@ namespace PCDiagnosticPro.Services
             {
                 var vramMB = GetDouble(firstGpu, "vramTotalMB");
                 
-                // FIX: Corriger les valeurs WMI incorrectes (overflow 32-bit pour GPU > 4GB)
+                // Corrige les valeurs WMI incorrectes (overflow 32-bit pour GPU > 4GB)
                 vramMB = GetCorrectedVramMB(name, vramMB);
                 
                 if (vramMB.HasValue && vramMB > 0)
@@ -774,7 +774,7 @@ namespace PCDiagnosticPro.Services
             {
                 var temp = sensors.Gpu.GpuTempC.Value;
                 var status = temp > 85 ? " 🔥 Critique" : temp > 75 ? " ⚠️ Élevée" : " ✅";
-                // FIX: Show temperature source for debugging discrepancies with Task Manager
+                // Affiche la source de température pour debug
                 var source = sensors.Gpu.GpuTempSource ?? "LHM";
                 Add(ev, "Température GPU", $"{temp:F0}°C{status}", $"sensors_csharp.gpu.gpuTempC ({source})");
                 
@@ -863,7 +863,7 @@ namespace PCDiagnosticPro.Services
             var storageData = GetSectionData(root, "Storage");
             
             // 1 & 2. Disques physiques avec type
-            // FIX: Support both "physicalDisks" (actual PS output) and "disks" (legacy)
+            // Supporte "physicalDisks" (PS) et "disks" comme alias
             JsonElement? disksElement = null;
             string diskSource = "physicalDisks";
             
@@ -908,7 +908,7 @@ namespace PCDiagnosticPro.Services
                         _ => mediaType.ToUpper() == "HDD" ? "HDD" : "Disque"
                     };
                     
-                    // FIX: Display temperature with emoji if available from sensors
+                    // Affiche température avec emoji si disponible
                     string? tempInfo = null;
                     if (sensors?.Disks != null)
                     {
@@ -1022,8 +1022,7 @@ namespace PCDiagnosticPro.Services
             }
 
             // 5. TOUTES les partitions (obligatoire selon cahier des charges)
-            // FIX: Support both "letter" (actual) and "driveLetter" (legacy)
-            // FIX: Support both "freeGB"/"totalGB" (actual) and "freeSpaceGB"/"sizeGB" (legacy)
+            // Supporte "letter"/"driveLetter" et "freeGB"/"totalGB"/"freeSpaceGB"/"sizeGB" comme alias
             if (storageData.HasValue && storageData.Value.TryGetProperty("volumes", out var volumes) && 
                 volumes.ValueKind == JsonValueKind.Array)
             {
@@ -1086,7 +1085,7 @@ namespace PCDiagnosticPro.Services
                     var name = GetString(adapter, "name")?.ToLower() ?? "";
                     var status = GetString(adapter, "status")?.ToLower() ?? "";
                     
-                    // FIX: Extract IPv4 from ip[] array OR ipv4 string
+                    // Extrait IPv4 depuis ip[] array ou ipv4 string
                     var ipv4 = ExtractIPv4FromAdapter(adapter);
                     
                     // Ignorer les adaptateurs virtuels
@@ -1244,7 +1243,7 @@ namespace PCDiagnosticPro.Services
             // === C#: network_diagnostics ===
             var netDiag = GetNestedElement(root, "network_diagnostics");
             // Also try diagnostic_signals.networkQuality as fallback
-            // FIX: Properly handle null signals (avoid "Operation is not valid" error)
+            // Gère les signaux null pour éviter les erreurs
             var diagSignals = GetDiagnosticSignals(root);
             var netQuality = diagSignals.HasValue ? GetSignalResult(diagSignals.Value, "networkQuality") : null;
             JsonElement? netQualityValue = null;
@@ -1963,7 +1962,7 @@ namespace PCDiagnosticPro.Services
             // #endregion
             
             // 1. Antivirus - try multiple sources
-            // FIX: Handle antivirusProducts as string OR array
+            // antivirusProducts peut être string ou array
             string? avName = null;
             string? avStatus = null;
             
@@ -2000,7 +1999,7 @@ namespace PCDiagnosticPro.Services
                 avStatus = GetString(secData, "antivirusStatus") ?? GetString(secData, "avStatus");
             }
             
-            // FIX: Check defenderEnabled/defenderRTP as status indicators
+            // defenderEnabled/defenderRTP comme indicateurs de statut
             if (string.IsNullOrEmpty(avStatus) && secData.HasValue)
             {
                 var defenderEnabled = GetBool(secData, "defenderEnabled");
@@ -2032,7 +2031,7 @@ namespace PCDiagnosticPro.Services
             }
 
             // 2. Pare-feu - handle multiple structures
-            // FIX: Handle firewall as object with profiles (Private/Domain/Public) with value__ property
+            // Firewall peut être un objet avec profiles (Private/Domain/Public)
             bool? fwEnabled = GetBool(secData, "firewallEnabled");
             string fwProfiles = "";
             
@@ -2040,7 +2039,7 @@ namespace PCDiagnosticPro.Services
             {
                 if (fwObj.ValueKind == JsonValueKind.Object)
                 {
-                    // FIX: Parse firewall object with profile sub-objects containing value__
+                    // Parse l'objet firewall avec sous-objets de profils
                     // Structure: { "Private": { "value__": 1 }, "Domain": { "value__": 1 }, "Public": { "value__": 1 } }
                     var enabledProfiles = new List<string>();
                     var disabledProfiles = new List<string>();
@@ -2120,7 +2119,7 @@ namespace PCDiagnosticPro.Services
             var securityInfoCsharp = GetNestedElement(root, "security_info_csharp");
             
             // 4. BitLocker (OUI/NON - OBLIGATOIRE, pas "—")
-            // FIX: Try PowerShell first, then C# fallback from SecurityInfoCollector
+            // PowerShell prioritaire, SecurityInfoCollector en fallback
             var bitlocker = GetBool(secData, "bitlockerEnabled") ?? GetBool(secData, "bitLocker") ?? GetBool(secData, "BitLocker");
             if (bitlocker.HasValue)
             {
@@ -2159,7 +2158,7 @@ namespace PCDiagnosticPro.Services
             AddYesNo(ev, "UAC", uac, "scan_powershell.sections.Security.data.uacEnabled");
 
             // 6. RDP
-            // FIX: Try PowerShell first, then C# fallback from SecurityInfoCollector
+            // PowerShell prioritaire, SecurityInfoCollector en fallback
             var rdp = GetBool(secData, "rdpEnabled") ?? GetBool(secData, "RDP");
             if (rdp.HasValue)
             {
@@ -2189,7 +2188,7 @@ namespace PCDiagnosticPro.Services
             }
 
             // 7. SMBv1
-            // FIX: Try PowerShell first, then C# fallback from SecurityInfoCollector
+            // PowerShell prioritaire, SecurityInfoCollector en fallback
             var smb1 = GetBool(secData, "smbV1Enabled") ?? GetBool(secData, "SMBv1");
             if (smb1.HasValue)
             {
@@ -2381,7 +2380,7 @@ namespace PCDiagnosticPro.Services
 
         private static JsonElement? GetSectionData(JsonElement root, string sectionName)
         {
-            // FIX: Always check ValueKind before calling TryGetProperty to avoid exceptions on Arrays
+            // Vérifie ValueKind avant TryGetProperty pour éviter les exceptions sur Arrays
             if (root.ValueKind != JsonValueKind.Object)
                 return null;
             
@@ -2412,7 +2411,7 @@ namespace PCDiagnosticPro.Services
             JsonElement current = root;
             foreach (var key in path)
             {
-                // FIX: Preserve current value before TryGetProperty to enable case-insensitive fallback
+                // Préserve la valeur avant TryGetProperty pour fallback case-insensitive
                 JsonElement previous = current;
                 if (!current.TryGetProperty(key, out current))
                 {
@@ -2440,7 +2439,7 @@ namespace PCDiagnosticPro.Services
             root.TryGetProperty("diagnostic_signals", out var signals) ? signals : null;
 
         /// <summary>
-        /// FIX: Map snake_case signal names to actual camelCase names in diagnostic_signals.
+        /// Map snake_case vers camelCase dans diagnostic_signals.
         /// UI code uses: whea_errors, cpu_throttle, bsod_minidump, kernel_power, tdr_video
         /// JSON has:    whea, cpuThrottle, driverStability (contains BSOD + kernel power), gpuRootCause
         /// </summary>
@@ -2459,7 +2458,7 @@ namespace PCDiagnosticPro.Services
 
         private static JsonElement? GetSignalResult(JsonElement signals, string signalName)
         {
-            // FIX: Guard against undefined/invalid element (fixes "Operation is not valid" crash)
+            // Protège contre les éléments undefined/invalid
             if (signals.ValueKind != JsonValueKind.Object)
                 return null;
             
@@ -2467,7 +2466,7 @@ namespace PCDiagnosticPro.Services
             if (signals.TryGetProperty(signalName, out var signal))
                 return signal;
             
-            // FIX: Try aliases
+            // Essaie les alias
             if (SignalNameAliases.TryGetValue(signalName, out var aliases))
             {
                 foreach (var alias in aliases)
@@ -2491,7 +2490,7 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
-        /// FIX: Get int value from signal, supporting nested value object.
+        /// Obtient une valeur int depuis un signal, supporte l'objet value imbriqué.
         /// JSON structure: { "signalName": { "value": { "Count30d": 0 }, "available": true } }
         /// </summary>
         private static int? GetSignalInt(JsonElement? signals, string signalName, string valueName)
@@ -2500,14 +2499,14 @@ namespace PCDiagnosticPro.Services
             var signal = GetSignalResult(signals.Value, signalName);
             if (!signal.HasValue) return null;
             
-            // FIX: Handle nested value object structure
+            // Gère la structure value imbriquée
             JsonElement valueContainer = signal.Value;
             if (signal.Value.TryGetProperty("value", out var valueObj) && valueObj.ValueKind == JsonValueKind.Object)
             {
                 valueContainer = valueObj;
             }
             
-            // FIX: Map value names for different signal structures
+            // Mappe les noms de valeurs pour différentes structures de signaux
             var mappedValueNames = MapSignalValueName(signalName, valueName);
             
             foreach (var name in mappedValueNames)
@@ -2526,7 +2525,7 @@ namespace PCDiagnosticPro.Services
             var signal = GetSignalResult(signals.Value, signalName);
             if (!signal.HasValue) return null;
             
-            // FIX: Handle nested value object structure
+            // Gère la structure value imbriquée
             JsonElement valueContainer = signal.Value;
             if (signal.Value.TryGetProperty("value", out var valueObj) && valueObj.ValueKind == JsonValueKind.Object)
             {
@@ -2545,8 +2544,8 @@ namespace PCDiagnosticPro.Services
         }
         
         /// <summary>
-        /// FIX: Map expected value names to actual JSON property names.
-        /// FIX: Support both PascalCase (C# models) and camelCase (JSON serialization)
+        /// Mappe les noms attendus vers les noms JSON réels.
+        /// Supporte PascalCase (modèles C#) et camelCase (JSON)
         /// </summary>
         private static string[] MapSignalValueName(string signalName, string valueName)
         {
@@ -2588,7 +2587,7 @@ namespace PCDiagnosticPro.Services
             
             if (valueName.Equals("detected", StringComparison.OrdinalIgnoreCase))
             {
-                // FIX: Support both PascalCase (model) and camelCase (JSON)
+                // Supporte PascalCase et camelCase
                 return signalName.ToLower() switch
                 {
                     "cpu_throttle" or "cputhrottle" => new[] { 
@@ -2603,7 +2602,7 @@ namespace PCDiagnosticPro.Services
                 };
             }
             
-            // FIX: For reason field, support both cases
+            // Supporte les deux cases pour le champ reason
             if (valueName.Equals("reason", StringComparison.OrdinalIgnoreCase))
             {
                 return new[] { "reason", "Reason", valueName };
@@ -2668,7 +2667,7 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
-        /// FIX: Get first item from a property that can be either Array or Object.
+        /// Obtient le premier élément d'une propriété qui peut être Array ou Object.
         /// PowerShell may return an object for single-item collections (cpus, gpuList).
         /// </summary>
         private static JsonElement? GetFirstItemFromArrayOrObject(JsonElement? element, string propName)
@@ -2694,7 +2693,7 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
-        /// FIX: Extract IPv4 address from adapter's ip[] array OR ipv4 string.
+        /// Extrait l'adresse IPv4 depuis ip[] array ou ipv4 string.
         /// PS script returns ip as array: ["192.168.x.x", "fe80::xxxx"]
         /// </summary>
         private static string? ExtractIPv4FromAdapter(JsonElement adapter)
@@ -2704,7 +2703,7 @@ namespace PCDiagnosticPro.Services
             if (!string.IsNullOrEmpty(ipv4Direct))
                 return ipv4Direct;
             
-            // FIX: Try ip[] array (actual PS output)
+            // Essaie ip[] array (sortie PS actuelle)
             if (adapter.TryGetProperty("ip", out var ipEl))
             {
                 if (ipEl.ValueKind == JsonValueKind.Array)
@@ -2770,7 +2769,7 @@ namespace PCDiagnosticPro.Services
         }
         
         /// <summary>
-        /// FIX: Extract gateway from adapter's gateway property (can be string or empty object {}).
+        /// Extrait la passerelle depuis la propriété gateway (peut être string ou objet vide {}).
         /// </summary>
         private static string? GetGatewayFromAdapter(JsonElement adapter)
         {
@@ -2819,7 +2818,7 @@ namespace PCDiagnosticPro.Services
             
             if (telemetry.HasValue)
             {
-                // FIX: Support multiple naming conventions including PascalCase "TopByXxx" (actual C# output)
+                // Supporte plusieurs conventions de nommage incluant PascalCase "TopByXxx"
                 var metricCapitalized = char.ToUpper(metric[0]) + metric.Substring(1).ToLower();
                 
                 var names = new[] { 

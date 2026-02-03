@@ -755,7 +755,7 @@ namespace PCDiagnosticPro.ViewModels
         public int SystemStabilityIndex => HealthReport?.UdisReport?.SystemStabilityIndex ?? 100;
         public string CpuPerformanceTier => HealthReport?.UdisReport?.CpuPerformanceTier ?? "N/A";
 
-        // === UDIS — NETWORK SPEED TEST (amélioré pour affichage speedtest.net style) ===
+        // === UDIS — NETWORK SPEED TEST ===
         public double? NetworkDownloadMbps => HealthReport?.UdisReport?.DownloadMbps;
         public double? NetworkUploadMbps => HealthReport?.UdisReport?.UploadMbps;
         public double? NetworkLatencyMs => HealthReport?.UdisReport?.LatencyMs;
