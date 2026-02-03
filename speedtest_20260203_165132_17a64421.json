@@ -1,0 +1,12 @@
+{
+  "Timestamp": "2026-02-03T16:51:32.3742099-05:00",
+  "RunId": "17a64421",
+  "Provider": "LibreSpeed CLI",
+  "DownloadMbps": 197.43,
+  "UploadMbps": 79.15,
+  "LatencyMs": 27.91,
+  "JitterMs": 1.54,
+  "ServerName": "Chicago, USA (Sharktech)",
+  "SpeedTier": "Tr\u00E8s rapide",
+  "Success": true
+}

@@ -212,6 +212,7 @@ namespace PCDiagnosticPro.Services
             
             if (pendingCount.HasValue)
             {
+                // Pas d'emoji blanc pour les updates en attente
                 var status = pendingCount.Value > 0 ? $"{pendingCount.Value} en attente" : "Système à jour";
                 Add(ev, "Updates Windows", status, "scan_powershell.sections.WindowsUpdate.data.pendingCount");
             }
@@ -243,6 +244,7 @@ namespace PCDiagnosticPro.Services
             }
             else if (signals.HasValue)
             {
+                // Pas d'emoji blanc pour "Aucune détectée"
                 Add(ev, "Erreurs critiques", "Aucune détectée", "diagnostic_signals.*");
             }
             else
@@ -417,18 +419,34 @@ namespace PCDiagnosticPro.Services
             }
             else
             {
-                // Detailed reason from the sensor collector
-                var reason = sensors?.Cpu?.CpuTempC?.Reason;
-                if (string.IsNullOrEmpty(reason))
+                // Fallback: température CPU depuis la collecte (scan PowerShell section Temperatures)
+                var tempData = GetSectionData(root, "Temperatures");
+                var cpuTempFromScan = tempData.HasValue ? GetDouble(tempData, "cpuTempC") : null;
+                const double minValidC = 5.0;
+                const double maxValidC = 115.0;
+                if (cpuTempFromScan.HasValue && cpuTempFromScan.Value >= minValidC && cpuTempFromScan.Value <= maxValidC)
                 {
-                    reason = sensors == null ? "capteurs non collectés" : "capteur indisponible";
+                    var temp = cpuTempFromScan.Value;
+                    var status = temp > 85 ? " 🔥 Critique" : temp > 70 ? " ⚠️ Élevée" : "";
+                    var sourceScan = tempData.HasValue ? GetString(tempData, "cpuSource") : null;
+                    var source = !string.IsNullOrEmpty(sourceScan) ? $" ({sourceScan})" : " (scan)";
+                    Add(ev, "Température CPU", $"{temp:F0}°C{status}{source}", "scan_powershell.sections.Temperatures.data.cpuTempC");
                 }
-                // Clarify WMI thermal zone limitation on desktop
-                if (reason?.Contains("thermal_zone") == true || reason?.Contains("WMI") == true)
+                else
                 {
-                    reason = "WMI non supporté (desktop typique)";
+                    // Detailed reason from the sensor collector
+                    var reason = sensors?.Cpu?.CpuTempC?.Reason;
+                    if (string.IsNullOrEmpty(reason))
+                    {
+                        reason = sensors == null ? "capteurs non collectés" : "capteur indisponible";
+                    }
+                    // Clarify WMI thermal zone limitation on desktop
+                    if (reason?.Contains("thermal_zone") == true || reason?.Contains("WMI") == true)
+                    {
+                        reason = "WMI non supporté (desktop typique)";
+                    }
+                    AddUnknown(ev, "Température CPU", reason);
                 }
-                AddUnknown(ev, "Température CPU", reason);
             }
 
             // 7. Throttling (Oui/Non + raison)
@@ -712,9 +730,11 @@ namespace PCDiagnosticPro.Services
             }
 
             // 9. Température GPU (capteurs C# - UNE SEULE LIGNE + SOURCE pour debug)
+            // Pas de check blanc (✅) à côté de la température
             if (sensors?.Gpu?.GpuTempC?.Available == true)
             {
                 var temp = sensors.Gpu.GpuTempC.Value;
+                // Indicateurs uniquement si problème (pas de check blanc pour état normal)
                 var status = temp > 85 ? " 🔥 Critique" : temp > 75 ? " ⚠️ Élevée" : "";
                 // Affiche la source de température pour debug
                 var source = sensors.Gpu.GpuTempSource ?? "LHM";
@@ -730,13 +750,15 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "Température GPU", sensors?.Gpu?.GpuTempC?.Reason ?? "capteur indisponible");
             }
 
-            // 10. TDR / crashes GPU
+            // 10. TDR / crashes GPU - avec icône (i) pour explication
+            // Pas de check blanc pour "Aucun"
             var signals = GetDiagnosticSignals(root);
             if (signals.HasValue)
             {
                 var tdrCount = GetSignalInt(signals.Value, "tdr_video", "count");
                 if (tdrCount.HasValue)
                 {
+                    // Pas de check blanc - juste la valeur
                     Add(ev, "TDR (crashes GPU)", tdrCount > 0 ? $"{tdrCount} détecté(s)" : "Aucun", "diagnostic_signals.tdr_video.count");
                 }
             }
@@ -877,13 +899,15 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "Disques physiques", "Storage.data.physicalDisks/disks absent");
             }
 
-            // 3. Températures disques (capteurs C#) - affichage individuel avec emoji
+            // 3. Températures disques (capteurs C#) - affichage individuel
+            // Pas de check blanc - uniquement indicateurs si problème
             if (sensors?.Disks?.Count > 0)
             {
                 var tempsWithEmoji = sensors.Disks
                     .Where(d => d.TempC?.Available == true)
                     .Select(d => {
                         var temp = d.TempC.Value;
+                        // Indicateurs uniquement si température élevée (pas de check blanc)
                         var emoji = temp < 45 ? "" : temp < 55 ? "⚡" : "⚠️";
                         var shortName = d.Name?.Value?.Split('_')[0] ?? "Disk";
                         if (shortName.Length > 15) shortName = shortName.Substring(0, 15) + "..";
@@ -902,6 +926,7 @@ namespace PCDiagnosticPro.Services
                     .Max();
                 if (maxTemp > 0)
                 {
+                    // Indicateurs uniquement si problème (pas de check blanc)
                     var emoji = maxTemp < 45 ? "" : maxTemp < 55 ? "⚡" : "⚠️";
                     Add(ev, "TempMax Disques", string.IsNullOrEmpty(emoji) ? $"{maxTemp:F0}°C" : $"{emoji} {maxTemp:F0}°C", "sensors_csharp.disks (max)");
                 }
@@ -930,6 +955,7 @@ namespace PCDiagnosticPro.Services
                     var healthStatus = GetString(smartData, "overallHealth") ?? GetString(smartData, "status") ?? GetString(smartData, "health");
                     if (!string.IsNullOrEmpty(healthStatus))
                     {
+                        // Pas de check blanc pour état OK - uniquement indicateurs si problème
                         var icon = healthStatus.ToLower() switch
                         {
                             "ok" or "healthy" or "good" or "passed" => "",
@@ -980,6 +1006,7 @@ namespace PCDiagnosticPro.Services
                     if (!string.IsNullOrEmpty(letter) && sizeGB.HasValue && sizeGB > 0)
                     {
                         var pct = freeGB.HasValue ? (freeGB.Value / sizeGB.Value * 100) : 0;
+                        // Indicateurs uniquement si espace faible (pas de check blanc)
                         var alert = pct < 10 ? "⚠️" : pct < 20 ? "⚡" : "";
                         var freeStr = freeGB.HasValue ? $"{freeGB.Value:F0}" : "?";
                         volList.Add(string.IsNullOrEmpty(alert) ? $"{letter}: {freeStr}/{sizeGB.Value:F0}GB" : $"{letter}: {freeStr}/{sizeGB.Value:F0}GB {alert}");
@@ -1218,6 +1245,7 @@ namespace PCDiagnosticPro.Services
                     ?? GetDouble(netQualityValue, "LatencyMsP95");
                 if (latency.HasValue)
                 {
+                    // Indicateurs uniquement si latence élevée (pas de check blanc)
                     var status = latency > 100 ? " ⚠️ Élevée" : latency > 50 ? " ⚡" : "";
                     Add(ev, "Latence (ping)", $"{latency.Value:F0} ms{status}", "network_diagnostics.LatencyMsP50");
                     hasNetDiagData = true;
@@ -1234,6 +1262,7 @@ namespace PCDiagnosticPro.Services
                 }
 
                 // 10. Perte paquets - FIX: Support PascalCase
+                // Pas de check blanc pour 0% - uniquement indicateur si perte
                 var loss = GetDouble(netDiag, "packetLossPercent") 
                     ?? GetDouble(netDiag, "PacketLossPercent")
                     ?? GetDouble(netQualityValue, "PacketLossPercent");
@@ -1264,13 +1293,15 @@ namespace PCDiagnosticPro.Services
                 }
                 
                 // 13. Connection verdict from networkQuality signal
+                // Pas de check blanc - uniquement texte descriptif
                 var verdict = GetString(netQualityValue, "ConnectionVerdict");
                 if (!string.IsNullOrEmpty(verdict))
                 {
+                    // Indicateurs uniquement si qualité moyenne ou faible (pas de check blanc pour excellent/bon)
                     var icon = verdict.ToLower() switch
                     {
                         "excellent" => "",
-                        "good" or "bon" => "👍",
+                        "good" or "bon" => "",
                         "fair" or "moyen" => "⚡",
                         _ => "⚠️"
                     };
@@ -1338,12 +1369,13 @@ namespace PCDiagnosticPro.Services
             }
 
             // 4. Crashes applicatifs (top 5)
+            // Pas de check blanc pour "Aucun"
             var reliData = GetSectionData(root, "ReliabilityHistory");
             if (reliData.HasValue)
             {
                 var appCrashes = GetInt(reliData, "appCrashCount") ?? GetInt(reliData, "applicationCrashes");
                 if (appCrashes.HasValue)
-                    Add(ev, "Crashes applicatifs", appCrashes == 0 ? "✅ Aucun" : $"⚠️ {appCrashes.Value}", 
+                    Add(ev, "Crashes applicatifs", appCrashes == 0 ? "Aucun" : $"⚠️ {appCrashes.Value}", 
                         "scan_powershell.sections.ReliabilityHistory.data.appCrashCount");
                 
                 // Top apps qui crashent
@@ -1360,12 +1392,13 @@ namespace PCDiagnosticPro.Services
             }
 
             // 5. Services en échec
+            // Pas de check blanc pour "Aucun"
             var svcData = GetSectionData(root, "Services");
             if (svcData.HasValue)
             {
                 var failedCount = GetInt(svcData, "failedCount") ?? GetInt(svcData, "stoppedCritical");
                 if (failedCount.HasValue)
-                    Add(ev, "Services en échec", failedCount == 0 ? "✅ Aucun" : $"⚠️ {failedCount.Value}", 
+                    Add(ev, "Services en échec", failedCount == 0 ? "Aucun" : $"⚠️ {failedCount.Value}", 
                         "scan_powershell.sections.Services.data.failedCount");
                 
                 if (svcData.Value.TryGetProperty("failedServices", out var failed) && failed.ValueKind == JsonValueKind.Array)
@@ -1381,22 +1414,23 @@ namespace PCDiagnosticPro.Services
             }
 
             // 6-7. SFC / DISM
+            // Indicateurs uniquement si problème (pas de check blanc pour OK)
             var intData = GetSectionData(root, "SystemIntegrity");
             if (intData.HasValue)
             {
                 var sfcStatus = GetString(intData, "sfcStatus") ?? GetString(intData, "sfc");
                 if (!string.IsNullOrEmpty(sfcStatus))
                 {
-                    var icon = sfcStatus.ToLower().Contains("ok") || sfcStatus.ToLower().Contains("clean") || 
-                               sfcStatus.ToLower().Contains("no integrity") ? "✅" : "⚠️";
-                    Add(ev, "SFC", $"{icon} {sfcStatus}", "scan_powershell.sections.SystemIntegrity.data.sfcStatus");
+                    var isOk = sfcStatus.ToLower().Contains("ok") || sfcStatus.ToLower().Contains("clean") || 
+                               sfcStatus.ToLower().Contains("no integrity");
+                    Add(ev, "SFC", isOk ? sfcStatus : $"⚠️ {sfcStatus}", "scan_powershell.sections.SystemIntegrity.data.sfcStatus");
                 }
                 
                 var dismStatus = GetString(intData, "dismStatus") ?? GetString(intData, "dism");
                 if (!string.IsNullOrEmpty(dismStatus))
                 {
-                    var icon = dismStatus.ToLower().Contains("ok") || dismStatus.ToLower().Contains("healthy") ? "✅" : "⚠️";
-                    Add(ev, "DISM", $"{icon} {dismStatus}", "scan_powershell.sections.SystemIntegrity.data.dismStatus");
+                    var isOk = dismStatus.ToLower().Contains("ok") || dismStatus.ToLower().Contains("healthy");
+                    Add(ev, "DISM", isOk ? dismStatus : $"⚠️ {dismStatus}", "scan_powershell.sections.SystemIntegrity.data.dismStatus");
                 }
             }
 
@@ -1447,12 +1481,13 @@ namespace PCDiagnosticPro.Services
                         if (rpDates.Count > 3)
                             datesStr += $", +{rpDates.Count - 3}";
                         
-                        var ageIcon = tooOld ? "⚠️" : "✅";
+                        // Indicateur uniquement si trop ancien (pas de check blanc)
+                        var ageIcon = tooOld ? "⚠️ " : "";
                         var ageInfo = $"Dernier: {(int)ageInDays}j";
                         
                         Add(ev, "Points de restauration", $"{rpDates.Count} ({datesStr})", 
                             "scan_powershell.sections.RestorePoints.data.points");
-                        Add(ev, "Âge dernier point", $"{ageIcon} {ageInfo} (seuil {RESTORE_POINT_AGE_THRESHOLD_DAYS}j)", 
+                        Add(ev, "Âge dernier point", $"{ageIcon}{ageInfo} (seuil {RESTORE_POINT_AGE_THRESHOLD_DAYS}j)", 
                             "scan_powershell.sections.RestorePoints.data.points[0]");
                         
                         // Add recommendation if too old
@@ -1501,20 +1536,20 @@ namespace PCDiagnosticPro.Services
                 if (total.HasValue)
                     Add(ev, "Pilotes détectés", total.Value.ToString(), "driver_inventory.totalCount");
 
-                // 2. Non signés
+                // 2. Non signés (sans ✅ blanc ; icône (i) et tooltip gérés côté HealthReport)
                 var unsigned = GetInt(driverInv, "unsignedCount");
                 if (unsigned.HasValue)
-                    Add(ev, "Non signés", unsigned == 0 ? "✅ Aucun" : $"⚠️ {unsigned.Value}", "driver_inventory.unsignedCount");
+                    Add(ev, "Non signés", unsigned == 0 ? "Aucun" : $"{unsigned.Value}", "driver_inventory.unsignedCount");
 
                 // 3. Périphériques en erreur
                 var problems = GetInt(driverInv, "problemCount");
                 if (problems.HasValue)
-                    Add(ev, "Périph. en erreur", problems == 0 ? "✅ Aucun" : $"⚠️ {problems.Value}", "driver_inventory.problemCount");
+                    Add(ev, "Périph. en erreur", problems == 0 ? "Aucun" : $"{problems.Value}", "driver_inventory.problemCount");
 
                 // 4. Obsolètes
                 var outdated = GetInt(driverInv, "outdatedCount");
                 if (outdated.HasValue)
-                    Add(ev, "Pilotes obsolètes", outdated == 0 ? "✅ Aucun" : $"⚠️ {outdated.Value}", "driver_inventory.outdatedCount");
+                    Add(ev, "Pilotes obsolètes", outdated == 0 ? "Aucun" : $"{outdated.Value}", "driver_inventory.outdatedCount");
 
                 // 5. Tableau pilotes critiques (GPU, NET, AUDIO, STORAGE)
                 if (driverInv.Value.TryGetProperty("drivers", out var drivers) && drivers.ValueKind == JsonValueKind.Array)
@@ -1531,12 +1566,10 @@ namespace PCDiagnosticPro.Services
                         var version = GetString(driver, "driverVersion") ?? "?";
                         var date = GetString(driver, "driverDate") ?? "";
                         var provider = GetString(driver, "provider") ?? "";
-                        var signed = GetBool(driver, "isSigned");
-                        
-                        var signedStr = signed.HasValue ? (signed.Value ? "✅" : "⚠️") : "";
+                        // Pas d'emoji dans la valeur affichée (indicateurs statut gérés côté HealthReport)
                         var shortDate = !string.IsNullOrEmpty(date) && date.Length >= 10 ? date.Substring(0, 10) : date;
                         
-                        criticalList.Add($"{cls}: {name.Trim()} v{version} {signedStr}");
+                        criticalList.Add($"{cls}: {name.Trim()} v{version}");
                         
                         if (criticalList.Count >= 5) break;
                     }
@@ -1558,7 +1591,7 @@ namespace PCDiagnosticPro.Services
                 {
                     var problemDevices = GetInt(devData, "problemDeviceCount") ?? GetInt(devData, "ProblemDeviceCount");
                     if (problemDevices.HasValue)
-                        Add(ev, "Périph. en erreur", problemDevices == 0 ? "✅ Aucun" : $"⚠️ {problemDevices.Value}", 
+                        Add(ev, "Périph. en erreur", problemDevices == 0 ? "Aucun" : $"{problemDevices.Value}", 
                             "scan_powershell.sections.DevicesDrivers.data.problemDeviceCount");
                 }
                 else
@@ -1695,7 +1728,8 @@ namespace PCDiagnosticPro.Services
                     var load = GetDouble(first, "currentLoad") ?? GetDouble(first, "load");
                     if (load.HasValue)
                     {
-                        var status = load > 90 ? "🔥 Saturé" : load > 70 ? "⚠️ Élevé" : "✅ Normal";
+                        // Indicateurs uniquement si problème (pas de check blanc pour Normal)
+                        var status = load > 90 ? "🔥 Saturé" : load > 70 ? "⚠️ Élevé" : "Normal";
                         Add(ev, "CPU", $"{load.Value:F0}% {status}", "scan_powershell.sections.CPU.data.cpus[0].currentLoad");
                     }
                 }
@@ -1710,7 +1744,8 @@ namespace PCDiagnosticPro.Services
                 if (totalGB.HasValue && totalGB > 0 && availGB.HasValue)
                 {
                     var pct = ((totalGB.Value - availGB.Value) / totalGB.Value) * 100;
-                    var status = pct > 90 ? "🔥 Saturée" : pct > 80 ? "⚠️ Élevée" : "✅ Normal";
+                    // Indicateurs uniquement si problème (pas de check blanc pour Normal)
+                    var status = pct > 90 ? "🔥 Saturée" : pct > 80 ? "⚠️ Élevée" : "Normal";
                     Add(ev, "RAM", $"{pct:F0}% {status}", "scan_powershell.sections.Memory.data (calculé)");
                 }
             }
@@ -1758,7 +1793,8 @@ namespace PCDiagnosticPro.Services
                 if (GetBool(GetSignalResult(signals.Value, "network_saturation"), "detected") == true)
                     bottlenecks.Add("Network saturation");
                 
-                Add(ev, "Bottlenecks", bottlenecks.Count > 0 ? $"⚠️ {string.Join(", ", bottlenecks)}" : "✅ Aucun détecté", 
+                // Pas de check blanc pour "Aucun détecté"
+                Add(ev, "Bottlenecks", bottlenecks.Count > 0 ? $"⚠️ {string.Join(", ", bottlenecks)}" : "Aucun détecté", 
                     "diagnostic_signals.*");
             }
 
@@ -1789,7 +1825,8 @@ namespace PCDiagnosticPro.Services
             {
                 cpuScore -= 20; cpuDetails.Add("throttling");
             }
-            Add(ev, "Score CPU", $"{cpuScore}/100 {(cpuDetails.Count > 0 ? $"({string.Join(", ", cpuDetails)})" : "✅")}", 
+            // Pas de check blanc pour score OK
+            Add(ev, "Score CPU", $"{cpuScore}/100 {(cpuDetails.Count > 0 ? $"({string.Join(", ", cpuDetails)})" : "")}", 
                 "calculé");
             
             // 7. Score GPU relatif (basé sur charge et température)
@@ -1810,7 +1847,8 @@ namespace PCDiagnosticPro.Services
                     else if (temp > 75) { gpuScore -= 10; gpuDetails.Add("temp élevée"); }
                 }
             }
-            Add(ev, "Score GPU", $"{gpuScore}/100 {(gpuDetails.Count > 0 ? $"({string.Join(", ", gpuDetails)})" : "✅")}", 
+            // Pas de check blanc pour score OK
+            Add(ev, "Score GPU", $"{gpuScore}/100 {(gpuDetails.Count > 0 ? $"({string.Join(", ", gpuDetails)})" : "")}", 
                 "calculé");
             
             // 8. RAM headroom (marge disponible)
@@ -1952,13 +1990,13 @@ namespace PCDiagnosticPro.Services
             
             if (!string.IsNullOrEmpty(avName))
             {
+                // Pas d'emoji blanc décoratif ; indicateur ⚠️ uniquement si désactivé
                 var icon = avStatus?.ToLower() switch
                 {
-                    "enabled" or "on" or "actif" or "à jour" => "✅",
-                    "disabled" or "off" or "désactivé" => "⚠️",
-                    _ => "✅" // Default to OK if AV is present
+                    "disabled" or "off" or "désactivé" => "⚠️ ",
+                    _ => ""
                 };
-                var avInfo = !string.IsNullOrEmpty(avStatus) ? $"{icon} {avName} ({avStatus})" : $"{icon} {avName}";
+                var avInfo = !string.IsNullOrEmpty(avStatus) ? $"{icon}{avName} ({avStatus})" : $"{icon}{avName}";
                 Add(ev, "Antivirus", avInfo, "scan_powershell.sections.Security.data.antivirusProducts");
             }
             else
@@ -2031,7 +2069,7 @@ namespace PCDiagnosticPro.Services
             
             if (fwEnabled.HasValue)
             {
-                var status = fwEnabled.Value ? "✅ Activé" : "⚠️ Désactivé";
+                var status = fwEnabled.Value ? "Activé" : "⚠️ Désactivé";
                 if (!string.IsNullOrEmpty(fwProfiles)) status += $" ({fwProfiles})";
                 Add(ev, "Pare-feu", status, "scan_powershell.sections.Security.data.firewall");
             }
@@ -2048,7 +2086,7 @@ namespace PCDiagnosticPro.Services
             string secureBootSource = machineIdData.HasValue && GetBool(machineIdData, "secureBoot").HasValue 
                 ? "MachineIdentity.secureBoot" 
                 : "Security.secureBootEnabled";
-            AddYesNo(ev, "Secure Boot", secureBoot, secureBootSource);
+            AddYesNoNoEmoji(ev, "Secure Boot", secureBoot, secureBootSource);
 
             // === C# Security Info Fallback (BitLocker, RDP, SMBv1) ===
             // Read from security_info_csharp if PowerShell didn't collect these
@@ -2091,7 +2129,7 @@ namespace PCDiagnosticPro.Services
 
             // 5. UAC
             var uac = GetBool(secData, "uacEnabled") ?? GetBool(secData, "UAC");
-            AddYesNo(ev, "UAC", uac, "scan_powershell.sections.Security.data.uacEnabled");
+            AddYesNoNoEmoji(ev, "UAC", uac, "scan_powershell.sections.Security.data.uacEnabled");
 
             // 6. RDP
             // PowerShell prioritaire, SecurityInfoCollector en fallback
@@ -2208,7 +2246,8 @@ namespace PCDiagnosticPro.Services
                     var health = GetInt(batteryData, "healthPercent") ?? GetInt(batteryData, "designCapacityPercent");
                     if (health.HasValue)
                     {
-                        var status = health < 50 ? " ⚠️ Usée" : health < 80 ? " ⚡" : " ✅";
+                        // Indicateurs uniquement si problème (pas de check blanc)
+                        var status = health < 50 ? " ⚠️ Usée" : health < 80 ? " ⚡" : "";
                         Add(ev, "Santé batterie", $"{health.Value}%{status}", "scan_powershell.sections.Battery.data.healthPercent");
                     }
                     
@@ -2245,20 +2284,20 @@ namespace PCDiagnosticPro.Services
             var signals = GetDiagnosticSignals(root);
             if (signals.HasValue)
             {
-                // Kernel-Power events (coupures de courant)
+                // Kernel-Power events (coupures de courant) — pas d'emoji blanc
                 var kpCount = GetSignalInt(signals.Value, "kernel_power", "count");
                 if (kpCount.HasValue)
                 {
-                    Add(ev, "Kernel-Power", kpCount == 0 ? "✅ Aucun" : $"⚠️ {kpCount} coupure(s)", 
+                    Add(ev, "Kernel-Power", kpCount == 0 ? "Aucun" : $"{kpCount} coupure(s)", 
                         "diagnostic_signals.kernel_power.count");
                 }
                 
-                // Power throttling
+                // Power throttling — pas d'emoji blanc ; icône (i) + tooltip côté HealthReport
                 var powerThrottle = GetSignalResult(signals.Value, "power_throttle");
                 if (powerThrottle.HasValue)
                 {
                     var detected = GetBool(powerThrottle, "detected") ?? false;
-                    Add(ev, "Power throttling", detected ? "⚠️ Oui" : "✅ Non", "diagnostic_signals.power_throttle");
+                    Add(ev, "Power throttling", detected ? "Oui" : "Non", "diagnostic_signals.power_throttle");
                 }
             }
 
@@ -2290,6 +2329,20 @@ namespace PCDiagnosticPro.Services
             string display;
             if (value.HasValue)
                 display = value.Value ? "✅ Oui" : "❌ Non";
+            else
+                display = "Inconnu (données absentes)";
+            
+            Add(ev, key, display, jsonPath);
+        }
+
+        /// <summary>
+        /// Ajoute "Oui/Non" sans emoji décoratif (pour sections Sécurité, Alimentation)
+        /// </summary>
+        private static void AddYesNoNoEmoji(Dictionary<string, string> ev, string key, bool? value, string jsonPath)
+        {
+            string display;
+            if (value.HasValue)
+                display = value.Value ? "Oui" : "Non";
             else
                 display = "Inconnu (données absentes)";
             

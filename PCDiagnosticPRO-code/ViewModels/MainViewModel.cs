@@ -185,12 +185,12 @@ namespace PCDiagnosticPro.ViewModels
                 ["ScoreLegendTitle"] = "Légende / Calcul du score",
                 ["ScoreRulesTitle"] = "Règles de score (UDIS)",
                 ["ScoreGradesTitle"] = "Grades",
-                ["ScoreRuleInitial"] = "• Score = moyenne pondérée des 8 domaines",
+                ["ScoreRuleInitial"] = "• Score global = moyenne pondérée des 8 domaines",
                 ["ScoreRuleCritical"] = "• Domaines : OS, CPU, GPU, RAM, Stockage, Réseau, Stabilité, Pilotes",
-                ["ScoreRuleError"] = "• Pénalités appliquées selon les problèmes détectés",
+                ["ScoreRuleError"] = "• Pénalités : erreurs critiques (-30), erreurs (-10), avertissements (-5)",
                 ["ScoreRuleWarning"] = "• Poids : Stockage (20%), OS/CPU/RAM (15%), GPU/Réseau/Stabilité (10%), Pilotes (5%)",
-                ["ScoreRuleMin"] = "• Score min : 0",
-                ["ScoreRuleMax"] = "• Score max : 100",
+                ["ScoreRuleMin"] = "• Score collecte : qualité des données récupérées (plafond 70 si erreurs collecteur)",
+                ["ScoreRuleMax"] = "• Score final = min(score global, score collecte)",
                 ["ScoreGradeA"] = "• 💎 ≥ 95 : A+ (Excellent) | ❤️ ≥ 90 : A (Très bien)",
                 ["ScoreGradeB"] = "• 👍 ≥ 80 : B+ (Bien) | 👌 ≥ 70 : B (Correct)",
                 ["ScoreGradeC"] = "• ⚠️ ≥ 60 : C (Dégradé - Attention)",
@@ -200,7 +200,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["DeleteScanConfirmMessage"] = "Voulez-vous vraiment supprimer ce scan ?",
                 // Scan phases labels (localized)
                 ["PhaseLabel_PowerShell"] = "Pilotes et périphériques",
-                ["PhaseLabel_Capteurs"] = "Températures composants",
+                ["PhaseLabel_Capteurs"] = "Capteurs matériel",
                 ["PhaseLabel_Compteurs"] = "Compteurs performances",
                 ["PhaseLabel_Signaux"] = "Signaux diagnostiques",
                 ["PhaseLabel_Telemetrie"] = "Télémétrie processus",
@@ -992,6 +992,11 @@ namespace PCDiagnosticPro.ViewModels
                     HealthReport.UdisReport.NetworkRecommendation = GetSpeedRecommendation(libreResult);
                     
                     App.LogMessage($"[SpeedTest] LibreSpeed OK: Down={libreResult.DownloadMbps:F1} Mbps, Up={libreResult.UploadMbps:F1} Mbps, Ping={libreResult.PingMs:F1} ms");
+                    
+                    // Sauvegarder le résultat en JSON pour inspection LLM
+                    var jsonPath = await _libreSpeedService.SaveResultToJsonAsync(libreResult);
+                    if (!string.IsNullOrEmpty(jsonPath))
+                        App.LogMessage($"[SpeedTest] JSON sauvegardé: {jsonPath}");
                 }
                 else if (HealthReport?.UdisReport != null)
                 {
@@ -1000,6 +1005,11 @@ namespace PCDiagnosticPro.ViewModels
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                     var updatedUdis = await UnifiedDiagnosticScoreEngine.AddNetworkSpeedTestAsync(HealthReport.UdisReport, cts.Token);
                     App.LogMessage($"[SpeedTest] Fallback: Download={updatedUdis.DownloadMbps:F1} Mbps");
+                    
+                    // Sauvegarder le résultat en JSON même en cas d'erreur
+                    var jsonPath = await _libreSpeedService.SaveResultToJsonAsync(libreResult);
+                    if (!string.IsNullOrEmpty(jsonPath))
+                        App.LogMessage($"[SpeedTest] JSON sauvegardé (avec erreur): {jsonPath}");
                 }
                 
                 // Notifier la UI
@@ -1372,6 +1382,8 @@ namespace PCDiagnosticPro.ViewModels
         // Commands for detail windows (Drivers and Applications)
         public ICommand OpenDriversDetailsCommand { get; }
         public ICommand OpenAppsDetailsCommand { get; }
+        /// <summary>Ouvre une fenêtre de liste (Périph. audio, Imprimantes, Obsolètes) selon le paramètre (Key).</summary>
+        public ICommand OpenListDetailCommand { get; }
         
         // Command for collector errors details
         public ICommand ShowCollectorErrorsCommand { get; }
@@ -1463,6 +1475,7 @@ namespace PCDiagnosticPro.ViewModels
             // Commands for detail windows
             OpenDriversDetailsCommand = new RelayCommand(OpenDriversDetails, () => _lastDriverInventory?.Available == true);
             OpenAppsDetailsCommand = new RelayCommand(OpenAppsDetails, () => !string.IsNullOrEmpty(_lastCombinedJsonContent));
+            OpenListDetailCommand = new RelayCommand(OpenListDetail, _ => true);
             
             // Command for collector errors details
             ShowCollectorErrorsCommand = new RelayCommand(ShowCollectorErrorsDetails, () => IsCollectionPartialOrFailed);
@@ -1731,17 +1744,43 @@ namespace PCDiagnosticPro.ViewModels
                 SetSectionPhase(0, "Done");
                 UpdateScanProgressCeiling(GetProgressForCompletedPhase(1));
                 
-                // Phase 1: Capteurs (Sensors)
-                AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Capteurs"));
+                // === OPTIMISATION: Phases 1-3 en parallèle (Sensors, Counters, Signals) ===
+                AddLiveFeedItem("Collecte données système en parallèle...");
                 SetSectionPhase(1, "Running");
+                SetSectionPhase(2, "Running");
+                SetSectionPhase(3, "Running");
 
                 HardwareSensorsResult sensorsResult;
+                PerfCounterCollector.PerfCounterResult? perfResult = null;
+                DiagnosticsSignals.DiagnosticSignalsResult? signalsResult = null;
+
                 try
                 {
-                    sensorsResult = await _hardwareSensorsCollector.CollectAsync(_scanCts.Token);
-                    _lastSensorsResult = sensorsResult; // Stocker pour injection dans HealthReport
+                    App.LogMessage("[Parallel Collection] Démarrage collecte parallèle Sensors/Counters/Signals");
+                    
+                    // Préparer le SignalsOrchestrator avant le parallélisme
+                    var signalsOrchestrator = new DiagnosticsSignals.SignalsOrchestrator();
+                    signalsOrchestrator.SetAllowExternalNetworkTests(_allowExternalNetworkTests);
+                    
+                    // Lancer les 3 collecteurs en parallèle
+                    var sensorsTask = Task.Run(() => _hardwareSensorsCollector.CollectAsync(_scanCts.Token), _scanCts.Token);
+                    var countersTask = Task.Run(() => PerfCounterCollector.CollectAsync(_scanCts.Token), _scanCts.Token);
+                    var signalsTask = Task.Run(() => signalsOrchestrator.CollectAllAsync(_scanCts.Token), _scanCts.Token);
+                    
+                    // Attendre que tous les collecteurs terminent
+                    await Task.WhenAll(sensorsTask, countersTask, signalsTask);
+                    
+                    // Récupérer les résultats
+                    sensorsResult = await sensorsTask;
+                    perfResult = await countersTask;
+                    signalsResult = await signalsTask;
+                    
+                    _lastSensorsResult = sensorsResult;
+                    _lastPerfCounterResult = perfResult;
+                    _lastDiagnosticSignals = signalsResult;
+                    
                     var (avail, total) = sensorsResult.GetAvailabilitySummary();
-                    App.LogMessage($"[Sensors] Collectés: {avail}/{total} métriques disponibles");
+                    App.LogMessage($"[Parallel Collection] Terminé: Sensors {avail}/{total}, Counters OK, Signals {signalsResult?.SuccessCount ?? 0}");
                     
                     // Check for security blocking
                     if (sensorsResult.BlockedBySecurity)
@@ -1749,63 +1788,69 @@ namespace PCDiagnosticPro.ViewModels
                         App.LogMessage($"[Sensors] ⚠️ BLOCKED BY SECURITY: {sensorsResult.BlockingMessage}");
                     }
                     
+                    // Log counters
+                    if (perfResult is not null)
+                    {
+                        App.LogMessage($"[PerfCounters] CPU={perfResult.CpuPercent:F1}%, Mem={perfResult.MemoryAvailableMB:F0}MB, DiskTime={perfResult.DiskTimePercent:F1}%");
+                    }
+                    
+                    // Log signals
+                    if (signalsResult is not null)
+                    {
+                        App.LogMessage($"[DiagnosticSignals] Collected: {signalsResult.SuccessCount} success, {signalsResult.FailCount} fail, {signalsResult.TotalDurationMs}ms");
+                    }
+                    
                     // Notify UI of sensor blocking status
                     NotifySensorBlockingChanged();
                 }
                 catch (Exception ex)
                 {
-                    sensorsResult = new HardwareSensorsResult();
-                    _lastSensorsResult = null;
-                    App.LogMessage($"Erreur collecte capteurs: {ex.Message}");
+                    App.LogMessage($"[Parallel Collection] Erreur: {ex.Message}. Fallback mode séquentiel.");
+                    
+                    // Fallback séquentiel si la collecte parallèle échoue
+                    try
+                    {
+                        sensorsResult = await _hardwareSensorsCollector.CollectAsync(_scanCts.Token);
+                        _lastSensorsResult = sensorsResult;
+                    }
+                    catch (Exception exSensors)
+                    {
+                        App.LogMessage($"[Sensors Fallback] Erreur: {exSensors.Message}");
+                        sensorsResult = new HardwareSensorsResult();
+                    }
+                    
+                    try
+                    {
+                        perfResult = await PerfCounterCollector.CollectAsync(_scanCts.Token);
+                        _lastPerfCounterResult = perfResult;
+                    }
+                    catch (Exception exPerf)
+                    {
+                        App.LogMessage($"[Counters Fallback] Erreur: {exPerf.Message}");
+                        _lastPerfCounterResult = null;
+                    }
+                    
+                    try
+                    {
+                        var signalsOrchestrator = new DiagnosticsSignals.SignalsOrchestrator();
+                        signalsOrchestrator.SetAllowExternalNetworkTests(_allowExternalNetworkTests);
+                        signalsResult = await signalsOrchestrator.CollectAllAsync(_scanCts.Token);
+                        _lastDiagnosticSignals = signalsResult;
+                    }
+                    catch (Exception exSignals)
+                    {
+                        App.LogMessage($"[Signals Fallback] Erreur: {exSignals.Message}");
+                        _lastDiagnosticSignals = null;
+                    }
                 }
 
-                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Capteurs"));
-                UpdateProgress(GetProgressForCompletedPhase(1), GetString("PhaseLabel_Capteurs"));
                 SetSectionPhase(1, "Done");
-                UpdateScanProgressCeiling(GetProgressForCompletedPhase(2));
-                
-                // Phase 2: Compteurs (Performance Counters)
-                AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Compteurs"));
-                SetSectionPhase(2, "Running");
-
-                // === PHASE 2B: Collecte PerfCounters robustes ===
-                try
-                {
-                    _lastPerfCounterResult = await PerfCounterCollector.CollectAsync(_scanCts.Token);
-                    App.LogMessage($"[PerfCounters] CPU={_lastPerfCounterResult.CpuPercent:F1}%, Mem={_lastPerfCounterResult.MemoryAvailableMB:F0}MB, DiskTime={_lastPerfCounterResult.DiskTimePercent:F1}%");
-                }
-                catch (Exception ex)
-                {
-                    _lastPerfCounterResult = null;
-                    App.LogMessage($"[PerfCounters] Erreur: {ex.Message}");
-                }
-                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Compteurs"));
-                UpdateProgress(GetProgressForCompletedPhase(2), GetString("PhaseLabel_Compteurs"));
                 SetSectionPhase(2, "Done");
-                UpdateScanProgressCeiling(GetProgressForCompletedPhase(3));
-                
-                // Phase 3: Signaux (Diagnostic Signals)
-                AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Signaux"));
-                SetSectionPhase(3, "Running");
-
-                // === PHASE 2C: Collecte des signaux diagnostiques avancés (11 mesures GOD TIER + Internet speed test) ===
-                try
-                {
-                    UpdateProgress(GetProgressForPhaseInProgress(3, 0.5), GetString("PhaseLabel_Signaux"));
-                    var signalsOrchestrator = new DiagnosticsSignals.SignalsOrchestrator();
-                    // FIX 7: Enable internet speed test only if user opted in
-                    signalsOrchestrator.SetAllowExternalNetworkTests(_allowExternalNetworkTests);
-                    _lastDiagnosticSignals = await signalsOrchestrator.CollectAllAsync(_scanCts.Token);
-                    App.LogMessage($"[DiagnosticSignals] Collected: {_lastDiagnosticSignals.SuccessCount} success, {_lastDiagnosticSignals.FailCount} fail, {_lastDiagnosticSignals.TotalDurationMs}ms");
-                }
-                catch (Exception ex)
-                {
-                    _lastDiagnosticSignals = null;
-                    App.LogMessage($"[DiagnosticSignals] Erreur: {ex.Message}");
-                }
-                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Signaux"));
-                UpdateProgress(GetProgressForCompletedPhase(3), GetString("PhaseLabel_Signaux"));
                 SetSectionPhase(3, "Done");
+                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Capteurs"));
+                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Compteurs"));
+                AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Signaux"));
+                UpdateProgress(GetProgressForCompletedPhase(3), "Collecte système terminée");
                 UpdateScanProgressCeiling(GetProgressForCompletedPhase(4));
                 
                 // Phase 4: Télémetrie (Process Telemetry)
@@ -3212,6 +3257,154 @@ namespace PCDiagnosticPro.ViewModels
             {
                 App.LogMessage($"[AppsDetails] Erreur: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Ouvre une fenêtre listant les éléments selon la clé (Périph. audio, Imprimantes, Obsolètes / Pilotes obsolètes).
+        /// </summary>
+        private void OpenListDetail(object? parameter)
+        {
+            var key = parameter as string;
+            if (string.IsNullOrEmpty(key)) return;
+
+            try
+            {
+                if (key.Equals("Périph. audio", StringComparison.OrdinalIgnoreCase))
+                {
+                    var items = GetAudioDevicesFromJson();
+                    var window = new ListDetailWindow(
+                        "Périphériques audio",
+                        "Liste des périphériques audio détectés (source : rapport de scan).",
+                        items)
+                    {
+                        Owner = Application.Current.MainWindow
+                    };
+                    window.ShowDialog();
+                    return;
+                }
+
+                if (key.Equals("Imprimantes", StringComparison.OrdinalIgnoreCase))
+                {
+                    var items = GetPrintersFromJson();
+                    var window = new ListDetailWindow(
+                        "Imprimantes",
+                        "Liste des imprimantes installées (source : rapport de scan).",
+                        items)
+                    {
+                        Owner = Application.Current.MainWindow
+                    };
+                    window.ShowDialog();
+                    return;
+                }
+
+                if (key.Equals("Obsolètes", StringComparison.OrdinalIgnoreCase) || key.Equals("Pilotes obsolètes", StringComparison.OrdinalIgnoreCase))
+                {
+                    var items = GetOutdatedDriversList();
+                    var window = new ListDetailWindow(
+                        "Pilotes obsolètes",
+                        "Pilotes considérés comme obsolètes (>24 mois ou signalés à mettre à jour). Source : inventaire C# ou rapport JSON.",
+                        items)
+                    {
+                        Owner = Application.Current.MainWindow
+                    };
+                    window.ShowDialog();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ListDetail] Erreur: {ex.Message}");
+            }
+        }
+
+        private List<string> GetAudioDevicesFromJson()
+        {
+            var list = new List<string>();
+            if (string.IsNullOrEmpty(_lastCombinedJsonContent)) return list;
+            try
+            {
+                using var doc = JsonDocument.Parse(_lastCombinedJsonContent);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("scan_powershell", out var ps) || !ps.TryGetProperty("sections", out var sections) ||
+                    !sections.TryGetProperty("Audio", out var audio) || !audio.TryGetProperty("data", out var data) ||
+                    !data.TryGetProperty("devices", out var devices) || devices.ValueKind != JsonValueKind.Array)
+                    return list;
+                foreach (var dev in devices.EnumerateArray())
+                {
+                    var name = dev.TryGetProperty("name", out var n) ? n.GetString() : null;
+                    var status = dev.TryGetProperty("status", out var s) ? s.GetString() : null;
+                    list.Add(string.IsNullOrEmpty(name) ? "—" : (string.IsNullOrEmpty(status) ? name : $"{name} — {status}"));
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        private List<string> GetPrintersFromJson()
+        {
+            var list = new List<string>();
+            if (string.IsNullOrEmpty(_lastCombinedJsonContent)) return list;
+            try
+            {
+                using var doc = JsonDocument.Parse(_lastCombinedJsonContent);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("scan_powershell", out var ps) || !ps.TryGetProperty("sections", out var sections) ||
+                    !sections.TryGetProperty("Printers", out var printers) || !printers.TryGetProperty("data", out var data) ||
+                    !data.TryGetProperty("printers", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                    return list;
+                foreach (var p in arr.EnumerateArray())
+                {
+                    var name = p.TryGetProperty("name", out var n) ? n.GetString() : null;
+                    var isDefault = p.TryGetProperty("default", out var d) && (d.ValueKind == JsonValueKind.True || (d.ValueKind == JsonValueKind.Number && d.GetInt32() != 0));
+                    list.Add(string.IsNullOrEmpty(name) ? "—" : (isDefault ? $"{name} [Défaut]" : name));
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        private List<string> GetOutdatedDriversList()
+        {
+            var list = new List<string>();
+            if (_lastDriverInventory?.Available == true && _lastDriverInventory.Drivers != null)
+            {
+                foreach (var d in _lastDriverInventory.Drivers)
+                {
+                    var isOutdated = d.UpdateStatus == "Outdated";
+                    if (!isOutdated && !string.IsNullOrEmpty(d.DriverDate) && DateTime.TryParse(d.DriverDate, out var date))
+                        isOutdated = (DateTime.Now - date).TotalDays > 730;
+                    if (!isOutdated) continue;
+                    var cls = d.DeviceClass ?? "";
+                    var name = d.DeviceName ?? "—";
+                    var ver = d.DriverVersion ?? "?";
+                    list.Add($"{cls}: {name.Trim()} v{ver}");
+                }
+            }
+            if (list.Count == 0 && !string.IsNullOrEmpty(_lastCombinedJsonContent))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(_lastCombinedJsonContent);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("driver_inventory", out var inv) && inv.TryGetProperty("drivers", out var drivers) && drivers.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var d in drivers.EnumerateArray())
+                        {
+                            var cls = d.TryGetProperty("deviceClass", out var c) ? c.GetString() ?? "" : "";
+                            var name = d.TryGetProperty("deviceName", out var n) ? n.GetString()?.Trim() ?? "—" : "—";
+                            var ver = d.TryGetProperty("driverVersion", out var v) ? v.GetString() ?? "?" : "?";
+                            var dateStr = d.TryGetProperty("driverDate", out var dt) ? dt.GetString() : null;
+                            var outdated = d.TryGetProperty("updateStatus", out var u) && u.GetString() == "Outdated";
+                            if (!outdated && !string.IsNullOrEmpty(dateStr) && dateStr.Length >= 8 && DateTime.TryParse(dateStr.Substring(0, Math.Min(10, dateStr.Length)), out var date))
+                                outdated = (DateTime.Now - date).TotalDays > 730;
+                            if (outdated)
+                                list.Add($"{cls}: {name} v{ver}");
+                        }
+                    }
+                }
+                catch { }
+            }
+            return list;
         }
 
         /// <summary>

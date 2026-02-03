@@ -240,7 +240,8 @@
                 <!-- MARGIN RÉDUITE EN HAUT pour laisser place au glow de l'anneau -->
                 <Grid Grid.Column="0" Margin="24,0,20,20" ClipToBounds="False">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="100"/>
+                        <!-- Live feed: hauteur augmentée pour afficher plus de lignes -->
+                        <RowDefinition Height="140"/>
                         <RowDefinition Height="Auto"/>
                         <!-- MinHeight=560 pour conteneur ring 450px + Margin 55 top/bottom pour glow BlurRadius=50 -->
                         <RowDefinition Height="*" MinHeight="560"/>
@@ -1007,17 +1008,45 @@
                                     <!-- Test de vitesse réseau avec Download/Upload/Ping colorés -->
                                     <Border Background="{StaticResource BackgroundMediumBrush}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
                                         <StackPanel>
-                                            <!-- Ligne 1: Titre + Bouton -->
+                                            <!-- Ligne 1: Titre + Tier + Planète (à côté du bouton) + Bouton Tester -->
                                             <Grid Margin="0,0,0,8">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="Speed Test Réseau" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding NetworkSpeedTier}" FontSize="11" 
                                                            Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                <Button Grid.Column="2" Content="🔄 Tester" Command="{Binding RunSpeedTestCommand}" 
+                                                <!-- Icône planète à côté du bouton Tester : visible en permanence, rotation pendant le test -->
+                                                <TextBlock Grid.Column="2" Text="🌍" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                           RenderTransformOrigin="0.5,0.5" SnapsToDevicePixels="True">
+                                                    <TextBlock.RenderTransform>
+                                                        <RotateTransform Angle="0"/>
+                                                    </TextBlock.RenderTransform>
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSpeedTestRunning}" Value="True">
+                                                                    <DataTrigger.EnterActions>
+                                                                        <BeginStoryboard x:Name="PlanetSpinStoryboard">
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                                                 From="0" To="360" Duration="0:0:1"
+                                                                                                 RepeatBehavior="Forever"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </DataTrigger.EnterActions>
+                                                                    <DataTrigger.ExitActions>
+                                                                        <StopStoryboard BeginStoryboardName="PlanetSpinStoryboard"/>
+                                                                    </DataTrigger.ExitActions>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <Button Grid.Column="3" Content="🔄 Tester" Command="{Binding RunSpeedTestCommand}" 
                                                         IsEnabled="{Binding IsSpeedTestRunning, Converter={StaticResource InverseBool}}"
                                                         Background="{StaticResource AccentBlueBrush}" Foreground="White" Padding="10,4"
                                                         FontSize="10" VerticalAlignment="Center" Cursor="Hand">
@@ -1223,9 +1252,41 @@
                                                                                     <TextBlock Text="i" FontSize="11" FontWeight="SemiBold" Foreground="White"
                                                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                                 </Border>
-                                                                                <!-- Colonne 1: Clé (nom du champ) -->
-                                                                                <TextBox Grid.Column="1" Text="{Binding Key, Mode=OneWay}" 
-                                                                                         Style="{StaticResource SelectableTextSecondaryStyle}"/>
+                                                                                <!-- Colonne 1: Clé (nom du champ) ; cliquable pour Périph. audio, Imprimantes, Obsolètes -->
+                                                                                <ContentControl Grid.Column="1" Content="{Binding}" VerticalContentAlignment="Center">
+                                                                                    <ContentControl.Style>
+                                                                                        <Style TargetType="ContentControl">
+                                                                                            <Setter Property="ContentTemplate">
+                                                                                                <Setter.Value>
+                                                                                                    <DataTemplate>
+                                                                                                        <TextBox Text="{Binding Key, Mode=OneWay}" Style="{StaticResource SelectableTextSecondaryStyle}"/>
+                                                                                                    </DataTemplate>
+                                                                                                </Setter.Value>
+                                                                                            </Setter>
+                                                                                            <Style.Triggers>
+                                                                                                <DataTrigger Binding="{Binding IsListDetailKey}" Value="True">
+                                                                                                    <Setter Property="ContentTemplate">
+                                                                                                        <Setter.Value>
+                                                                                                            <DataTemplate>
+                                                                                                                <Button Content="{Binding Key}"
+                                                                                                                        Command="{Binding DataContext.OpenListDetailCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                                                        CommandParameter="{Binding Key}"
+                                                                                                                        Background="Transparent" BorderThickness="0" Padding="0" HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
+                                                                                                                        Foreground="#2196F3" Cursor="Hand">
+                                                                                                                    <Button.Template>
+                                                                                                                        <ControlTemplate TargetType="Button">
+                                                                                                                            <TextBlock Text="{TemplateBinding Content}" Foreground="#2196F3" TextDecorations="Underline" Cursor="Hand"/>
+                                                                                                                        </ControlTemplate>
+                                                                                                                    </Button.Template>
+                                                                                                                </Button>
+                                                                                                            </DataTemplate>
+                                                                                                        </Setter.Value>
+                                                                                                    </Setter>
+                                                                                                </DataTrigger>
+                                                                                            </Style.Triggers>
+                                                                                        </Style>
+                                                                                    </ContentControl.Style>
+                                                                                </ContentControl>
                                                                                 <!-- Colonne 2: Valeur -->
                                                                                 <TextBox Grid.Column="2" Text="{Binding Value, Mode=OneWay}" 
                                                                                          Style="{StaticResource SelectableTextStyle}"/>

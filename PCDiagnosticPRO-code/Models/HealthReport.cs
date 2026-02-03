@@ -294,6 +294,19 @@ namespace PCDiagnosticPro.Models
                 // Pilotes
                 "pilote" or "driver" => "Pilote : Logiciel permettant au système d'exploitation de communiquer avec le matériel.\n\nDes pilotes obsolètes peuvent causer des problèmes de stabilité ou de performance.",
                 "date pilote" => "Date de mise à jour du pilote. Un pilote ancien (>2 ans) peut être mis à jour.",
+                "non signés" => 
+                    "Pilotes non signés\n\n" +
+                    "Définition : Un pilote « non signé » n'est pas signé numériquement par une autorité reconnue (Microsoft, éditeur matériel). Windows peut le bloquer selon les réglages de stratégie (Signature Enforcement).\n\n" +
+                    "Ce n'est pas forcément malveillant mais plus risqué : sources non officielles, vieux drivers non mis à jour, possible compatibilité ou stabilité réduite.\n\n" +
+                    "Actions : Privilégier les pilotes officiels (site fabricant, Windows Update), vérifier l'éditeur, éviter de désactiver les contrôles de sécurité (désactivation du mode test, etc.).",
+                
+                // Alimentation
+                "power throttling" => 
+                    "Power throttling (limitation de puissance)\n\n" +
+                    "Définition : Limitation volontaire de la puissance du CPU/GPU pour réduire la chaleur et la consommation. Le système réduit les fréquences ou l'utilisation pour rester dans des limites thermiques ou d'alimentation.\n\n" +
+                    "Impact : Baisse des performances, latence accrue, FPS réduits en jeu, tâches lourdes plus lentes.\n\n" +
+                    "Causes typiques : Mode économie d'énergie, limites thermiques atteintes, politiques OEM, chargeur insuffisant sur portable, paramètres Windows ou BIOS.\n\n" +
+                    "Actions : Vérifier le mode d'alimentation (Performances élevées), pilotes chipset à jour, températures (nettoyage, pâte thermique), paramètres Windows (Options d'alimentation), BIOS si pertinent.",
                 
                 // Applications
                 "applications" or "apps" => "Applications installées détectées via le registre Windows et les packages AppX.",
@@ -324,6 +337,20 @@ namespace PCDiagnosticPro.Models
         public string Value { get; set; } = string.Empty;
         public string? Tooltip { get; set; }
         public bool HasTooltip => !string.IsNullOrEmpty(Tooltip);
+
+        /// <summary>
+        /// Indique si cette ligne ouvre une fenêtre de liste au clic (Périph. audio, Imprimantes, Obsolètes).
+        /// </summary>
+        public bool IsListDetailKey
+        {
+            get
+            {
+                return Key.Equals("Périph. audio", StringComparison.OrdinalIgnoreCase) ||
+                       Key.Equals("Imprimantes", StringComparison.OrdinalIgnoreCase) ||
+                       Key.Equals("Obsolètes", StringComparison.OrdinalIgnoreCase) ||
+                       Key.Equals("Pilotes obsolètes", StringComparison.OrdinalIgnoreCase);
+            }
+        }
         
         /// <summary>
         /// Détermine si l'icône info "i" doit être affichée.
@@ -351,6 +378,12 @@ namespace PCDiagnosticPro.Models
                     // CPU - termes techniques  
                     "Throttling",
                     
+                    // Pilotes - termes techniques
+                    "Non signés",
+                    
+                    // Alimentation - termes techniques
+                    "Power throttling",
+                    
                     // Performance - termes techniques
                     "Bottlenecks", "Bottleneck", "RAM pressure", "CPU bound", "Disk saturation"
                 };
@@ -367,6 +400,36 @@ namespace PCDiagnosticPro.Models
         {
             get
             {
+                // Ne pas afficher d'indicateur (☑) pour ces champs — pas de ✅ blanc côté UI
+                // Inclut: Sécurité, Alimentation, Pilotes, GPU (TDR, Temp), Stockage (Temp, SMART, Partitions), Réseau (Latence, Perte, Qualité), Stabilité (BSOD, WHEA)
+                if (Key.Equals("Antivirus", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Pare-feu", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Secure Boot", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("UAC", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Kernel-Power", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Power throttling", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Non signés", StringComparison.OrdinalIgnoreCase) ||
+                    Key.StartsWith("Pilote ", StringComparison.OrdinalIgnoreCase) ||
+                    // GPU
+                    Key.Equals("Température GPU", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Contains("TDR", StringComparison.OrdinalIgnoreCase) ||
+                    // Stockage
+                    Key.Equals("Températures disques", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("TempMax Disques", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Santé SMART", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Partitions", StringComparison.OrdinalIgnoreCase) ||
+                    // Réseau
+                    Key.Equals("Latence (ping)", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Perte paquets", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Qualité connexion", StringComparison.OrdinalIgnoreCase) ||
+                    // Stabilité
+                    Key.Equals("BSOD", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Erreurs WHEA", StringComparison.OrdinalIgnoreCase) ||
+                    // OS
+                    Key.Equals("Updates Windows", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Erreurs critiques", StringComparison.OrdinalIgnoreCase))
+                    return "";
+
                 if (string.IsNullOrEmpty(Value)) return "";
                 var v = Value.ToLower();
                 // Positif: Throttling "Non détecté" = pas de throttling = vert

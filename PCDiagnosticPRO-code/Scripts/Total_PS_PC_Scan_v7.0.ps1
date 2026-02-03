@@ -72,7 +72,8 @@ param(
     [string]$OutputDir = "C:\Virtual IT Pro\Rapport",
     [switch]$QuickScan,
     [ValidateRange(3, 60)]
-    [int]$MonitorSeconds = 10,
+    # OPTIMISATION: Réduit de 10s à 3s (suffisant pour moyennes CPU/Disk)
+    [int]$MonitorSeconds = 3,
     [switch]$AllowExternalNetworkTests,
     [string[]]$NetworkTestTargets = @('8.8.8.8', '1.1.1.1'),
     [string[]]$DnsTestTargets = @('google.com', 'microsoft.com'),
@@ -1929,18 +1930,25 @@ function Collect-Temperatures {
         $content += "TEMPERATURES HARDWARE"
         $content += ("-" * 50)
 
-        # v7.0: CPU et GPU neutralisés
-        $cpuNote = 'Non disponible (limitation WMI - collecte externalisee)'
+        # CPU: tentative WMI (MSAcpi_ThermalZoneTemperature / ThermalZoneInformation) pour alimenter l'UI
+        $cpuResult = Get-WmiCpuTemperature
+        $cpuTempC = $null
+        $cpuSource = 'Non disponible (WMI non supporte ou admin requis)'
+        if ($null -ne $cpuResult -and $null -ne $cpuResult.Value) {
+            $cpuTempC = $cpuResult.Value
+            $cpuSource = Get-SafeDictValue $cpuResult 'Source' 'WMI'
+        }
+        $cpuNote = if ($null -ne $cpuTempC) { "$cpuTempC $degC [$cpuSource]" } else { $cpuSource }
         $gpuNote = 'Non disponible (limitation WMI - collecte externalisee)'
-        
+
         $content += ""
         $content += "CPU: $cpuNote"
         $content += "GPU: $gpuNote"
-        
+
         # Températures disques (conservées)
         $diskTemps = @((Get-DiskTemperatures))
         if ($null -eq $diskTemps) { $diskTemps = @() }
-        
+
         $content += "Disques: $(Get-SafeCount $diskTemps)"
         foreach ($disk in $diskTemps) {
             $model = Get-SafeDictValue $disk 'model' 'Disque'
@@ -1954,13 +1962,13 @@ function Collect-Temperatures {
             $content += "[INFO] Temperature disque non disponible"
         }
 
-        # Données JSON
-        $data['cpuTempC'] = $null
+        # Données JSON (cpuTempC alimente l'UI Température CPU quand disponible)
+        $data['cpuTempC'] = $cpuTempC
         $data['gpuTempC'] = $null
         $data['cpuNote'] = $cpuNote
         $data['gpuNote'] = $gpuNote
         $data['disks'] = $diskTemps
-        $data['cpuSource'] = 'Neutralise_v7'
+        $data['cpuSource'] = $cpuSource
         $data['gpuSource'] = 'Neutralise_v7'
         $data['lhmAvailable'] = $false
         $Script:SectionData['Temperatures'] = $data
@@ -2194,6 +2202,30 @@ function Collect-WindowsUpdate {
     $content = @(); $data = [ordered]@{}
     try {
         $content += "WINDOWS UPDATE"; $content += ("-" * 50)
+        
+        # OPTIMISATION: Cache - Skip recherche complète si dernière vérification < 24h
+        try {
+            $lastCheck = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\Results\Detect" -Name LastSuccessTime -ErrorAction SilentlyContinue).LastSuccessTime
+            if ($lastCheck) {
+                $lastCheckDate = [DateTime]::Parse($lastCheck)
+                $hoursSinceCheck = ((Get-Date) - $lastCheckDate).TotalHours
+                
+                if ($hoursSinceCheck -lt 24) {
+                    $content += "[CACHE] Derniere verification: il y a $([math]::Round($hoursSinceCheck, 1))h"
+                    $content += "[CACHE] Skip verification (< 24h)"
+                    $data['pendingCount'] = 0
+                    $data['status'] = "Skipped (verified < 24h ago)"
+                    $data['cached'] = $true
+                    $data['lastCheckHours'] = [math]::Round($hoursSinceCheck, 1)
+                    $Script:SectionData['WindowsUpdate'] = $data
+                    return ($content -join "`n")
+                }
+            }
+        }
+        catch {
+            # Si erreur cache, continuer normalement
+        }
+        
         try {
             $session = New-Object -ComObject Microsoft.Update.Session
             $searcher = $session.CreateUpdateSearcher()
@@ -2201,6 +2233,7 @@ function Collect-WindowsUpdate {
             $pendingCount = 0
             if ($null -ne $pending -and $null -ne $pending.Updates) { $pendingCount = Get-SafePropValue $pending.Updates 'Count' 0 }
             $data['pendingCount'] = $pendingCount
+            $data['cached'] = $false
             $content += "Mises a jour en attente  : $pendingCount"
         }
         catch { $data['pendingCount'] = -1; $content += "[INFO] Non disponible" }
@@ -2920,13 +2953,44 @@ function Collect-SmartDetails {
     try {
         $content += "SMART DETAILLE"; $content += ("-" * 50)
         $smartData = @()
+        
+        # OPTIMISATION: Récupérer liste des disques USB à ignorer
+        $usbDiskPatterns = @()
+        try {
+            $physicalDisks = Get-PhysicalDisk -ErrorAction SilentlyContinue
+            if ($physicalDisks) {
+                foreach ($pd in $physicalDisks) {
+                    $busType = $pd.BusType
+                    $mediaType = $pd.MediaType
+                    # Skip USB, Removable, et très petits disques (< 10GB = probablement clé USB)
+                    if ($busType -eq 'USB' -or $pd.Size -lt 10GB) {
+                        $usbDiskPatterns += $pd.FriendlyName
+                    }
+                }
+            }
+        }
+        catch { }
+        
         $smartStatus = Get-WmiSafe -ClassName 'MSStorageDriver_FailurePredictStatus' -Namespace 'root\wmi'
         if ($null -ne $smartStatus) {
             $smartAttribs = Get-WmiSafe -ClassName 'MSStorageDriver_FailurePredictData' -Namespace 'root\wmi'
             $statusArray = @($smartStatus)
+            $skippedCount = 0
             foreach ($status in $statusArray) {
                 if ($null -eq $status) { continue }
                 $instanceName = Get-SafePropValue $status 'InstanceName' 'N/A'
+                
+                # OPTIMISATION: Skip disques USB/removable identifiés
+                $skipDisk = $false
+                foreach ($usbPattern in $usbDiskPatterns) {
+                    if ($instanceName -like "*$usbPattern*") {
+                        $skipDisk = $true
+                        $skippedCount++
+                        break
+                    }
+                }
+                if ($skipDisk) { continue }
+                
                 $predictFailure = Get-SafePropValue $status 'PredictFailure' $false
                 $diskInfo = [ordered]@{ instanceName = $instanceName; predictFailure = $predictFailure }
                 $content += "Disque: $($instanceName.Split('\')[-1])"
@@ -2980,8 +3044,13 @@ function Collect-SmartDetails {
                 }
                 $smartData += $diskInfo; $content += ""
             }
+            # Log des disques ignorés (USB/removable)
+            if ($skippedCount -gt 0) {
+                $content += "[OPTIM] $skippedCount disque(s) USB/removable ignore(s)"
+            }
         } else { $content += "[INFO] Donnees SMART non disponibles" }
         $data['disks'] = $smartData; $data['diskCount'] = Get-SafeCount $smartData
+        $data['skippedUsbCount'] = if ($skippedCount) { $skippedCount } else { 0 }
     }
     catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Collect-SmartDetails' -Message $_.Exception.Message }
     $Script:SectionData['SmartDetails'] = $data

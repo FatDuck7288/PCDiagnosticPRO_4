@@ -299,6 +299,84 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
+        /// Sauvegarde le résultat du test de vitesse en JSON pour inspection par LLM
+        /// </summary>
+        public async Task<string?> SaveResultToJsonAsync(SpeedTestResult result, string? outputDir = null)
+        {
+            try
+            {
+                // Utiliser le dossier Rapports par défaut
+                if (string.IsNullOrEmpty(outputDir))
+                {
+                    var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    outputDir = Path.Combine(localAppData, "PCDiagnosticPRO", "Rapports");
+                }
+                
+                if (!Directory.Exists(outputDir))
+                    Directory.CreateDirectory(outputDir);
+                
+                // Générer un nom de fichier unique avec timestamp et run ID
+                var runId = Guid.NewGuid().ToString("N").Substring(0, 8);
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var fileName = $"speedtest_{timestamp}_{runId}.json";
+                var filePath = Path.Combine(outputDir, fileName);
+                
+                // Créer l'objet JSON structuré pour LLM
+                var jsonResult = new
+                {
+                    // Métadonnées
+                    Timestamp = result.TestTime.ToString("o"),
+                    RunId = runId,
+                    Provider = "LibreSpeed CLI",
+                    
+                    // Résultats principaux
+                    DownloadMbps = result.DownloadMbps,
+                    UploadMbps = result.UploadMbps,
+                    LatencyMs = result.PingMs,
+                    JitterMs = result.JitterMs,
+                    PacketLossPercent = (double?)null, // LibreSpeed ne mesure pas la perte
+                    
+                    // Serveur
+                    ServerName = result.ServerName,
+                    ServerLocation = result.ServerLocation,
+                    ServerSponsor = result.ServerSponsor,
+                    
+                    // Interface réseau (à enrichir si disponible)
+                    PublicIp = (string?)null,
+                    InterfaceName = (string?)null,
+                    InterfaceType = (string?)null,
+                    WifiBand = (string?)null,
+                    LinkSpeedMbps = (double?)null,
+                    
+                    // Analyse
+                    SpeedTier = result.SpeedTier,
+                    Success = result.Success,
+                    
+                    // Erreur
+                    ErrorCode = result.Success ? (string?)null : "TEST_FAILED",
+                    ErrorMessage = result.Error
+                };
+                
+                var options = new JsonSerializerOptions 
+                { 
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                };
+                var json = JsonSerializer.Serialize(jsonResult, options);
+                
+                await File.WriteAllTextAsync(filePath, json);
+                
+                App.LogMessage($"[LibreSpeed] Résultat sauvegardé: {filePath}");
+                return filePath;
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[LibreSpeed] Erreur sauvegarde JSON: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Fallback HTTP simple si LibreSpeed CLI échoue
         /// </summary>
         public async Task<SpeedTestResult> RunFallbackTestAsync(CancellationToken cancellationToken = default)

@@ -379,11 +379,7 @@ namespace PCDiagnosticPro.Services
             if (outdated > 0)
                 driversSection.EvidenceData["Obsolètes"] = outdated.ToString();
 
-            if (driverInventory.ByClass.Count > 0)
-            {
-                var topClasses = string.Join(", ", driverInventory.ByClass.Keys.Take(5));
-                driversSection.EvidenceData["Classes"] = topClasses;
-            }
+            // Ligne "Classes" supprimée (ne renseigne pas assez)
 
             // Only override status if section was previously empty/unknown
             if (driversSection.Score == 0 && driversSection.Severity == HealthSeverity.Unknown)
@@ -820,8 +816,8 @@ namespace PCDiagnosticPro.Services
                         section.EvidenceData = new Dictionary<string, string>
                         {
                             ["Source"] = "WMI Win32_PnPSignedDriver",
-                            ["Pilotes essentiels"] = wmiDriverData.Count.ToString(),
-                            ["Classes détectées"] = string.Join(", ", wmiDriverData.Select(d => d.cls).Distinct().Take(5))
+                            ["Pilotes essentiels"] = wmiDriverData.Count.ToString()
+                            // Ligne "Classes" supprimée (ne renseigne pas assez)
                         };
                         section.DetailedExplanation = $"Les pilotes ont été détectés via WMI. {wmiDriverData.Count} pilotes essentiels trouvés.";
                         section.SectionRecommendations = new List<string> { "Mettez à jour les pilotes obsolètes" };

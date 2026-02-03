@@ -77,3 +77,5 @@ D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-detail
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\DriversDetailsWindow.g.cs
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\CollectorErrorsWindow.baml
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\CollectorErrorsWindow.g.cs
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\ListDetailWindow.baml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\ListDetailWindow.g.cs

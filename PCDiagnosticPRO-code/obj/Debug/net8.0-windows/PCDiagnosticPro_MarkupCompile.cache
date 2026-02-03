@@ -10,11 +10,11 @@ none
 false
 TRACE;DEBUG;NET;NET8_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_OR_GREATER;NET7_0_OR_GREATER;NET8_0_OR_GREATER;NETCOREAPP3_0_OR_GREATER;NETCOREAPP3_1_OR_GREATER;WINDOWS7_0_OR_GREATER
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\App.xaml
-6-2028066181
+7338994264
 14740115
-91652411229
+92373212193
 2121363407265
-Controls\ScanAnimationOverlay.xaml;MainWindow.xaml;Styles\FuturisticStyles.xaml;Views\AppsDetailsWindow.xaml;Views\CollectorErrorsWindow.xaml;Views\DriversDetailsWindow.xaml;
+Controls\ScanAnimationOverlay.xaml;MainWindow.xaml;Styles\FuturisticStyles.xaml;Views\AppsDetailsWindow.xaml;Views\CollectorErrorsWindow.xaml;Views\DriversDetailsWindow.xaml;Views\ListDetailWindow.xaml;
 
 False
 

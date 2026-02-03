@@ -45,6 +45,22 @@ namespace PCDiagnosticPro.Services
 
                 if (processes.Count == 0)
                 {
+                    // Method C: WMI Win32_Process (fallback robuste)
+                    App.LogMessage("[ProcessTelemetry] Toolhelp32 failed, trying WMI Win32_Process");
+                    processes = await Task.Run(() => CollectViaWmiProcess(ct), ct);
+                    result.Source = "WMI_Win32_Process";
+                }
+
+                if (processes.Count == 0)
+                {
+                    // Method D: tasklist /fo csv (dernier recours)
+                    App.LogMessage("[ProcessTelemetry] WMI failed, trying tasklist");
+                    processes = await Task.Run(() => CollectViaTasklist(ct), ct);
+                    result.Source = "tasklist";
+                }
+
+                if (processes.Count == 0)
+                {
                     result.Available = false;
                     result.Reason = "all_collection_methods_failed";
                     result.Source = "ProcessTelemetryCollector";
@@ -440,6 +456,142 @@ namespace PCDiagnosticPro.Services
         {
             long ticks = ((long)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
             return ticks / 10000; // 100ns to ms
+        }
+
+        #endregion
+
+        #region Method C: WMI Win32_Process
+
+        private List<ProcessInfo> CollectViaWmiProcess(CancellationToken ct)
+        {
+            var result = new List<ProcessInfo>();
+            try
+            {
+                using var searcher = new System.Management.ManagementObjectSearcher(
+                    "SELECT ProcessId, Name, WorkingSetSize, ThreadCount FROM Win32_Process");
+                
+                foreach (System.Management.ManagementObject obj in searcher.Get())
+                {
+                    if (ct.IsCancellationRequested) break;
+                    
+                    try
+                    {
+                        var info = new ProcessInfo
+                        {
+                            Pid = Convert.ToInt32(obj["ProcessId"]),
+                            Name = obj["Name"]?.ToString() ?? "Unknown",
+                            WorkingSetMB = Math.Round(Convert.ToDouble(obj["WorkingSetSize"] ?? 0) / (1024.0 * 1024.0), 2),
+                            ThreadCount = Convert.ToInt32(obj["ThreadCount"] ?? 0),
+                            AccessDenied = false
+                        };
+                        result.Add(info);
+                    }
+                    catch { /* Ignore individual process errors */ }
+                }
+                
+                App.LogMessage($"[ProcessTelemetry] WMI collected {result.Count} processes");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ProcessTelemetry] WMI error: {ex.Message}");
+            }
+            return result;
+        }
+
+        #endregion
+
+        #region Method D: tasklist /fo csv
+
+        private List<ProcessInfo> CollectViaTasklist(CancellationToken ct)
+        {
+            var result = new List<ProcessInfo>();
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "tasklist",
+                    Arguments = "/fo csv /nh",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(psi);
+                if (process == null) return result;
+
+                // Timeout de 10 secondes
+                var completed = process.WaitForExit(10000);
+                if (!completed)
+                {
+                    try { process.Kill(); } catch { }
+                    App.LogMessage("[ProcessTelemetry] tasklist timeout");
+                    return result;
+                }
+
+                var output = process.StandardOutput.ReadToEnd();
+                var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (var line in lines)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    
+                    try
+                    {
+                        // Format CSV: "Image Name","PID","Session Name","Session#","Mem Usage"
+                        var parts = ParseCsvLine(line);
+                        if (parts.Length >= 5)
+                        {
+                            var memStr = parts[4].Replace("\"", "").Replace(",", "").Replace(" K", "").Trim();
+                            if (int.TryParse(parts[1].Replace("\"", ""), out var pid) &&
+                                double.TryParse(memStr, out var memKb))
+                            {
+                                var info = new ProcessInfo
+                                {
+                                    Pid = pid,
+                                    Name = parts[0].Replace("\"", ""),
+                                    WorkingSetMB = Math.Round(memKb / 1024.0, 2),
+                                    AccessDenied = false
+                                };
+                                result.Add(info);
+                            }
+                        }
+                    }
+                    catch { /* Ignore parse errors */ }
+                }
+                
+                App.LogMessage($"[ProcessTelemetry] tasklist collected {result.Count} processes");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ProcessTelemetry] tasklist error: {ex.Message}");
+            }
+            return result;
+        }
+
+        private static string[] ParseCsvLine(string line)
+        {
+            var result = new List<string>();
+            var inQuotes = false;
+            var current = new System.Text.StringBuilder();
+            
+            foreach (var c in line)
+            {
+                if (c == '"')
+                {
+                    inQuotes = !inQuotes;
+                }
+                else if (c == ',' && !inQuotes)
+                {
+                    result.Add(current.ToString());
+                    current.Clear();
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            result.Add(current.ToString());
+            return result.ToArray();
         }
 
         #endregion
