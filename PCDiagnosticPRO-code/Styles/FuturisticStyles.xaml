@@ -56,7 +56,7 @@
                             Background="{TemplateBinding Background}" 
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="8"
+                            CornerRadius="12"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
@@ -409,7 +409,7 @@
         <Setter Property="Background" Value="{StaticResource BackgroundLightBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="CornerRadius" Value="12"/>
         <Setter Property="Padding" Value="12"/>
         <Setter Property="Effect" Value="{StaticResource SubtleShadow}"/>
         <Style.Triggers>
@@ -443,6 +443,61 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="4"/>
         <Setter Property="Padding" Value="8,4"/>
+    </Style>
+
+    <!-- ==================== EXPANDABLE BOX STYLE (No Arrow) ==================== -->
+    <!-- Inset shadow effects for pressed appearance -->
+    <DropShadowEffect x:Key="InsetShadowBase" Color="Black" BlurRadius="3" ShadowDepth="1" Opacity="0.08" Direction="270"/>
+    <DropShadowEffect x:Key="InsetShadowHover" Color="Black" BlurRadius="3" ShadowDepth="1" Opacity="0.12" Direction="270"/>
+    
+    <!-- Colors for expandable boxes -->
+    <SolidColorBrush x:Key="ExpandableBoxBorderBrush" Color="#E5E5E5"/>
+    <SolidColorBrush x:Key="ExpandableBoxHoverBrush" Color="#F8F8F8"/>
+    <SolidColorBrush x:Key="ExpandableBoxActiveBrush" Color="#FEE2E2"/>
+    <SolidColorBrush x:Key="ExpandableBoxActiveBorderBrush" Color="#DC2626"/>
+    
+    <!-- Expander style without arrow -->
+    <Style x:Key="ExpanderNoArrowStyle" TargetType="Expander">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Expander">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <DockPanel>
+                            <!-- Header without arrow - entire header is clickable -->
+                            <ToggleButton DockPanel.Dock="Top"
+                                          IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                          Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          OverridesDefaultStyle="True"
+                                          Background="Transparent"
+                                          Cursor="Hand">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <ContentPresenter Content="{TemplateBinding Content}"
+                                                          ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <!-- Content area -->
+                            <ContentPresenter x:Name="ExpanderContent" 
+                                              DockPanel.Dock="Bottom"
+                                              Visibility="Collapsed"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                        </DockPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="ExpanderContent" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ==================== TOOLTIP LISIBLE ==================== -->

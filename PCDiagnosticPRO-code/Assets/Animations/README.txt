@@ -1,8 +1,6 @@
-Speed Test - Icône planète animée
-=================================
-Déposer ici le fichier planet.gif (GIF animé en couleur de la planète).
+Speed Test - Icône planète
+==========================
+• earth-globe.png : image statique de la Terre (couleur, type globe 3D). Affichée à côté de "Speed Test Réseau" et animée en rotation pendant le scan ou le test. Nom exact requis : earth-globe.png
+• planet.gif : (optionnel) GIF animé. Si présent, peut être utilisé pour une animation avancée.
 
-Référence visuelle (à ne pas charger depuis Internet en production):
-https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExemc2dHFnZDIxNzB6dnh5djU0cHMyazl6YThxOGoxeGN6c25wc3QzaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3YHzWhog1v3HBk3oXm/giphy.gif
-
-Si planet.gif est absent, l'application affiche un fallback (emoji) à la place.
+Si aucun PNG n'est présent, l'application affiche l'emoji globe (fallback).

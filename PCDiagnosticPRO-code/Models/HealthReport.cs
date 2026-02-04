@@ -355,12 +355,20 @@ namespace PCDiagnosticPro.Models
         /// <summary>
         /// Détermine si l'icône info "i" doit être affichée.
         /// On affiche le "i" UNIQUEMENT pour les termes techniques nécessitant une explication détaillée.
+        /// Exclusions explicites: Antivirus, Température GPU, VRAM totale (trop évidents, pas besoin d'explication)
         /// </summary>
         public bool ShouldShowInfoIcon
         {
             get
             {
                 if (!HasTooltip) return false;
+                
+                // Exclusions explicites - champs évidents qui n'ont pas besoin d'icône info
+                if (Key.Equals("Antivirus", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Température GPU", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Contains("VRAM totale", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Contains("VRAM", StringComparison.OrdinalIgnoreCase))
+                    return false;
                 
                 // Liste des clés qui DOIVENT afficher l'icône "i" (termes techniques nécessitant explication)
                 var keysWithInfoIcon = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -432,6 +440,13 @@ namespace PCDiagnosticPro.Models
 
                 if (string.IsNullOrEmpty(Value)) return "";
                 var v = Value.ToLower();
+                
+                // Cas spécial: Redémarrage requis - icône neutre (pas un X qui suggère erreur)
+                if (Key.Equals("Redémarrage requis", StringComparison.OrdinalIgnoreCase))
+                {
+                    return v.StartsWith("oui") ? "↻" : "☑"; // Flèche circulaire si oui, coche si non
+                }
+                
                 // Positif: Throttling "Non détecté" = pas de throttling = vert
                 if (Key.IndexOf("Throttling", StringComparison.OrdinalIgnoreCase) >= 0 && (v.Contains("non détecté") || v.Contains("non détect")))
                     return "☑";

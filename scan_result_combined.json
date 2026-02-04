@@ -2,7 +2,7 @@
   "scan_powershell": {
     "missingData": {
       "section": "Processes",
-      "timestamp": "2026-02-03T19:24:06.7267803-05:00",
+      "timestamp": "2026-02-04T16:27:51.5979555-05:00",
       "item": "ProcessList",
       "reason": "Get-Process, CIM et tasklist ont echoue"
     },
@@ -22,14 +22,14 @@
       "topPenalties": {}
     },
     "metadata": {
-      "durationSeconds": 52.17,
-      "runId": "23f755ab-cc4c-4dc4-a5d2-01beb3262e21",
+      "durationSeconds": 55.15,
+      "runId": "2eff71b2-f14a-4830-8679-5c12dde408fe",
       "monitorSeconds": 3,
       "redactLevel": "Full",
       "version": "7.0",
       "partialFailure": false,
       "isAdmin": true,
-      "timestamp": "2026-02-03T19:24:34.7608089-05:00",
+      "timestamp": "2026-02-04T16:28:22.3078591-05:00",
       "quickScan": false
     },
     "findings": {},
@@ -165,9 +165,9 @@
               ]
             }
           ],
-          "totalConnections": 110,
+          "totalConnections": 131,
           "adapterCount": 8,
-          "listeningPorts": 35
+          "listeningPorts": 36
         }
       },
       "DynamicSignals": {
@@ -176,10 +176,10 @@
         "data": {
           "cpu": {
             "source": "WMI-Fallback",
-            "average": "2",
-            "min": "2",
+            "average": "10",
+            "min": "10",
             "sampleCount": 1,
-            "max": "2"
+            "max": "10"
           },
           "disk": {
             "queueLength": "0",
@@ -190,57 +190,57 @@
           "topCpu": [
             {
               "name": "dwm",
-              "cpuSeconds": 3189.859375
-            },
-            {
-              "name": "System",
-              "cpuSeconds": 2315.453125
-            },
-            {
-              "name": "RazerAppEngine",
-              "cpuSeconds": 1907.546875
+              "cpuSeconds": 6970.765625
             },
             {
               "name": "chrome",
-              "cpuSeconds": 1194.90625
+              "cpuSeconds": 5555.25
             },
             {
-              "name": "MsMpEng",
-              "cpuSeconds": 1112.75
+              "name": "System",
+              "cpuSeconds": 5269.078125
+            },
+            {
+              "name": "RazerAppEngine",
+              "cpuSeconds": 4206.546875
+            },
+            {
+              "name": "Cursor",
+              "cpuSeconds": 3462.75
             }
           ],
           "memory": {
             "pageFaultsPerSec": 0,
             "source": "WMI-Fallback",
-            "usedPercent": 23.51,
-            "availableMB": 75138.56,
+            "usedPercent": 27.94,
+            "availableMB": 70785.55,
             "sampleCount": 0
           },
           "samplesCollected": "3",
           "topMemory": [
             {
               "name": "Cursor",
-              "memoryMB": 1828.16
+              "memoryMB": 1960.05
             },
             {
               "name": "explorer",
-              "memoryMB": 699.36
+              "memoryMB": 1380.45
             },
             {
               "name": "chrome",
-              "memoryMB": "591"
+              "memoryMB": 927.34
             },
             {
               "name": "chrome",
-              "memoryMB": 580.28
+              "memoryMB": 782.57
             },
             {
               "name": "chrome",
-              "memoryMB": 563.52
+              "memoryMB": 753.09
             }
           ],
           "network": {
-            "throughputMbps": "0.07",
+            "throughputMbps": "0.01",
             "errors": 0,
             "adapter": "Wi-Fi 4"
           },
@@ -259,10 +259,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "totalBytes": 2875498771,
+          "totalBytes": 3207121996,
           "locations": {
-            "Temp User": 2742458167,
-            "Temp Windows": 133040604
+            "Temp User": 3067427553,
+            "Temp Windows": 139694443
           }
         }
       },
@@ -311,12 +311,6 @@
               "serial": "SERIAL-XXXX",
               "source": "SMART",
               "model": "TOSHIBA DT01ACA200",
-              "tempC": null
-            },
-            {
-              "serial": "SERIAL-XXXX",
-              "source": "SMART",
-              "model": "SanDisk Cruzer Glide USB Device",
               "tempC": null
             }
           ],
@@ -442,7 +436,7 @@
             "graphics": 9.1
           },
           "fragmentation": {
-            "C": 1,
+            "C": 2,
             "E": 0,
             "D": 0,
             "H": -1
@@ -454,7 +448,7 @@
         "status": "OK",
         "data": {
           "totalTasks": 292,
-          "readyTasks": 234
+          "readyTasks": 233
         }
       },
       "HealthChecks": {
@@ -511,10 +505,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "freeGB": 73.6,
+          "freeGB": 69.85,
           "totalGB": 95.93,
           "moduleCount": 4,
-          "usedPercent": 23.3,
+          "usedPercent": 27.2,
           "modules": [
             {
               "speedMHz": 3200,
@@ -596,7 +590,7 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "runningServices": 130,
+          "runningServices": 133,
           "criticalServices": [
             {
               "status": "Stopped",
@@ -631,25 +625,25 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "physicalDiskCount": 6,
+          "physicalDiskCount": 5,
           "volumeCount": 4,
           "volumes": [
             {
-              "freeGB": 373.26,
+              "freeGB": 369.75,
               "totalGB": 952.65,
-              "usedPercent": 60.8,
+              "usedPercent": 61.2,
               "letter": "C:"
             },
             {
-              "freeGB": 1095.09,
+              "freeGB": 1094.97,
               "totalGB": 1863.02,
               "usedPercent": 41.2,
               "letter": "D:"
             },
             {
-              "freeGB": 1492.63,
+              "freeGB": 1492.29,
               "totalGB": 1862.17,
-              "usedPercent": 19.8,
+              "usedPercent": 19.9,
               "letter": "E:"
             },
             {
@@ -699,14 +693,6 @@
               "interface": "IDE",
               "status": "OK",
               "serial": "SERIAL-XXXX"
-            },
-            {
-              "type": "HDD",
-              "sizeGB": 14.32,
-              "model": "SanDisk Cruzer Glide USB Device",
-              "interface": "USB",
-              "status": "OK",
-              "serial": "SERIAL-XXXX"
             }
           ],
           "smart": {
@@ -754,7 +740,7 @@
             "maxClockSpeed": 3701,
             "name": "AMD Ryzen 9 5900X 12-Core Processor            ",
             "cores": 12,
-            "currentLoad": 6
+            "currentLoad": 21
           },
           "cpuCount": 1
         }
@@ -763,7 +749,7 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "deviceCount": 3,
+          "deviceCount": 4,
           "devices": [
             {
               "name": "Realtek High Definition Audio",
@@ -775,6 +761,10 @@
             },
             {
               "name": "NVIDIA Virtual Audio Device (Wave Extensible) (WDM)",
+              "status": "OK"
+            },
+            {
+              "name": "P\u00E9riph\u00E9rique audio USB",
               "status": "OK"
             }
           ]
@@ -797,13 +787,13 @@
           "skippedUsbCount": 0,
           "disks": {
             "reallocationEvents": 0,
-            "powerOnHours": 22995,
+            "powerOnHours": 23016,
             "uncorrectableSectors": 0,
             "instanceName": "SCSI\\Disk\u0026Ven_TOSHIBA\u0026Prod_DT01ACA200\\5\u0026221baba8\u00260\u0026020000_0",
             "reallocatedSectors": 0,
             "predictFailure": false,
             "pendingSectors": 0,
-            "temperature": 37
+            "temperature": 36
           }
         }
       },
@@ -826,10 +816,10 @@
         "summary": null,
         "status": "OK",
         "data": {
-          "uptimeDays": 0,
+          "uptimeDays": 1,
           "biosSerial": "SERIAL-XXXX",
           "manufacturer": "Micro-Star International Co., Ltd.",
-          "uptimeHours": 10,
+          "uptimeHours": 7,
           "username": "USER-cd9bc0",
           "secureBoot": false,
           "osCaption": "Microsoft Windows 11 Famille",
@@ -1279,12 +1269,12 @@
     },
     "paths": {
       "outputDir": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports",
-      "txtPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_23f755ab-cc4c-4dc4-a5d2-01beb3262e21_20260203_192342.txt",
-      "jsonPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_23f755ab-cc4c-4dc4-a5d2-01beb3262e21_20260203_192342.json"
+      "txtPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_2eff71b2-f14a-4830-8679-5c12dde408fe_20260204_162727.txt",
+      "jsonPath": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_2eff71b2-f14a-4830-8679-5c12dde408fe_20260204_162727.json"
     }
   },
   "sensors_csharp": {
-    "collectedAt": "2026-02-03T19:28:41.976894-05:00",
+    "collectedAt": "2026-02-04T16:32:21.5858307-05:00",
     "gpu": {
       "name": {
         "value": "NVIDIA GeForce RTX 3090",
@@ -1297,49 +1287,37 @@
         "reason": null
       },
       "vramUsedMB": {
-        "value": 10632.57421875,
+        "value": 11941.01171875,
         "available": true,
         "reason": null
       },
       "gpuLoadPercent": {
-        "value": 80.98619842529297,
+        "value": 100,
         "available": true,
         "reason": null
       },
       "gpuTempC": {
-        "value": 82,
+        "value": 80,
         "available": true,
         "reason": null
       },
-      "gpuTempSource": "NVIDIA NVML (usermode)",
-      "vramUsedSource": "NVIDIA NVML (usermode)"
+      "gpuTempSource": "GPU Core",
+      "vramUsedSource": "D3D Dedicated Memory Used"
     },
     "cpu": {
       "cpuTempC": {
-        "value": 0,
-        "available": false,
-        "reason": "Temp\u00E9rature CPU non accessible sans outils tiers"
-      },
-      "cpuTempSource": "Non disponible (mode s\u00E9curis\u00E9)",
-      "cpuLoadPercent": {
-        "value": 20.852582931518555,
+        "value": 70.50000762939453,
         "available": true,
         "reason": null
+      },
+      "cpuTempSource": "Tctl (AMD)",
+      "cpuLoadPercent": {
+        "value": 0,
+        "available": false,
+        "reason": "Charge CPU: utiliser donnees PowerShell"
       }
     },
     "disks": [
-      {
-        "name": {
-          "value": "VendorCo ProductCode USB Device",
-          "available": true,
-          "reason": null
-        },
-        "tempC": {
-          "value": 37,
-          "available": true,
-          "reason": null
-        }
-      },
       {
         "name": {
           "value": "Micron_2210_MTFDHBA1T0QFD",
@@ -1347,21 +1325,21 @@
           "reason": null
         },
         "tempC": {
-          "value": 0,
-          "available": false,
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo"
+          "value": 59,
+          "available": true,
+          "reason": null
         }
       },
       {
         "name": {
-          "value": "Micron CT2000X9PROSSD9 SCSI Disk Device",
+          "value": "Micron CT2000X9PROSSD9",
           "available": true,
           "reason": null
         },
         "tempC": {
           "value": 0,
           "available": false,
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo"
+          "reason": "Temperature disque indisponible"
         }
       },
       {
@@ -1371,9 +1349,9 @@
           "reason": null
         },
         "tempC": {
-          "value": 0,
-          "available": false,
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo"
+          "value": 53,
+          "available": true,
+          "reason": null
         }
       },
       {
@@ -1383,31 +1361,19 @@
           "reason": null
         },
         "tempC": {
-          "value": 0,
-          "available": false,
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo"
-        }
-      },
-      {
-        "name": {
-          "value": "SanDisk Cruzer Glide USB Device",
+          "value": 36,
           "available": true,
           "reason": null
-        },
-        "tempC": {
-          "value": 0,
-          "available": false,
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo"
         }
       }
     ],
     "collectionExceptions": [],
     "blockedBySecurity": false,
-    "safeModeUsed": true
+    "safeModeUsed": false
   },
   "diagnostic_snapshot": {
     "schemaVersion": "2.2.0",
-    "generatedAt": "2026-02-04T00:30:40.9841754Z",
+    "generatedAt": "2026-02-04T21:34:56.7463012Z",
     "machine": {
       "hostname": "DESKTOP-LAKVT49",
       "os": "Microsoft Windows NT 10.0.26200.0",
@@ -1416,13 +1382,12 @@
     "metrics": {
       "cpu": {
         "temperature": {
-          "value": null,
+          "value": 70.5,
           "unit": "\u00B0C",
-          "available": false,
-          "source": "Non disponible (mode s\u00E9curis\u00E9)",
-          "reason": "Temp\u00E9rature CPU non accessible sans outils tiers",
-          "timestamp": "2026-02-04T00:30:40.9851203Z",
-          "confidence": 0
+          "available": true,
+          "source": "Tctl (AMD)",
+          "timestamp": "2026-02-04T21:34:56.7473451Z",
+          "confidence": 100
         }
       },
       "gpu": {
@@ -1431,23 +1396,23 @@
           "unit": "",
           "available": true,
           "source": "LHM",
-          "timestamp": "2026-02-04T00:30:40.9854376Z",
+          "timestamp": "2026-02-04T21:34:56.7476019Z",
           "confidence": 100
         },
         "temperature": {
-          "value": 82,
+          "value": 80,
           "unit": "\u00B0C",
           "available": true,
           "source": "LHM",
-          "timestamp": "2026-02-04T00:30:40.9855740Z",
+          "timestamp": "2026-02-04T21:34:56.7477454Z",
           "confidence": 100
         },
         "load": {
-          "value": 81,
+          "value": 100,
           "unit": "%",
           "available": true,
           "source": "LHM",
-          "timestamp": "2026-02-04T00:30:40.9857005Z",
+          "timestamp": "2026-02-04T21:34:56.7478747Z",
           "confidence": 100
         },
         "vramTotalMB": {
@@ -1455,92 +1420,70 @@
           "unit": "MB",
           "available": true,
           "source": "LHM",
-          "timestamp": "2026-02-04T00:30:40.9857936Z",
+          "timestamp": "2026-02-04T21:34:56.7479605Z",
           "confidence": 100
         },
         "vramUsedMB": {
-          "value": 10632.6,
+          "value": 11941,
           "unit": "MB",
           "available": true,
           "source": "LHM",
-          "timestamp": "2026-02-04T00:30:40.9859391Z",
+          "timestamp": "2026-02-04T21:34:56.7480966Z",
           "confidence": 100
         }
       },
       "storage": {
         "disk_0_temp": {
-          "value": 37,
+          "value": 59,
           "unit": "\u00B0C",
           "available": true,
           "source": "LHM",
-          "timestamp": "2026-02-04T00:30:40.9863441Z",
+          "timestamp": "2026-02-04T21:34:56.7485224Z",
           "confidence": 100,
-          "notes": "VendorCo ProductCode USB Device"
+          "notes": "Micron_2210_MTFDHBA1T0QFD"
         },
         "disk_1_temp": {
           "value": null,
           "unit": "\u00B0C",
           "available": false,
           "source": "LHM",
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo",
-          "timestamp": "2026-02-04T00:30:40.9863816Z",
+          "reason": "Temperature disque indisponible",
+          "timestamp": "2026-02-04T21:34:56.7486345Z",
           "confidence": 0,
-          "notes": "Micron_2210_MTFDHBA1T0QFD"
+          "notes": "Micron CT2000X9PROSSD9"
         },
         "disk_2_temp": {
-          "value": null,
+          "value": 53,
           "unit": "\u00B0C",
-          "available": false,
+          "available": true,
           "source": "LHM",
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo",
-          "timestamp": "2026-02-04T00:30:40.9863823Z",
-          "confidence": 0,
-          "notes": "Micron CT2000X9PROSSD9 SCSI Disk Device"
-        },
-        "disk_3_temp": {
-          "value": null,
-          "unit": "\u00B0C",
-          "available": false,
-          "source": "LHM",
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo",
-          "timestamp": "2026-02-04T00:30:40.9863827Z",
-          "confidence": 0,
+          "timestamp": "2026-02-04T21:34:56.7486359Z",
+          "confidence": 100,
           "notes": "Samsung SSD 990 PRO with Heatsink 2TB"
         },
-        "disk_4_temp": {
-          "value": null,
+        "disk_3_temp": {
+          "value": 36,
           "unit": "\u00B0C",
-          "available": false,
+          "available": true,
           "source": "LHM",
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo",
-          "timestamp": "2026-02-04T00:30:40.9863853Z",
-          "confidence": 0,
+          "timestamp": "2026-02-04T21:34:56.7486364Z",
+          "confidence": 100,
           "notes": "TOSHIBA DT01ACA200"
         },
-        "disk_5_temp": {
-          "value": null,
-          "unit": "\u00B0C",
-          "available": false,
-          "source": "LHM",
-          "reason": "Temp\u00E9rature disque: utiliser CrystalDiskInfo",
-          "timestamp": "2026-02-04T00:30:40.9863861Z",
-          "confidence": 0,
-          "notes": "SanDisk Cruzer Glide USB Device"
-        },
         "diskCount": {
-          "value": 6,
+          "value": 4,
           "unit": "count",
           "available": true,
           "source": "LHM",
-          "timestamp": "2026-02-04T00:30:40.9864214Z",
+          "timestamp": "2026-02-04T21:34:56.7486763Z",
           "confidence": 100
         },
         "maxDiskTemp": {
-          "value": 37,
+          "value": 59,
           "unit": "\u00B0C",
           "available": true,
           "source": "Derived",
-          "timestamp": "2026-02-04T00:30:40.9864263Z",
+          "timestamp": "2026-02-04T21:34:56.7486796Z",
           "confidence": 100
         },
         "smartHealthy": {
@@ -1549,7 +1492,7 @@
           "available": false,
           "source": "PS/SmartDetails",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9921326Z",
+          "timestamp": "2026-02-04T21:34:56.7542161Z",
           "confidence": 0
         },
         "smartWarnings": {
@@ -1558,7 +1501,7 @@
           "available": false,
           "source": "PS/SmartDetails",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9921333Z",
+          "timestamp": "2026-02-04T21:34:56.7542169Z",
           "confidence": 0
         },
         "tempFilesSizeMB": {
@@ -1567,7 +1510,7 @@
           "available": false,
           "source": "PS/TempFiles",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9921374Z",
+          "timestamp": "2026-02-04T21:34:56.7542198Z",
           "confidence": 0
         },
         "tempFilesCount": {
@@ -1576,7 +1519,7 @@
           "available": false,
           "source": "PS/TempFiles",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9921378Z",
+          "timestamp": "2026-02-04T21:34:56.7542203Z",
           "confidence": 0
         }
       },
@@ -1587,7 +1530,7 @@
           "available": false,
           "source": "PS/OS",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9872731Z",
+          "timestamp": "2026-02-04T21:34:56.7494900Z",
           "confidence": 0
         },
         "version": {
@@ -1596,7 +1539,7 @@
           "available": false,
           "source": "PS/OS",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9872741Z",
+          "timestamp": "2026-02-04T21:34:56.7494910Z",
           "confidence": 0
         },
         "buildNumber": {
@@ -1605,7 +1548,7 @@
           "available": false,
           "source": "PS/OS",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9872747Z",
+          "timestamp": "2026-02-04T21:34:56.7494916Z",
           "confidence": 0
         },
         "installDate": {
@@ -1614,7 +1557,7 @@
           "available": false,
           "source": "PS/OS",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9872758Z",
+          "timestamp": "2026-02-04T21:34:56.7494921Z",
           "confidence": 0
         },
         "lastBootTime": {
@@ -1623,7 +1566,7 @@
           "available": false,
           "source": "PS/OS",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9872767Z",
+          "timestamp": "2026-02-04T21:34:56.7494929Z",
           "confidence": 0
         },
         "uptime": {
@@ -1632,7 +1575,7 @@
           "available": false,
           "source": "PS/OS",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9872779Z",
+          "timestamp": "2026-02-04T21:34:56.7494935Z",
           "confidence": 0
         },
         "architecture": {
@@ -1641,7 +1584,7 @@
           "available": false,
           "source": "PS/OS",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9872784Z",
+          "timestamp": "2026-02-04T21:34:56.7494941Z",
           "confidence": 0
         },
         "sfcStatus": {
@@ -1650,7 +1593,7 @@
           "available": false,
           "source": "PS/SystemIntegrity",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9872819Z",
+          "timestamp": "2026-02-04T21:34:56.7494972Z",
           "confidence": 0
         },
         "dismHealth": {
@@ -1659,7 +1602,7 @@
           "available": false,
           "source": "PS/SystemIntegrity",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9872826Z",
+          "timestamp": "2026-02-04T21:34:56.7494977Z",
           "confidence": 0
         }
       },
@@ -1670,7 +1613,7 @@
           "available": false,
           "source": "PS/Memory",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9877683Z",
+          "timestamp": "2026-02-04T21:34:56.7499972Z",
           "confidence": 0
         },
         "availableGB": {
@@ -1679,7 +1622,7 @@
           "available": false,
           "source": "PS/Memory",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9877693Z",
+          "timestamp": "2026-02-04T21:34:56.7499982Z",
           "confidence": 0
         },
         "usedPercent": {
@@ -1688,7 +1631,7 @@
           "available": false,
           "source": "PS/Memory",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9877699Z",
+          "timestamp": "2026-02-04T21:34:56.7499988Z",
           "confidence": 0
         },
         "freePercent": {
@@ -1697,7 +1640,7 @@
           "available": false,
           "source": "PS/Memory",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9877704Z",
+          "timestamp": "2026-02-04T21:34:56.7499994Z",
           "confidence": 0
         },
         "commitTotalGB": {
@@ -1706,7 +1649,7 @@
           "available": false,
           "source": "PS/Memory",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9877712Z",
+          "timestamp": "2026-02-04T21:34:56.7500001Z",
           "confidence": 0
         },
         "commitUsedGB": {
@@ -1715,7 +1658,7 @@
           "available": false,
           "source": "PS/Memory",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9877718Z",
+          "timestamp": "2026-02-04T21:34:56.7500018Z",
           "confidence": 0
         },
         "pageFileUsagePercent": {
@@ -1724,7 +1667,7 @@
           "available": false,
           "source": "PS/Memory",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9877723Z",
+          "timestamp": "2026-02-04T21:34:56.7500024Z",
           "confidence": 0
         }
       },
@@ -1735,7 +1678,7 @@
           "available": false,
           "source": "PS/Network",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9884444Z",
+          "timestamp": "2026-02-04T21:34:56.7506224Z",
           "confidence": 0
         },
         "dnsServers": {
@@ -1744,7 +1687,7 @@
           "available": false,
           "source": "PS/Network",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9884462Z",
+          "timestamp": "2026-02-04T21:34:56.7506233Z",
           "confidence": 0
         },
         "publicIP": {
@@ -1753,7 +1696,7 @@
           "available": false,
           "source": "PS/Network",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9884468Z",
+          "timestamp": "2026-02-04T21:34:56.7506238Z",
           "confidence": 0
         }
       },
@@ -1763,7 +1706,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/WindowsUpdate",
-          "timestamp": "2026-02-04T00:30:40.9890853Z",
+          "timestamp": "2026-02-04T21:34:56.7512249Z",
           "confidence": 100
         }
       },
@@ -1774,7 +1717,7 @@
           "available": false,
           "source": "PS/Security",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9896602Z",
+          "timestamp": "2026-02-04T21:34:56.7517551Z",
           "confidence": 0
         },
         "antivirusName": {
@@ -1783,7 +1726,7 @@
           "available": false,
           "source": "PS/Security",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9896613Z",
+          "timestamp": "2026-02-04T21:34:56.7517562Z",
           "confidence": 0
         },
         "firewallStatus": {
@@ -1792,7 +1735,7 @@
           "available": false,
           "source": "PS/Security",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9896619Z",
+          "timestamp": "2026-02-04T21:34:56.7517568Z",
           "confidence": 0
         },
         "uacEnabled": {
@@ -1801,7 +1744,7 @@
           "available": false,
           "source": "PS/Security",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9897343Z",
+          "timestamp": "2026-02-04T21:34:56.7518279Z",
           "confidence": 0
         },
         "secureBootEnabled": {
@@ -1810,7 +1753,7 @@
           "available": false,
           "source": "PS/Security",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9897355Z",
+          "timestamp": "2026-02-04T21:34:56.7518291Z",
           "confidence": 0
         },
         "bitlockerStatus": {
@@ -1819,7 +1762,7 @@
           "available": false,
           "source": "PS/Security",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9897362Z",
+          "timestamp": "2026-02-04T21:34:56.7518297Z",
           "confidence": 0
         }
       },
@@ -1829,7 +1772,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/StartupPrograms",
-          "timestamp": "2026-02-04T00:30:40.9901873Z",
+          "timestamp": "2026-02-04T21:34:56.7522795Z",
           "confidence": 100
         },
         "highImpactCount": {
@@ -1837,7 +1780,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/StartupPrograms",
-          "timestamp": "2026-02-04T00:30:40.9901890Z",
+          "timestamp": "2026-02-04T21:34:56.7522803Z",
           "confidence": 100
         }
       },
@@ -1847,7 +1790,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/DevicesDrivers",
-          "timestamp": "2026-02-04T00:30:40.9906947Z",
+          "timestamp": "2026-02-04T21:34:56.7527846Z",
           "confidence": 100
         },
         "problemDevices": {
@@ -1855,7 +1798,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/DevicesDrivers",
-          "timestamp": "2026-02-04T00:30:40.9906955Z",
+          "timestamp": "2026-02-04T21:34:56.7527853Z",
           "confidence": 100
         },
         "outdatedDrivers": {
@@ -1863,7 +1806,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/DevicesDrivers",
-          "timestamp": "2026-02-04T00:30:40.9906958Z",
+          "timestamp": "2026-02-04T21:34:56.7527855Z",
           "confidence": 100
         }
       },
@@ -1873,7 +1816,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/EventLogs",
-          "timestamp": "2026-02-04T00:30:40.9912695Z",
+          "timestamp": "2026-02-04T21:34:56.7533683Z",
           "confidence": 100
         },
         "errorEvents24h": {
@@ -1881,7 +1824,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/EventLogs",
-          "timestamp": "2026-02-04T00:30:40.9912703Z",
+          "timestamp": "2026-02-04T21:34:56.7533690Z",
           "confidence": 100
         },
         "bsods": {
@@ -1889,7 +1832,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/EventLogs",
-          "timestamp": "2026-02-04T00:30:40.9912712Z",
+          "timestamp": "2026-02-04T21:34:56.7533695Z",
           "confidence": 100
         },
         "warningEvents24h": {
@@ -1898,7 +1841,7 @@
           "available": false,
           "source": "PS/EventLogs",
           "reason": "not_collected_by_ps",
-          "timestamp": "2026-02-04T00:30:40.9912715Z",
+          "timestamp": "2026-02-04T21:34:56.7533698Z",
           "confidence": 0
         },
         "appFailures30d": {
@@ -1906,7 +1849,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/ReliabilityHistory",
-          "timestamp": "2026-02-04T00:30:40.9912749Z",
+          "timestamp": "2026-02-04T21:34:56.7533729Z",
           "confidence": 100
         },
         "reliabilityEventCount": {
@@ -1914,7 +1857,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/ReliabilityHistory",
-          "timestamp": "2026-02-04T00:30:40.9912753Z",
+          "timestamp": "2026-02-04T21:34:56.7533733Z",
           "confidence": 100
         },
         "reliabilityIndex": {
@@ -1923,7 +1866,7 @@
           "available": false,
           "source": "PS/ReliabilityHistory",
           "reason": "not_collected_by_ps",
-          "timestamp": "2026-02-04T00:30:40.9912755Z",
+          "timestamp": "2026-02-04T21:34:56.7533736Z",
           "confidence": 0
         },
         "hwFailures30d": {
@@ -1932,7 +1875,7 @@
           "available": false,
           "source": "PS/ReliabilityHistory",
           "reason": "not_collected_by_ps",
-          "timestamp": "2026-02-04T00:30:40.9912757Z",
+          "timestamp": "2026-02-04T21:34:56.7533737Z",
           "confidence": 0
         },
         "minidumpCount": {
@@ -1940,7 +1883,7 @@
           "unit": "count",
           "available": true,
           "source": "PS/MinidumpAnalysis",
-          "timestamp": "2026-02-04T00:30:40.9912778Z",
+          "timestamp": "2026-02-04T21:34:56.7533757Z",
           "confidence": 100
         },
         "lastBsodDate": {
@@ -1949,7 +1892,7 @@
           "available": false,
           "source": "PS/MinidumpAnalysis",
           "reason": "not_collected_by_ps",
-          "timestamp": "2026-02-04T00:30:40.9912780Z",
+          "timestamp": "2026-02-04T21:34:56.7533759Z",
           "confidence": 0
         }
       },
@@ -1960,7 +1903,7 @@
           "available": false,
           "source": "PS/PerformanceCounters",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9916485Z",
+          "timestamp": "2026-02-04T21:34:56.7537381Z",
           "confidence": 0
         },
         "loginTimeSeconds": {
@@ -1969,7 +1912,7 @@
           "available": false,
           "source": "PS/PerformanceCounters",
           "reason": "property_not_found",
-          "timestamp": "2026-02-04T00:30:40.9916493Z",
+          "timestamp": "2026-02-04T21:34:56.7537390Z",
           "confidence": 0
         }
       },
@@ -1979,7 +1922,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog_System_WHEA-Logger",
-          "timestamp": "2026-02-04T00:30:40.9970235Z",
+          "timestamp": "2026-02-04T21:34:56.7597981Z",
           "confidence": 100
         },
         "Last7dCount": {
@@ -1987,7 +1930,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System_WHEA-Logger",
-          "timestamp": "2026-02-04T00:30:40.9972925Z",
+          "timestamp": "2026-02-04T21:34:56.7601518Z",
           "confidence": 100
         },
         "Last30dCount": {
@@ -1995,7 +1938,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System_WHEA-Logger",
-          "timestamp": "2026-02-04T00:30:40.9973188Z",
+          "timestamp": "2026-02-04T21:34:56.7601879Z",
           "confidence": 100
         },
         "CorrectedCount": {
@@ -2003,7 +1946,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System_WHEA-Logger",
-          "timestamp": "2026-02-04T00:30:40.9973345Z",
+          "timestamp": "2026-02-04T21:34:56.7602127Z",
           "confidence": 100
         },
         "FatalCount": {
@@ -2011,7 +1954,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System_WHEA-Logger",
-          "timestamp": "2026-02-04T00:30:40.9973483Z",
+          "timestamp": "2026-02-04T21:34:56.7602334Z",
           "confidence": 100
         },
         "LastEvents": {
@@ -2019,7 +1962,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog_System_WHEA-Logger",
-          "timestamp": "2026-02-04T00:30:40.9973704Z",
+          "timestamp": "2026-02-04T21:34:56.7602631Z",
           "confidence": 100
         }
       },
@@ -2029,7 +1972,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog_System_TDR",
-          "timestamp": "2026-02-04T00:30:40.9973723Z",
+          "timestamp": "2026-02-04T21:34:56.7602648Z",
           "confidence": 100
         },
         "TdrCount7d": {
@@ -2037,7 +1980,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System_TDR",
-          "timestamp": "2026-02-04T00:30:40.9974138Z",
+          "timestamp": "2026-02-04T21:34:56.7603080Z",
           "confidence": 100
         },
         "TdrCount30d": {
@@ -2045,7 +1988,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System_TDR",
-          "timestamp": "2026-02-04T00:30:40.9974281Z",
+          "timestamp": "2026-02-04T21:34:56.7603285Z",
           "confidence": 100
         },
         "PerfcapAvailable": {
@@ -2053,7 +1996,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog_System_TDR",
-          "timestamp": "2026-02-04T00:30:40.9974408Z",
+          "timestamp": "2026-02-04T21:34:56.7603455Z",
           "confidence": 100
         },
         "ThrottlingSuspected": {
@@ -2061,7 +2004,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog_System_TDR",
-          "timestamp": "2026-02-04T00:30:40.9974668Z",
+          "timestamp": "2026-02-04T21:34:56.7603844Z",
           "confidence": 100
         },
         "Evidence": {
@@ -2069,7 +2012,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog_System_TDR",
-          "timestamp": "2026-02-04T00:30:40.9974831Z",
+          "timestamp": "2026-02-04T21:34:56.7604058Z",
           "confidence": 100
         },
         "LastEvents": {
@@ -2077,7 +2020,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog_System_TDR",
-          "timestamp": "2026-02-04T00:30:40.9974996Z",
+          "timestamp": "2026-02-04T21:34:56.7604282Z",
           "confidence": 100
         }
       },
@@ -2087,71 +2030,71 @@
           "unit": "bool",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9975012Z",
+          "timestamp": "2026-02-04T21:34:56.7604294Z",
           "confidence": 100
         },
         "ReadLatencyMsP50": {
-          "value": 0,
+          "value": 0.36,
           "unit": "",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9975339Z",
+          "timestamp": "2026-02-04T21:34:56.7604739Z",
           "confidence": 100
         },
         "ReadLatencyMsP95": {
-          "value": 0,
+          "value": 158.65,
           "unit": "",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9975363Z",
+          "timestamp": "2026-02-04T21:34:56.7604765Z",
           "confidence": 100
         },
         "ReadLatencyMsP99": {
-          "value": 0,
+          "value": 158.65,
           "unit": "",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9975495Z",
+          "timestamp": "2026-02-04T21:34:56.7604994Z",
           "confidence": 100
         },
         "WriteLatencyMsP50": {
-          "value": 0,
+          "value": 0.19,
           "unit": "",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9975618Z",
+          "timestamp": "2026-02-04T21:34:56.7605198Z",
           "confidence": 100
         },
         "WriteLatencyMsP95": {
-          "value": 0.11,
+          "value": 5.58,
           "unit": "",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9975630Z",
+          "timestamp": "2026-02-04T21:34:56.7605214Z",
           "confidence": 100
         },
         "WriteLatencyMsP99": {
-          "value": 0.11,
+          "value": 5.58,
           "unit": "",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9975770Z",
+          "timestamp": "2026-02-04T21:34:56.7605408Z",
           "confidence": 100
         },
         "QueueDepthAvg": {
-          "value": 0,
+          "value": 0.14,
           "unit": "",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9975902Z",
+          "timestamp": "2026-02-04T21:34:56.7605734Z",
           "confidence": 100
         },
         "QueueDepthP95": {
-          "value": 0.01,
+          "value": 0.57,
           "unit": "",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9976029Z",
+          "timestamp": "2026-02-04T21:34:56.7605972Z",
           "confidence": 100
         },
         "SampleCount": {
@@ -2159,7 +2102,7 @@
           "unit": "count",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9976149Z",
+          "timestamp": "2026-02-04T21:34:56.7606214Z",
           "confidence": 100
         },
         "WindowSeconds": {
@@ -2167,7 +2110,7 @@
           "unit": "",
           "available": true,
           "source": "PerfCounter_PhysicalDisk",
-          "timestamp": "2026-02-04T00:30:40.9976288Z",
+          "timestamp": "2026-02-04T21:34:56.7606416Z",
           "confidence": 100
         }
       },
@@ -2177,15 +2120,15 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9976299Z",
+          "timestamp": "2026-02-04T21:34:56.7606429Z",
           "confidence": 100
         },
         "PercentOfMaxFreqAvg": {
-          "value": 99,
+          "value": 99.2,
           "unit": "",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9976729Z",
+          "timestamp": "2026-02-04T21:34:56.7606913Z",
           "confidence": 100
         },
         "PercentOfMaxFreqMin": {
@@ -2193,7 +2136,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9976873Z",
+          "timestamp": "2026-02-04T21:34:56.7607122Z",
           "confidence": 100
         },
         "ThrottlingEventCount7d": {
@@ -2201,7 +2144,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9977010Z",
+          "timestamp": "2026-02-04T21:34:56.7607310Z",
           "confidence": 100
         },
         "ThrottlingEventCount30d": {
@@ -2209,7 +2152,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9977132Z",
+          "timestamp": "2026-02-04T21:34:56.7607508Z",
           "confidence": 100
         },
         "ThermalThrottleCount": {
@@ -2217,7 +2160,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9977362Z",
+          "timestamp": "2026-02-04T21:34:56.7607972Z",
           "confidence": 100
         },
         "PowerLimitCount": {
@@ -2225,7 +2168,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9977483Z",
+          "timestamp": "2026-02-04T21:34:56.7608146Z",
           "confidence": 100
         },
         "FreqMhzAvg": {
@@ -2233,7 +2176,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9977606Z",
+          "timestamp": "2026-02-04T21:34:56.7608320Z",
           "confidence": 100
         },
         "ThrottleSuspected": {
@@ -2241,7 +2184,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9977729Z",
+          "timestamp": "2026-02-04T21:34:56.7608498Z",
           "confidence": 100
         },
         "Evidence": {
@@ -2249,7 +2192,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9977859Z",
+          "timestamp": "2026-02-04T21:34:56.7608685Z",
           "confidence": 100
         },
         "CountersAvailable": {
@@ -2257,7 +2200,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9977983Z",
+          "timestamp": "2026-02-04T21:34:56.7608862Z",
           "confidence": 100
         },
         "FirmwareThrottleEvents7d": {
@@ -2265,7 +2208,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9978224Z",
+          "timestamp": "2026-02-04T21:34:56.7609091Z",
           "confidence": 100
         },
         "FirmwareThrottleEvents30d": {
@@ -2273,15 +2216,15 @@
           "unit": "count",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9978406Z",
+          "timestamp": "2026-02-04T21:34:56.7609293Z",
           "confidence": 100
         },
         "PerfPercentAvg": {
-          "value": 99,
+          "value": 99.2,
           "unit": "",
           "available": true,
           "source": "EventLog\u002BPerfCounter",
-          "timestamp": "2026-02-04T00:30:40.9978563Z",
+          "timestamp": "2026-02-04T21:34:56.7609518Z",
           "confidence": 100
         }
       },
@@ -2292,7 +2235,7 @@
           "available": false,
           "source": "ETW_TraceEvent",
           "reason": "etw_required_for_latency",
-          "timestamp": "2026-02-04T00:30:40.9978576Z",
+          "timestamp": "2026-02-04T21:34:56.7609534Z",
           "confidence": 0
         }
       },
@@ -2302,31 +2245,31 @@
           "unit": "bool",
           "available": true,
           "source": "PerfCounter_Memory",
-          "timestamp": "2026-02-04T00:30:40.9978591Z",
+          "timestamp": "2026-02-04T21:34:56.7609540Z",
           "confidence": 100
         },
         "HardFaultsAvg": {
-          "value": 7180.4,
+          "value": 29909.9,
           "unit": "",
           "available": true,
           "source": "PerfCounter_Memory",
-          "timestamp": "2026-02-04T00:30:40.9978903Z",
+          "timestamp": "2026-02-04T21:34:56.7609947Z",
           "confidence": 100
         },
         "HardFaultsP95": {
-          "value": 39710.8,
+          "value": 180807.1,
           "unit": "",
           "available": true,
           "source": "PerfCounter_Memory",
-          "timestamp": "2026-02-04T00:30:40.9979046Z",
+          "timestamp": "2026-02-04T21:34:56.7610128Z",
           "confidence": 100
         },
         "HardFaultsMax": {
-          "value": 52792,
+          "value": 259983.5,
           "unit": "",
           "available": true,
           "source": "PerfCounter_Memory",
-          "timestamp": "2026-02-04T00:30:40.9979180Z",
+          "timestamp": "2026-02-04T21:34:56.7610304Z",
           "confidence": 100
         },
         "SustainedSeconds": {
@@ -2334,7 +2277,7 @@
           "unit": "count",
           "available": true,
           "source": "PerfCounter_Memory",
-          "timestamp": "2026-02-04T00:30:40.9979318Z",
+          "timestamp": "2026-02-04T21:34:56.7610482Z",
           "confidence": 100
         },
         "WindowSeconds": {
@@ -2342,7 +2285,7 @@
           "unit": "count",
           "available": true,
           "source": "PerfCounter_Memory",
-          "timestamp": "2026-02-04T00:30:40.9979436Z",
+          "timestamp": "2026-02-04T21:34:56.7610816Z",
           "confidence": 100
         },
         "SampleCount": {
@@ -2350,7 +2293,7 @@
           "unit": "count",
           "available": true,
           "source": "PerfCounter_Memory",
-          "timestamp": "2026-02-04T00:30:40.9979559Z",
+          "timestamp": "2026-02-04T21:34:56.7611042Z",
           "confidence": 100
         }
       },
@@ -2360,7 +2303,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog_PowerThermal",
-          "timestamp": "2026-02-04T00:30:40.9979578Z",
+          "timestamp": "2026-02-04T21:34:56.7611067Z",
           "confidence": 100
         },
         "CpuPowerLimitSuspected": {
@@ -2368,7 +2311,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog_PowerThermal",
-          "timestamp": "2026-02-04T00:30:40.9979843Z",
+          "timestamp": "2026-02-04T21:34:56.7611437Z",
           "confidence": 100
         },
         "GpuPowerLimitSuspected": {
@@ -2376,7 +2319,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog_PowerThermal",
-          "timestamp": "2026-02-04T00:30:40.9979967Z",
+          "timestamp": "2026-02-04T21:34:56.7611608Z",
           "confidence": 100
         },
         "CpuPowerEvents": {
@@ -2384,7 +2327,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_PowerThermal",
-          "timestamp": "2026-02-04T00:30:40.9980086Z",
+          "timestamp": "2026-02-04T21:34:56.7611780Z",
           "confidence": 100
         },
         "ThermalEvents": {
@@ -2392,7 +2335,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_PowerThermal",
-          "timestamp": "2026-02-04T00:30:40.9980251Z",
+          "timestamp": "2026-02-04T21:34:56.7611949Z",
           "confidence": 100
         },
         "GpuThrottleEvents": {
@@ -2400,7 +2343,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_PowerThermal",
-          "timestamp": "2026-02-04T00:30:40.9980388Z",
+          "timestamp": "2026-02-04T21:34:56.7612138Z",
           "confidence": 100
         },
         "Evidence": {
@@ -2408,7 +2351,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog_PowerThermal",
-          "timestamp": "2026-02-04T00:30:40.9980530Z",
+          "timestamp": "2026-02-04T21:34:56.7612325Z",
           "confidence": 100
         }
       },
@@ -2418,7 +2361,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog_System\u002BApplication",
-          "timestamp": "2026-02-04T00:30:40.9980539Z",
+          "timestamp": "2026-02-04T21:34:56.7612335Z",
           "confidence": 100
         },
         "TdrCount30d": {
@@ -2426,7 +2369,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System\u002BApplication",
-          "timestamp": "2026-02-04T00:30:40.9980798Z",
+          "timestamp": "2026-02-04T21:34:56.7612648Z",
           "confidence": 100
         },
         "KernelPower41Count30d": {
@@ -2434,7 +2377,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System\u002BApplication",
-          "timestamp": "2026-02-04T00:30:40.9980916Z",
+          "timestamp": "2026-02-04T21:34:56.7612812Z",
           "confidence": 100
         },
         "BugcheckCount30d": {
@@ -2442,7 +2385,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System\u002BApplication",
-          "timestamp": "2026-02-04T00:30:40.9981029Z",
+          "timestamp": "2026-02-04T21:34:56.7612980Z",
           "confidence": 100
         },
         "AppCrashGpuRelated": {
@@ -2450,7 +2393,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_System\u002BApplication",
-          "timestamp": "2026-02-04T00:30:40.9981142Z",
+          "timestamp": "2026-02-04T21:34:56.7613232Z",
           "confidence": 100
         },
         "LastEvents": {
@@ -2458,7 +2401,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog_System\u002BApplication",
-          "timestamp": "2026-02-04T00:30:40.9981299Z",
+          "timestamp": "2026-02-04T21:34:56.7613522Z",
           "confidence": 100
         }
       },
@@ -2468,7 +2411,7 @@
           "unit": "bool",
           "available": true,
           "source": "EventLog_Diagnostics-Performance",
-          "timestamp": "2026-02-04T00:30:40.9981318Z",
+          "timestamp": "2026-02-04T21:34:56.7613535Z",
           "confidence": 100
         },
         "LastBootMs": {
@@ -2476,7 +2419,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_Diagnostics-Performance",
-          "timestamp": "2026-02-04T00:30:40.9981628Z",
+          "timestamp": "2026-02-04T21:34:56.7614108Z",
           "confidence": 100
         },
         "AvgBootMs": {
@@ -2484,7 +2427,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog_Diagnostics-Performance",
-          "timestamp": "2026-02-04T00:30:40.9981775Z",
+          "timestamp": "2026-02-04T21:34:56.7614378Z",
           "confidence": 100
         },
         "DegradationEvents30d": {
@@ -2492,7 +2435,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_Diagnostics-Performance",
-          "timestamp": "2026-02-04T00:30:40.9981900Z",
+          "timestamp": "2026-02-04T21:34:56.7614627Z",
           "confidence": 100
         },
         "BootCount30d": {
@@ -2500,7 +2443,7 @@
           "unit": "count",
           "available": true,
           "source": "EventLog_Diagnostics-Performance",
-          "timestamp": "2026-02-04T00:30:40.9982019Z",
+          "timestamp": "2026-02-04T21:34:56.7614865Z",
           "confidence": 100
         },
         "LastEventTime": {
@@ -2508,7 +2451,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog_Diagnostics-Performance",
-          "timestamp": "2026-02-04T00:30:40.9982135Z",
+          "timestamp": "2026-02-04T21:34:56.7615074Z",
           "confidence": 100
         },
         "Details": {
@@ -2516,7 +2459,7 @@
           "unit": "",
           "available": true,
           "source": "EventLog_Diagnostics-Performance",
-          "timestamp": "2026-02-04T00:30:40.9982419Z",
+          "timestamp": "2026-02-04T21:34:56.7615573Z",
           "confidence": 100
         }
       },
@@ -2526,7 +2469,7 @@
           "unit": "bool",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9982430Z",
+          "timestamp": "2026-02-04T21:34:56.7615586Z",
           "confidence": 100
         },
         "AdapterName": {
@@ -2534,7 +2477,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9982780Z",
+          "timestamp": "2026-02-04T21:34:56.7616074Z",
           "confidence": 100
         },
         "AdapterType": {
@@ -2542,7 +2485,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9982902Z",
+          "timestamp": "2026-02-04T21:34:56.7616249Z",
           "confidence": 100
         },
         "LinkSpeedMbps": {
@@ -2550,7 +2493,7 @@
           "unit": "count",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9982917Z",
+          "timestamp": "2026-02-04T21:34:56.7616267Z",
           "confidence": 100
         },
         "IsWifi": {
@@ -2558,7 +2501,7 @@
           "unit": "bool",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9982929Z",
+          "timestamp": "2026-02-04T21:34:56.7616281Z",
           "confidence": 100
         },
         "WifiSignalPercent": {
@@ -2566,7 +2509,7 @@
           "unit": "count",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9982942Z",
+          "timestamp": "2026-02-04T21:34:56.7616297Z",
           "confidence": 100
         },
         "Targets": {
@@ -2574,7 +2517,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983098Z",
+          "timestamp": "2026-02-04T21:34:56.7616546Z",
           "confidence": 100
         },
         "LatencyMsP50": {
@@ -2582,7 +2525,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983231Z",
+          "timestamp": "2026-02-04T21:34:56.7616755Z",
           "confidence": 100
         },
         "LatencyMsP95": {
@@ -2590,7 +2533,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983251Z",
+          "timestamp": "2026-02-04T21:34:56.7616774Z",
           "confidence": 100
         },
         "JitterMsP95": {
@@ -2598,7 +2541,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983258Z",
+          "timestamp": "2026-02-04T21:34:56.7616791Z",
           "confidence": 100
         },
         "PacketLossPercent": {
@@ -2606,7 +2549,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983266Z",
+          "timestamp": "2026-02-04T21:34:56.7616800Z",
           "confidence": 100
         },
         "DnsLatencyMs": {
@@ -2614,7 +2557,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983381Z",
+          "timestamp": "2026-02-04T21:34:56.7616982Z",
           "confidence": 100
         },
         "TcpRetransmitRate": {
@@ -2622,7 +2565,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983501Z",
+          "timestamp": "2026-02-04T21:34:56.7617164Z",
           "confidence": 100
         },
         "ConnectionVerdict": {
@@ -2630,7 +2573,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983618Z",
+          "timestamp": "2026-02-04T21:34:56.7617345Z",
           "confidence": 100
         },
         "VerdictReason": {
@@ -2638,7 +2581,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983732Z",
+          "timestamp": "2026-02-04T21:34:56.7617515Z",
           "confidence": 100
         },
         "Recommendations": {
@@ -2646,7 +2589,7 @@
           "unit": "",
           "available": true,
           "source": "NetworkQualityCollector_LocalOnly",
-          "timestamp": "2026-02-04T00:30:40.9983886Z",
+          "timestamp": "2026-02-04T21:34:56.7617737Z",
           "confidence": 100
         }
       },
@@ -2656,18 +2599,18 @@
           "unit": "bool",
           "available": false,
           "source": "InternetSpeedTestCollector",
-          "reason": "external_tests_disabled",
-          "timestamp": "2026-02-04T00:30:40.9983898Z",
+          "reason": "tool_not_installed",
+          "timestamp": "2026-02-04T21:34:56.7617753Z",
           "confidence": 0
         }
       }
     },
     "findings": [],
     "collectionQuality": {
-      "totalMetrics": 144,
-      "availableMetrics": 101,
-      "unavailableMetrics": 43,
-      "coveragePercent": 70.1,
+      "totalMetrics": 142,
+      "availableMetrics": 104,
+      "unavailableMetrics": 38,
+      "coveragePercent": 73.2,
       "errors": [],
       "signalsCollected": 9,
       "signalsUnavailable": 2
@@ -2713,11 +2656,12 @@
         ]
       },
       "audio": {
-        "count": 3,
+        "count": 4,
         "names": [
           "Realtek High Definition Audio",
           "NVIDIA High Definition Audio",
-          "NVIDIA Virtual Audio Device (Wave Extensible) (WDM)"
+          "NVIDIA Virtual Audio Device (Wave Extensible) (WDM)",
+          "P\u00E9riph\u00E9rique audio USB"
         ]
       }
     }
@@ -2734,10 +2678,10 @@
       },
       "available": true,
       "source": "EventLog_System_WHEA-Logger",
-      "timestamp": "2026-02-04T00:28:27.8455938Z",
+      "timestamp": "2026-02-04T21:32:18.3067006Z",
       "quality": "ok",
       "notes": "7d=0, 30d=0, fatal=0",
-      "durationMs": 12
+      "durationMs": 16
     },
     "gpuRootCause": {
       "name": "gpuRootCause",
@@ -2752,36 +2696,36 @@
       },
       "available": true,
       "source": "EventLog_System_TDR",
-      "timestamp": "2026-02-04T00:28:27.8630381Z",
+      "timestamp": "2026-02-04T21:32:18.3238547Z",
       "quality": "ok",
       "notes": "TDR: 7d=0, 30d=0",
-      "durationMs": 28
+      "durationMs": 32
     },
     "storageLatency": {
       "name": "storageLatency",
       "value": {
-        "ReadLatencyMsP50": 0,
-        "ReadLatencyMsP95": 0,
-        "ReadLatencyMsP99": 0,
-        "WriteLatencyMsP50": 0,
-        "WriteLatencyMsP95": 0.11,
-        "WriteLatencyMsP99": 0.11,
-        "QueueDepthAvg": 0,
-        "QueueDepthP95": 0.01,
+        "ReadLatencyMsP50": 0.36,
+        "ReadLatencyMsP95": 158.65,
+        "ReadLatencyMsP99": 158.65,
+        "WriteLatencyMsP50": 0.19,
+        "WriteLatencyMsP95": 5.58,
+        "WriteLatencyMsP99": 5.58,
+        "QueueDepthAvg": 0.14,
+        "QueueDepthP95": 0.57,
         "SampleCount": 10,
         "WindowSeconds": 5
       },
       "available": true,
       "source": "PerfCounter_PhysicalDisk",
-      "timestamp": "2026-02-04T00:28:33.6389739Z",
+      "timestamp": "2026-02-04T21:32:24.3794374Z",
       "quality": "ok",
-      "notes": "readP95=0,00ms, writeP95=0,11ms",
-      "durationMs": 5804
+      "notes": "readP95=158,65ms, writeP95=5,58ms",
+      "durationMs": 6087
     },
     "cpuThrottle": {
       "name": "cpuThrottle",
       "value": {
-        "PercentOfMaxFreqAvg": 99,
+        "PercentOfMaxFreqAvg": 99.2,
         "PercentOfMaxFreqMin": 99,
         "ThrottlingEventCount7d": 0,
         "ThrottlingEventCount30d": 0,
@@ -2794,14 +2738,14 @@
         "CountersAvailable": true,
         "FirmwareThrottleEvents7d": 0,
         "FirmwareThrottleEvents30d": 0,
-        "PerfPercentAvg": 99
+        "PerfPercentAvg": 99.2
       },
       "available": true,
       "source": "EventLog\u002BPerfCounter",
-      "timestamp": "2026-02-04T00:28:29.6306112Z",
+      "timestamp": "2026-02-04T21:32:20.3256041Z",
       "quality": "ok",
-      "notes": "throttle7d=0, perf=99,0%, min=99,0%",
-      "durationMs": 1794
+      "notes": "throttle7d=0, perf=99,2%, min=99,0%",
+      "durationMs": 2032
     },
     "dpcIsr": {
       "name": "dpcIsr",
@@ -2809,26 +2753,26 @@
       "available": false,
       "source": "ETW_TraceEvent",
       "reason": "etw_required_for_latency",
-      "timestamp": "2026-02-04T00:28:27.8379632Z",
+      "timestamp": "2026-02-04T21:32:18.2952756Z",
       "quality": "suspect",
-      "durationMs": 0
+      "durationMs": 1
     },
     "memoryPressure": {
       "name": "memoryPressure",
       "value": {
-        "HardFaultsAvg": 7180.4,
-        "HardFaultsP95": 39710.8,
-        "HardFaultsMax": 52792,
+        "HardFaultsAvg": 29909.9,
+        "HardFaultsP95": 180807.1,
+        "HardFaultsMax": 259983.5,
         "SustainedSeconds": 30,
         "WindowSeconds": 30,
         "SampleCount": 30
       },
       "available": true,
       "source": "PerfCounter_Memory",
-      "timestamp": "2026-02-04T00:28:58.6520791Z",
+      "timestamp": "2026-02-04T21:32:49.4145115Z",
       "quality": "suspect",
-      "notes": "avg=7180/s, p95=39711/s, sustained=30s",
-      "durationMs": 30813
+      "notes": "avg=29910/s, p95=180807/s, sustained=30s",
+      "durationMs": 31118
     },
     "powerLimits": {
       "name": "powerLimits",
@@ -2842,10 +2786,10 @@
       },
       "available": true,
       "source": "EventLog_PowerThermal",
-      "timestamp": "2026-02-04T00:28:28.5613076Z",
+      "timestamp": "2026-02-04T21:32:19.1997851Z",
       "quality": "ok",
       "notes": "cpuLimit=False, gpuLimit=False",
-      "durationMs": 43
+      "durationMs": 46
     },
     "driverStability": {
       "name": "driverStability",
@@ -2858,10 +2802,10 @@
       },
       "available": true,
       "source": "EventLog_System\u002BApplication",
-      "timestamp": "2026-02-04T00:28:28.5890478Z",
+      "timestamp": "2026-02-04T21:32:19.2335949Z",
       "quality": "ok",
       "notes": "TDR=0, KP41=0, BugCheck=0",
-      "durationMs": 70
+      "durationMs": 79
     },
     "bootPerformance": {
       "name": "bootPerformance",
@@ -2907,10 +2851,10 @@
       },
       "available": true,
       "source": "EventLog_Diagnostics-Performance",
-      "timestamp": "2026-02-04T00:28:28.551229Z",
+      "timestamp": "2026-02-04T21:32:19.1874968Z",
       "quality": "suspect",
       "notes": "lastBoot=2ms, avg=2ms, degradation=10",
-      "durationMs": 31
+      "durationMs": 32
     },
     "networkQuality": {
       "name": "networkQuality",
@@ -2931,7 +2875,7 @@
             "Lost": 0,
             "LossPercent": 0,
             "LatencyMsMin": 0,
-            "LatencyMsMax": 6,
+            "LatencyMsMax": 3,
             "LatencyMsP50": 1,
             "LatencyMsP95": 3,
             "JitterMsP95": 1
@@ -2961,9 +2905,9 @@
             "Lost": 0,
             "LossPercent": 0,
             "LatencyMsMin": 0,
-            "LatencyMsMax": 7,
+            "LatencyMsMax": 2,
             "LatencyMsP50": 1,
-            "LatencyMsP95": 3,
+            "LatencyMsP95": 2,
             "JitterMsP95": 1
           },
           {
@@ -3001,18 +2945,18 @@
       },
       "available": true,
       "source": "NetworkQualityCollector_LocalOnly",
-      "timestamp": "2026-02-04T00:28:31.7388483Z",
+      "timestamp": "2026-02-04T21:32:23.1247358Z",
       "quality": "ok",
       "notes": "OFFLINE: link=866Mbps, latencyP95=3ms, loss=0%",
-      "durationMs": 3218
+      "durationMs": 3969
     },
     "internetSpeedTest": {
       "name": "internetSpeedTest",
       "value": {
         "Available": false,
-        "Reason": "external_tests_disabled",
-        "Message": "Test vitesse Internet d\u00E9sactiv\u00E9 (AllowExternalNetworkTests=false)",
-        "Timestamp": "2026-02-04T00:28:28.7784552Z",
+        "Reason": "tool_not_installed",
+        "Message": "Outil non install\u00E9 : installez un outil de test de vitesse CLI compatible",
+        "Timestamp": "2026-02-04T21:32:19.5722207Z",
         "DurationMs": 0,
         "DownloadMbps": 0,
         "UploadMbps": 0,
@@ -3028,11 +2972,11 @@
       },
       "available": false,
       "source": "InternetSpeedTestCollector",
-      "reason": "external_tests_disabled",
-      "timestamp": "2026-02-04T00:28:28.7785039Z",
+      "reason": "tool_not_installed",
+      "timestamp": "2026-02-04T21:32:19.5723118Z",
       "quality": "ok",
-      "notes": "Test non ex\u00E9cut\u00E9 - option d\u00E9sactiv\u00E9e",
-      "durationMs": 1
+      "notes": "Speedtest CLI non trouv\u00E9",
+      "durationMs": 127
     }
   },
   "process_telemetry": {
@@ -3041,120 +2985,132 @@
     "Reason": null,
     "Quality": "ok",
     "Confidence": 90,
-    "Timestamp": "2026-02-04T00:28:58.6583854Z",
-    "DurationMs": 767,
-    "TotalProcessCount": 339,
-    "AccessDeniedCount": 1,
+    "Timestamp": "2026-02-04T21:32:49.4209948Z",
+    "DurationMs": 775,
+    "TotalProcessCount": 362,
+    "AccessDeniedCount": 2,
     "TopByMemory": [
       {
         "Name": "Cursor",
-        "Pid": 2168,
-        "WorkingSetMB": 1818.42,
-        "PrivateBytesMB": 1784.06,
-        "CpuTimeMs": 798156,
-        "CpuPercent": 0.26,
-        "StartTime": "2026-02-03T18:34:51.6675454-05:00",
-        "ThreadCount": 35,
+        "Pid": 31212,
+        "WorkingSetMB": 1807.46,
+        "PrivateBytesMB": 1761.49,
+        "CpuTimeMs": 3594468,
+        "CpuPercent": 0.78,
+        "StartTime": "2026-02-04T14:41:59.9504152-05:00",
+        "ThreadCount": 36,
         "AccessDenied": false,
-        "CpuSeconds": 798.156
+        "CpuSeconds": 3594.468
       },
       {
         "Name": "explorer",
         "Pid": 11252,
-        "WorkingSetMB": 699.61,
-        "PrivateBytesMB": 561.22,
-        "CpuTimeMs": 885046,
+        "WorkingSetMB": 1401.02,
+        "PrivateBytesMB": 1742.5,
+        "CpuTimeMs": 2620796,
         "CpuPercent": 0,
         "StartTime": "2026-02-03T08:41:56.7078625-05:00",
-        "ThreadCount": 383,
+        "ThreadCount": 478,
         "AccessDenied": false,
-        "CpuSeconds": 885.046
+        "CpuSeconds": 2620.796
+      },
+      {
+        "Name": "chrome",
+        "Pid": 17184,
+        "WorkingSetMB": 979.12,
+        "PrivateBytesMB": 899.95,
+        "CpuTimeMs": 5561937,
+        "CpuPercent": 0,
+        "StartTime": "2026-02-03T08:46:14.5349080-05:00",
+        "ThreadCount": 40,
+        "AccessDenied": false,
+        "CpuSeconds": 5561.937
       },
       {
         "Name": "chrome",
         "Pid": 33256,
-        "WorkingSetMB": 586.55,
-        "PrivateBytesMB": 778.08,
-        "CpuTimeMs": 971937,
+        "WorkingSetMB": 802.96,
+        "PrivateBytesMB": 1212.22,
+        "CpuTimeMs": 2761671,
         "CpuPercent": 0,
         "StartTime": "2026-02-03T08:46:08.1481036-05:00",
         "ThreadCount": 99,
         "AccessDenied": false,
-        "CpuSeconds": 971.937
+        "CpuSeconds": 2761.671
       },
       {
         "Name": "chrome",
-        "Pid": 29824,
-        "WorkingSetMB": 566.94,
-        "PrivateBytesMB": 489.94,
-        "CpuTimeMs": 250812,
+        "Pid": 37624,
+        "WorkingSetMB": 750.52,
+        "PrivateBytesMB": 671.51,
+        "CpuTimeMs": 535046,
         "CpuPercent": 0,
-        "StartTime": "2026-02-03T12:00:39.4845961-05:00",
+        "StartTime": "2026-02-04T10:18:48.4466954-05:00",
         "ThreadCount": 39,
         "AccessDenied": false,
-        "CpuSeconds": 250.812
-      },
-      {
-        "Name": "Microsoft.CodeAnalysis.LanguageServer",
-        "Pid": 9756,
-        "WorkingSetMB": 542.32,
-        "PrivateBytesMB": 354.92,
-        "CpuTimeMs": 51203,
-        "CpuPercent": 0,
-        "StartTime": "2026-02-03T18:35:05.6348515-05:00",
-        "ThreadCount": 39,
-        "AccessDenied": false,
-        "CpuSeconds": 51.203
+        "CpuSeconds": 535.046
       }
     ],
     "TopByCpu": [
       {
         "Name": "PCDiagnosticPro",
-        "Pid": 8252,
-        "WorkingSetMB": 194.43,
-        "PrivateBytesMB": 218.02,
-        "CpuTimeMs": 91187,
-        "CpuPercent": 1.3,
-        "StartTime": "2026-02-03T19:23:40.7900100-05:00",
+        "Pid": 46420,
+        "WorkingSetMB": 220,
+        "PrivateBytesMB": 248.21,
+        "CpuTimeMs": 107484,
+        "CpuPercent": 2.08,
+        "StartTime": "2026-02-04T16:27:25.2930930-05:00",
         "ThreadCount": 24,
         "AccessDenied": false,
-        "CpuSeconds": 91.187
-      },
-      {
-        "Name": "dwm",
-        "Pid": 2084,
-        "WorkingSetMB": 164.08,
-        "PrivateBytesMB": 567.43,
-        "CpuTimeMs": 3225437,
-        "CpuPercent": 1.13,
-        "StartTime": "2026-02-03T08:41:52.3297285-05:00",
-        "ThreadCount": 149,
-        "AccessDenied": false,
-        "CpuSeconds": 3225.437
+        "CpuSeconds": 107.484
       },
       {
         "Name": "System",
         "Pid": 4,
-        "WorkingSetMB": 22.61,
+        "WorkingSetMB": 26.45,
         "PrivateBytesMB": 0.09,
-        "CpuTimeMs": 2351890,
-        "CpuPercent": 0.43,
+        "CpuTimeMs": 5319687,
+        "CpuPercent": 1.56,
         "StartTime": "2026-02-03T08:41:41.7848197-05:00",
-        "ThreadCount": 458,
+        "ThreadCount": 499,
         "AccessDenied": false,
-        "CpuSeconds": 2351.89
+        "CpuSeconds": 5319.687
+      },
+      {
+        "Name": "dwm",
+        "Pid": 2084,
+        "WorkingSetMB": 179.01,
+        "PrivateBytesMB": 564.55,
+        "CpuTimeMs": 7011703,
+        "CpuPercent": 0.78,
+        "StartTime": "2026-02-03T08:41:52.3297285-05:00",
+        "ThreadCount": 148,
+        "AccessDenied": false,
+        "CpuSeconds": 7011.703
       },
       {
         "Name": "Cursor",
-        "Pid": 2168,
-        "WorkingSetMB": 1818.42,
-        "PrivateBytesMB": 1784.06,
-        "CpuTimeMs": 798156,
-        "CpuPercent": 0.26,
-        "StartTime": "2026-02-03T18:34:51.6675454-05:00",
-        "ThreadCount": 35,
+        "Pid": 31212,
+        "WorkingSetMB": 1807.46,
+        "PrivateBytesMB": 1761.49,
+        "CpuTimeMs": 3594468,
+        "CpuPercent": 0.78,
+        "StartTime": "2026-02-04T14:41:59.9504152-05:00",
+        "ThreadCount": 36,
         "AccessDenied": false,
-        "CpuSeconds": 798.156
+        "CpuSeconds": 3594.468
+      },
+      {
+        "Name": "MsMpEng",
+        "Pid": 5664,
+        "WorkingSetMB": 421.07,
+        "PrivateBytesMB": 458.53,
+        "CpuTimeMs": 2274906,
+        "CpuPercent": 0.69,
+        "StartTime": "2026-02-03T08:41:53.1280531-05:00",
+        "ThreadCount": 92,
+        "AccessDenied": false,
+        "CpuSeconds": 2274.906
       }
     ]
   },
@@ -3163,8 +3119,8 @@
     "Source": "NetworkDiagnosticsCollector",
     "Reason": null,
     "Quality": "suspect",
-    "Timestamp": "2026-02-04T00:28:59.4292002Z",
-    "DurationMs": 91688,
+    "Timestamp": "2026-02-04T21:32:50.2014141Z",
+    "DurationMs": 106935,
     "Gateway": "192.168.2.1",
     "InternetTargets": [
       {
@@ -3175,10 +3131,10 @@
         "Received": 30,
         "LossPercent": 0,
         "LatencyMsMin": 0,
-        "LatencyMsMax": 4,
+        "LatencyMsMax": 3,
         "LatencyMsP50": 1,
-        "LatencyMsP95": 3,
-        "JitterMsP95": 0.83
+        "LatencyMsP95": 2,
+        "JitterMsP95": 0.73
       },
       {
         "Target": "1.1.1.1",
@@ -3187,11 +3143,11 @@
         "Sent": 30,
         "Received": 30,
         "LossPercent": 0,
-        "LatencyMsMin": 3,
-        "LatencyMsMax": 8,
-        "LatencyMsP50": 4,
-        "LatencyMsP95": 7,
-        "JitterMsP95": 1.32
+        "LatencyMsMin": 2,
+        "LatencyMsMax": 6,
+        "LatencyMsP50": 3,
+        "LatencyMsP95": 6,
+        "JitterMsP95": 0.95
       },
       {
         "Target": "8.8.8.8",
@@ -3200,25 +3156,25 @@
         "Sent": 30,
         "Received": 30,
         "LossPercent": 0,
-        "LatencyMsMin": 3,
-        "LatencyMsMax": 5,
+        "LatencyMsMin": 2,
+        "LatencyMsMax": 6,
         "LatencyMsP50": 3,
-        "LatencyMsP95": 5,
-        "JitterMsP95": 0.62
+        "LatencyMsP95": 6,
+        "JitterMsP95": 1.13
       }
     ],
     "DnsTests": [
       {
         "Domain": "microsoft.com",
         "Success": true,
-        "ResolveMs": 10,
+        "ResolveMs": 0,
         "IpCount": 2,
         "Error": null
       },
       {
         "Domain": "cloudflare.com",
         "Success": true,
-        "ResolveMs": 4,
+        "ResolveMs": 3,
         "IpCount": 2,
         "Error": null
       },
@@ -3232,7 +3188,7 @@
       {
         "Domain": "windows.com",
         "Success": true,
-        "ResolveMs": 13,
+        "ResolveMs": 0,
         "IpCount": 5,
         "Error": null
       },
@@ -3247,19 +3203,17 @@
     "Throughput": {
       "Available": true,
       "Reason": null,
-      "DownloadMbpsMedian": 4.42,
+      "DownloadMbpsMedian": 5.07,
       "DownloadSamples": [
-        3.73,
-        4.4,
-        4.42,
-        7.12,
-        16.5
+        4.27,
+        5.07,
+        5.13
       ],
-      "UploadMbpsMedian": 39.29,
+      "UploadMbpsMedian": 30.01,
       "UploadSamples": [
-        23.24,
-        39.29,
-        45.96
+        26.46,
+        30.01,
+        30.73
       ],
       "UploadReason": null
     },
@@ -3269,28 +3223,28 @@
         "Severity": "high"
       },
       {
-        "Text": "Low download speed (4,4 Mbps). Navigation only. Gaming not recommended.",
-        "Severity": "high"
+        "Text": "Moderate speed (5,1 Mbps). Streaming HD possible. Gaming may have issues.",
+        "Severity": "medium"
       }
     ],
-    "OverallLatencyMsP50": 2.7,
-    "OverallLatencyMsP95": 7,
+    "OverallLatencyMsP50": 2.3,
+    "OverallLatencyMsP95": 6,
     "OverallLossPercent": 0,
-    "OverallJitterMsP95": 1.32,
-    "DnsP95Ms": 13
+    "OverallJitterMsP95": 1.13,
+    "DnsP95Ms": 3
   },
   "driver_inventory": {
-    "timestamp": "2026-02-04T00:30:31.1216732Z",
+    "timestamp": "2026-02-04T21:34:37.1411941Z",
     "available": true,
     "source": "DriverInventoryCollector",
-    "durationMs": 2055,
-    "totalCount": 234,
-    "signedCount": 234,
+    "durationMs": 8334,
+    "totalCount": 237,
+    "signedCount": 237,
     "unsignedCount": 0,
     "problemCount": 1,
     "byClass": {
       "DISPLAY": 1,
-      "MEDIA": 3,
+      "MEDIA": 4,
       "NET": 21,
       "HDC": 1,
       "SCSIADAPTER": 6,
@@ -3301,20 +3255,20 @@
       "COMPUTER": 2,
       "SECURITYDEVICES": 2,
       "SOFTWARECOMPONENT": 3,
-      "AUDIOENDPOINT": 3,
-      "HIDCLASS": 15,
-      "WPD": 3,
-      "DISKDRIVE": 6,
+      "AUDIOENDPOINT": 4,
+      "HIDCLASS": 17,
+      "WPD": 2,
+      "DISKDRIVE": 5,
       "MONITOR": 1,
       "SOFTWAREDEVICE": 12,
-      "VOLUMESNAPSHOT": 3,
+      "VOLUMESNAPSHOT": 5,
       "KEYBOARD": 3,
       "PRINTQUEUE": 5,
       "PORTS": 1,
       "MOUSE": 1,
       "RAZER DEVICE": 1,
       "AUDIOPROCESSINGOBJECT": 2,
-      "VOLUME": 14,
+      "VOLUME": 13,
       "XNACOMPOSITE": 1
     },
     "drivers": [
@@ -3388,6 +3342,23 @@
         "updateStatus": "Unknown"
       },
       {
+        "deviceClass": "MEDIA",
+        "deviceName": "USB Audio Device",
+        "provider": "Microsoft",
+        "manufacturer": "Microsoft",
+        "driverVersion": "10.0.26100.7705",
+        "driverDate": "2026-01-26",
+        "infName": "wdma_usb.inf",
+        "hardwareIds": [
+          "USB\\VID_FF01\u0026PID_0009\u0026REV_0100\u0026MI_00",
+          "USB\\VID_FF01\u0026PID_0009\u0026MI_00"
+        ],
+        "pnpDeviceId": "USB\\VID_FF01\u0026PID_0009\u0026MI_00\\7\u002639C49198\u00260\u00260000",
+        "isSigned": true,
+        "status": "OK",
+        "updateStatus": "Unknown"
+      },
+      {
         "deviceClass": "NET",
         "deviceName": "Bluetooth Device (Personal Area Network)",
         "provider": "Microsoft",
@@ -3456,9 +3427,9 @@
         "deviceName": "Realtek PCIe GbE Family Controller",
         "provider": "Realtek",
         "manufacturer": "Realtek",
-        "driverVersion": "10.79.50.1003",
-        "driverDate": "2025-03-10",
-        "infName": "oem75.inf",
+        "driverVersion": "1168.28.20.1224",
+        "driverDate": "2025-12-24",
+        "infName": "oem16.inf",
         "hardwareIds": [
           "PCI\\VEN_10EC\u0026DEV_8168\u0026SUBSYS_7C951462\u0026REV_15",
           "PCI\\VEN_10EC\u0026DEV_8168\u0026SUBSYS_7C951462",
@@ -3961,6 +3932,23 @@
         "driverDate": "2006-06-21",
         "infName": "usb.inf",
         "hardwareIds": [
+          "USB\\VID_FF01\u0026PID_0009\u0026REV_0100",
+          "USB\\VID_FF01\u0026PID_0009"
+        ],
+        "pnpDeviceId": "USB\\VID_FF01\u0026PID_0009\\20180508",
+        "isSigned": true,
+        "status": "OK",
+        "updateStatus": "Unknown"
+      },
+      {
+        "deviceClass": "USB",
+        "deviceName": "USB Composite Device",
+        "provider": "Microsoft",
+        "manufacturer": "(Contr\u00F4leur h\u00F4te USB standard)",
+        "driverVersion": "10.0.26100.7705",
+        "driverDate": "2006-06-21",
+        "infName": "usb.inf",
+        "hardwareIds": [
           "USB\\VID_0E8D\u0026PID_0616\u0026REV_0100",
           "USB\\VID_0E8D\u0026PID_0616"
         ],
@@ -3982,23 +3970,6 @@
           "USB\\VID_FFFF\u0026PID_5678"
         ],
         "pnpDeviceId": "USB\\VID_FFFF\u0026PID_5678\\2103001000813489471",
-        "isSigned": true,
-        "status": "OK",
-        "updateStatus": "Unknown"
-      },
-      {
-        "deviceClass": "USB",
-        "deviceName": "USB Mass Storage Device",
-        "provider": "Microsoft",
-        "manufacturer": "Compatible USB storage device",
-        "driverVersion": "10.0.26100.4768",
-        "driverDate": "2006-06-21",
-        "infName": "usbstor.inf",
-        "hardwareIds": [
-          "USB\\VID_0781\u0026PID_5575\u0026REV_0100",
-          "USB\\VID_0781\u0026PID_5575"
-        ],
-        "pnpDeviceId": "USB\\VID_0781\u0026PID_5575\\4C530000140219214403",
         "isSigned": true,
         "status": "OK",
         "updateStatus": "Unknown"
@@ -6250,22 +6221,6 @@
         "hardwareIds": [
           "MMDEVAPI\\AudioEndpoints"
         ],
-        "pnpDeviceId": "SWD\\MMDEVAPI\\{0.0.1.00000000}.{D92F275A-3196-425E-84E3-77436E1F52FE}",
-        "isSigned": true,
-        "status": "OK",
-        "updateStatus": "Unknown"
-      },
-      {
-        "deviceClass": "AUDIOENDPOINT",
-        "deviceName": "Audio Endpoint",
-        "provider": "Microsoft",
-        "manufacturer": "Microsoft",
-        "driverVersion": "10.0.26100.1",
-        "driverDate": "2024-03-31",
-        "infName": "audioendpoint.inf",
-        "hardwareIds": [
-          "MMDEVAPI\\AudioEndpoints"
-        ],
         "pnpDeviceId": "SWD\\MMDEVAPI\\{0.0.0.00000000}.{CC8A7128-E3D4-4698-BE99-A616FAA31BC3}",
         "isSigned": true,
         "status": "OK",
@@ -6282,7 +6237,39 @@
         "hardwareIds": [
           "MMDEVAPI\\AudioEndpoints"
         ],
+        "pnpDeviceId": "SWD\\MMDEVAPI\\{0.0.1.00000000}.{D92F275A-3196-425E-84E3-77436E1F52FE}",
+        "isSigned": true,
+        "status": "OK",
+        "updateStatus": "Unknown"
+      },
+      {
+        "deviceClass": "AUDIOENDPOINT",
+        "deviceName": "Audio Endpoint",
+        "provider": "Microsoft",
+        "manufacturer": "Microsoft",
+        "driverVersion": "10.0.26100.1",
+        "driverDate": "2024-03-31",
+        "infName": "audioendpoint.inf",
+        "hardwareIds": [
+          "MMDEVAPI\\AudioEndpoints"
+        ],
         "pnpDeviceId": "SWD\\MMDEVAPI\\{0.0.0.00000000}.{1AD2C84E-9F5D-4877-911C-214CDCB1C095}",
+        "isSigned": true,
+        "status": "OK",
+        "updateStatus": "Unknown"
+      },
+      {
+        "deviceClass": "AUDIOENDPOINT",
+        "deviceName": "Audio Endpoint",
+        "provider": "Microsoft",
+        "manufacturer": "Microsoft",
+        "driverVersion": "10.0.26100.1",
+        "driverDate": "2024-03-31",
+        "infName": "audioendpoint.inf",
+        "hardwareIds": [
+          "MMDEVAPI\\AudioEndpoints"
+        ],
+        "pnpDeviceId": "SWD\\MMDEVAPI\\{0.0.1.00000000}.{2B50BD54-957D-4FE4-B878-7CBDF54AD765}",
         "isSigned": true,
         "status": "OK",
         "updateStatus": "Unknown"
@@ -6346,20 +6333,6 @@
           "COMPUTER\\{E821E0E2-E11A-5E94-BF5D-FFE53C5E5048}"
         ],
         "pnpDeviceId": "SWD\\COMPUTER\\MFG_MICRO-STAR_INTERNATIONAL_CO.__LTD.\u0026FAM_TO_BE_FILLED_BY_O.E.M.\u0026PROD_MS-7C95\u0026SKU_TO_BE_FILLED_BY_O.E.M.",
-        "isSigned": true,
-        "status": "OK",
-        "updateStatus": "Unknown"
-      },
-      {
-        "deviceClass": "WPD",
-        "deviceName": "Cruzer Glide",
-        "provider": "Microsoft",
-        "manufacturer": "SanDisk",
-        "driverVersion": "10.0.26100.5074",
-        "driverDate": "2006-06-21",
-        "infName": "wpdfs.inf",
-        "hardwareIds": [],
-        "pnpDeviceId": "SWD\\WPDBUSENUM\\_??_USBSTOR#DISK\u0026VEN_SANDISK\u0026PROD_CRUZER_GLIDE\u0026REV_1.00#4C530000140219214403\u00260#{53F56307-B6BF-11D0-94F2-00A0C91EFB8B}",
         "isSigned": true,
         "status": "OK",
         "updateStatus": "Unknown"
@@ -6440,28 +6413,6 @@
           "GenDisk"
         ],
         "pnpDeviceId": "SCSI\\DISK\u0026VEN_TOSHIBA\u0026PROD_DT01ACA200\\5\u0026221BABA8\u00260\u0026020000",
-        "isSigned": true,
-        "status": "OK",
-        "updateStatus": "Unknown"
-      },
-      {
-        "deviceClass": "DISKDRIVE",
-        "deviceName": "Disk drive",
-        "provider": "Microsoft",
-        "manufacturer": "(Standard disk drives)",
-        "driverVersion": "10.0.26100.7705",
-        "driverDate": "2006-06-21",
-        "infName": "disk.inf",
-        "hardwareIds": [
-          "USBSTOR\\DiskSanDisk_Cruzer_Glide____1.00",
-          "USBSTOR\\DiskSanDisk_Cruzer_Glide____",
-          "USBSTOR\\DiskSanDisk_",
-          "USBSTOR\\SanDisk_Cruzer_Glide____1",
-          "SanDisk_Cruzer_Glide____1",
-          "USBSTOR\\GenDisk",
-          "GenDisk"
-        ],
-        "pnpDeviceId": "USBSTOR\\DISK\u0026VEN_SANDISK\u0026PROD_CRUZER_GLIDE\u0026REV_1.00\\4C530000140219214403\u00260",
         "isSigned": true,
         "status": "OK",
         "updateStatus": "Unknown"
@@ -6711,7 +6662,39 @@
         "hardwareIds": [
           "STORAGE\\VolumeSnapshot"
         ],
+        "pnpDeviceId": "STORAGE\\VOLUMESNAPSHOT\\HARDDISKVOLUMESNAPSHOT4",
+        "isSigned": true,
+        "status": "OK",
+        "updateStatus": "Unknown"
+      },
+      {
+        "deviceClass": "VOLUMESNAPSHOT",
+        "deviceName": "Generic volume shadow copy",
+        "provider": "Microsoft",
+        "manufacturer": "Microsoft",
+        "driverVersion": "10.0.26100.1",
+        "driverDate": "2006-06-21",
+        "infName": "volsnap.inf",
+        "hardwareIds": [
+          "STORAGE\\VolumeSnapshot"
+        ],
         "pnpDeviceId": "STORAGE\\VOLUMESNAPSHOT\\HARDDISKVOLUMESNAPSHOT2",
+        "isSigned": true,
+        "status": "OK",
+        "updateStatus": "Unknown"
+      },
+      {
+        "deviceClass": "VOLUMESNAPSHOT",
+        "deviceName": "Generic volume shadow copy",
+        "provider": "Microsoft",
+        "manufacturer": "Microsoft",
+        "driverVersion": "10.0.26100.1",
+        "driverDate": "2006-06-21",
+        "infName": "volsnap.inf",
+        "hardwareIds": [
+          "STORAGE\\VolumeSnapshot"
+        ],
+        "pnpDeviceId": "STORAGE\\VOLUMESNAPSHOT\\HARDDISKVOLUMESNAPSHOT5",
         "isSigned": true,
         "status": "OK",
         "updateStatus": "Unknown"
@@ -6993,6 +6976,27 @@
         "driverDate": "2006-06-21",
         "infName": "input.inf",
         "hardwareIds": [
+          "HID\\VID_FF01\u0026PID_0009\u0026REV_0100\u0026MI_02",
+          "HID\\VID_FF01\u0026PID_0009\u0026MI_02",
+          "HID\\VID_FF01\u0026UP:FF00_U:55AA",
+          "HID_DEVICE_UP:FF00_U:55AA",
+          "HID_DEVICE_UPR:FF00-FFFF",
+          "HID_DEVICE"
+        ],
+        "pnpDeviceId": "HID\\VID_FF01\u0026PID_0009\u0026MI_02\\8\u002622665F07\u00260\u00260000",
+        "isSigned": true,
+        "status": "OK",
+        "updateStatus": "Unknown"
+      },
+      {
+        "deviceClass": "HIDCLASS",
+        "deviceName": "HID-compliant vendor-defined device",
+        "provider": "Microsoft",
+        "manufacturer": "(Standard system devices)",
+        "driverVersion": "10.0.26100.7705",
+        "driverDate": "2006-06-21",
+        "infName": "input.inf",
+        "hardwareIds": [
           "HID\\VID_0B05\u0026PID_1866\u0026REV_0003\u0026Col02",
           "HID\\VID_0B05\u0026PID_1866\u0026Col02",
           "HID\\VID_0B05\u0026UP:FF31_U:0080",
@@ -7022,6 +7026,24 @@
           "HID_DEVICE"
         ],
         "pnpDeviceId": "HID\\VID_0B05\u0026PID_1866\u0026COL01\\8\u00261974E02E\u00260\u00260000",
+        "isSigned": true,
+        "status": "OK",
+        "updateStatus": "Unknown"
+      },
+      {
+        "deviceClass": "PRINTQUEUE",
+        "deviceName": "Local Print Queue",
+        "provider": "Microsoft",
+        "manufacturer": "Microsoft",
+        "driverVersion": "10.0.26100.1",
+        "driverDate": "2006-06-21",
+        "infName": "printqueue.inf",
+        "hardwareIds": [
+          "PRINTENUM\\{3ee39114-30b4-45a4-a109-19d4a40fcc22}",
+          "PRINTENUM\\LocalPrintQueue",
+          "{3ee39114-30b4-45a4-a109-19d4a40fcc22}"
+        ],
+        "pnpDeviceId": "SWD\\PRINTENUM\\{78D91532-56A4-4950-A12A-73A1524D3251}",
         "isSigned": true,
         "status": "OK",
         "updateStatus": "Unknown"
@@ -7076,24 +7098,6 @@
           "{0f4130dd-19c7-7ab6-99a1-980f03b2ee4e}"
         ],
         "pnpDeviceId": "SWD\\PRINTENUM\\{1CF5AF25-7839-48BF-AE0C-B0BD42E37BD6}",
-        "isSigned": true,
-        "status": "OK",
-        "updateStatus": "Unknown"
-      },
-      {
-        "deviceClass": "PRINTQUEUE",
-        "deviceName": "Local Print Queue",
-        "provider": "Microsoft",
-        "manufacturer": "Microsoft",
-        "driverVersion": "10.0.26100.1",
-        "driverDate": "2006-06-21",
-        "infName": "printqueue.inf",
-        "hardwareIds": [
-          "PRINTENUM\\{3ee39114-30b4-45a4-a109-19d4a40fcc22}",
-          "PRINTENUM\\LocalPrintQueue",
-          "{3ee39114-30b4-45a4-a109-19d4a40fcc22}"
-        ],
-        "pnpDeviceId": "SWD\\PRINTENUM\\{DAE3B7F7-0A16-44A8-A195-A23BA3A3F72F}",
         "isSigned": true,
         "status": "OK",
         "updateStatus": "Unknown"
@@ -7269,6 +7273,23 @@
         "driverDate": "2006-06-21",
         "infName": "input.inf",
         "hardwareIds": [
+          "USB\\VID_FF01\u0026PID_0009\u0026REV_0100\u0026MI_02",
+          "USB\\VID_FF01\u0026PID_0009\u0026MI_02"
+        ],
+        "pnpDeviceId": "USB\\VID_FF01\u0026PID_0009\u0026MI_02\\7\u002639C49198\u00260\u00260002",
+        "isSigned": true,
+        "status": "OK",
+        "updateStatus": "Unknown"
+      },
+      {
+        "deviceClass": "HIDCLASS",
+        "deviceName": "USB Input Device",
+        "provider": "Microsoft",
+        "manufacturer": "(Standard system devices)",
+        "driverVersion": "10.0.26100.7705",
+        "driverDate": "2006-06-21",
+        "infName": "input.inf",
+        "hardwareIds": [
           "USB\\VID_1462\u0026PID_7C95\u0026REV_0001",
           "USB\\VID_1462\u0026PID_7C95"
         ],
@@ -7322,22 +7343,6 @@
           "SWC\\VEN_MSFT\u0026AUDIO_EFFECTPACK_VOICECLARITY"
         ],
         "pnpDeviceId": "SWD\\DRIVERENUM\\{96BEDF2C-18CB-4A15-B821-5E95ED0FEA61}#VOCAEFFECTPACK\u00261\u002619718049\u00260",
-        "isSigned": true,
-        "status": "OK",
-        "updateStatus": "Unknown"
-      },
-      {
-        "deviceClass": "VOLUME",
-        "deviceName": "Volume",
-        "provider": "Microsoft",
-        "manufacturer": "Microsoft",
-        "driverVersion": "10.0.26100.5074",
-        "driverDate": "2006-06-21",
-        "infName": "volume.inf",
-        "hardwareIds": [
-          "STORAGE\\Volume"
-        ],
-        "pnpDeviceId": "STORAGE\\VOLUME\\_??_USBSTOR#DISK\u0026VEN_SANDISK\u0026PROD_CRUZER_GLIDE\u0026REV_1.00#4C530000140219214403\u00260#{53F56307-B6BF-11D0-94F2-00A0C91EFB8B}",
         "isSigned": true,
         "status": "OK",
         "updateStatus": "Unknown"
@@ -7594,19 +7599,19 @@
         "driverHardwareId": "acpi\\mbad0001"
       }
     ],
-    "updateSearchMode": "Offline"
+    "updateSearchMode": "Online"
   },
   "updates_csharp": {
-    "timestamp": "2026-02-04T00:30:33.1799763Z",
+    "timestamp": "2026-02-04T21:34:45.4778040Z",
     "available": true,
     "source": "WindowsUpdateCollector",
-    "durationMs": 1635,
-    "searchMode": "Offline",
+    "durationMs": 4886,
+    "searchMode": "Online",
     "pendingCount": 1,
     "rebootRequired": false,
     "updates": [
       {
-        "title": "Mise \u00E0 jour de la s\u00E9lection disjointe pour Microsoft Defender Antivirus \u2013 2267602\u00A0Ko (version\u00A01.443.992.0) \u2013 Canal actuel (large)"
+        "title": "Mise \u00E0 jour de la s\u00E9lection disjointe pour Microsoft Defender Antivirus \u2013 2267602\u00A0Ko (version\u00A01.443.1004.0) \u2013 Canal actuel (large)"
       }
     ]
   },
@@ -7624,21 +7629,21 @@
     "SmbV1Enabled": true,
     "SmbV1Status": "feature_enabled",
     "SmbV1Source": "WindowsFeature",
-    "Timestamp": "2026-02-04T00:30:34.8170263Z"
+    "Timestamp": "2026-02-04T21:34:50.3663633Z"
   },
   "missingData": [
     "Processes",
-    "2026-02-03T19:24:06.7267803-05:00",
+    "2026-02-04T16:27:51.5979555-05:00",
     "ProcessList",
     "Get-Process, CIM et tasklist ont echoue"
   ],
   "metadata": {
     "version": "7.0",
-    "runId": "23f755ab-cc4c-4dc4-a5d2-01beb3262e21",
-    "timestamp": "2026-02-03T19:24:34.7608089-05:00",
+    "runId": "2eff71b2-f14a-4830-8679-5c12dde408fe",
+    "timestamp": "2026-02-04T16:28:22.3078591-05:00",
     "isAdmin": true,
     "partialFailure": false,
-    "durationSeconds": 52.17
+    "durationSeconds": 55.15
   },
   "findings": [],
   "errors": [
@@ -7693,9 +7698,9 @@
     "InstalledApplications"
   ],
   "paths": {
-    "jsonOutput": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_23f755ab-cc4c-4dc4-a5d2-01beb3262e21_20260203_192342.json",
+    "jsonOutput": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Scan_2eff71b2-f14a-4830-8679-5c12dde408fe_20260204_162727.json",
     "txtOutput": "",
     "combinedJson": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\scan_result_combined.json",
-    "unifiedTxt": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Rapport_Unifie_20260203_193041.txt"
+    "unifiedTxt": "C:\\Users\\rams_\\AppData\\Local\\PCDiagnosticPro\\Rapports\\Rapport_Unifie_20260204_163456.txt"
   }
 }

@@ -258,12 +258,26 @@ namespace PCDiagnosticPro.Services
                     ? root[0]
                     : root;
 
-                // Extraire les résultats
+                // LibreSpeed CLI --json : vitesses en bit/s (doc officielle). Conversion bps → Mbps si valeur > 10_000.
+                const double bpsToMbps = 1.0 / 1_000_000.0;
+                static double ToMbps(double raw)
+                {
+                    if (raw <= 0) return 0;
+                    return raw >= 10_000 ? raw * bpsToMbps : raw; // déjà en Mbps si petit
+                }
                 if (testResult.TryGetProperty("download", out var dl))
-                    result.DownloadMbps = dl.GetDouble();
+                {
+                    var raw = dl.GetDouble();
+                    result.DownloadMbps = ToMbps(raw);
+                    App.LogMessage($"[LibreSpeed] Download: raw={raw} → {result.DownloadMbps:F2} Mbps");
+                }
                 
                 if (testResult.TryGetProperty("upload", out var ul))
-                    result.UploadMbps = ul.GetDouble();
+                {
+                    var raw = ul.GetDouble();
+                    result.UploadMbps = ToMbps(raw);
+                    App.LogMessage($"[LibreSpeed] Upload: raw={raw} → {result.UploadMbps:F2} Mbps");
+                }
                 
                 if (testResult.TryGetProperty("ping", out var ping))
                     result.PingMs = ping.GetDouble();

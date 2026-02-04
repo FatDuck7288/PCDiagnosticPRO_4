@@ -6,7 +6,6 @@
         xmlns:vm="clr-namespace:PCDiagnosticPro.ViewModels"
         xmlns:conv="clr-namespace:PCDiagnosticPro.Converters"
         xmlns:ctrl="clr-namespace:PCDiagnosticPro.Controls"
-        xmlns:gif="clr-namespace:WpfAnimatedGif;assembly=WpfAnimatedGif"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
         Title="PC Diagnostic Pro" 
@@ -233,7 +232,7 @@
             <Grid Visibility="{Binding IsHealthcheckView, Converter={StaticResource BoolToVisibility}}"
                   ClipToBounds="False">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" MinWidth="400"/>
+                    <ColumnDefinition Width="*" MinWidth="580"/>
                     <ColumnDefinition Width="280"/>
                 </Grid.ColumnDefinitions>
 
@@ -244,14 +243,14 @@
                         <!-- Live feed: hauteur augmentée pour afficher plus de lignes -->
                         <RowDefinition Height="140"/>
                         <RowDefinition Height="Auto"/>
-                        <!-- MinHeight=560 pour conteneur ring 450px + Margin 55 top/bottom pour glow BlurRadius=50 -->
-                        <RowDefinition Height="*" MinHeight="560"/>
+                        <!-- MinHeight=580 : MinVisualExtent 460 + 2×Margin 60 pour éviter clipping DropShadow -->
+                        <RowDefinition Height="*" MinHeight="580"/>
                     </Grid.RowDefinitions>
 
                     <!-- ROW 0: Live feed avec pluie de 0/1 en fond, texte au-dessus -->
-                    <Border Grid.Row="0" Background="#161B22" CornerRadius="6" Padding="12,8"
+                    <Border Grid.Row="0" Background="#161B22" CornerRadius="12" Padding="12,8"
                             BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                            Margin="0,0,0,12">
+                            Margin="0,0,0,12" ClipToBounds="False">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -312,29 +311,22 @@
                     <!-- ROW 2: ANNEAU DE PROGRESSION - CORRECTION DÉFINITIVE CLIPPING    -->
                     <!-- ================================================================== -->
                     <!-- 
-                    CALCUL REQUIREDRINGSIZE (formule V3 - marge pour BlurRadius hover=50):
-                    ─────────────────────────────────────────────────────────────────
-                    BaseDiameter     = 300   (rayon 150 × 2)
-                    GlowBlurRadius   = 50    (BlurRadius max sur hover effect)
-                    StrokeThickMax   = 14    (anneau segmenté)
-                    
-                    GlowMargin       = (GlowBlurRadius + StrokeThickMax) × 2 = (50 + 14) × 2 = 128
-                    SafetyMargin     = 32    (buffer DPI scaling 150% + arrondis)
-                    InternalPadding  = 30    (espace absorbeur dans le Border)
-                    ExternalMargin   = 55    (Margin sur RingRowContainer pour débordement glow)
-                    
-                    RequiredRingSize = BaseDiameter + GlowMargin + SafetyMargin + InternalPadding
-                                     = 300 + 128 + 32 + 30 = 490 (arrondi à 450 + Margin externe)
-                    RequiredRowHeight = RequiredRingSize + ExternalMargin × 2 = 450 + 110 = 560
+                    MinVisualExtent = base diameter + 2×BlurRadius + 2×StrokeThickness + DPI margin
+                                    = 300 + 2×50 + 2×14 + 32 = 460
+                    ExternalMargin  = 60    (Margin sur RingRowContainer pour débordement glow)
+                    RequiredRowHeight = MinVisualExtent + 2×ExternalMargin = 460 + 120 = 580
+                    Border/Viewbox min = 460×460 pour aucun clipping DropShadowEffect.
+                    ClipToBounds=False sur toute la hiérarchie ring.
                     -->
-                    <!-- FIX #2: Margin augmenté de 55 à 60 pour éviter le clipping du glow -->
                     <Grid x:Name="RingRowContainer" Grid.Row="2" ClipToBounds="False" 
+                          MinWidth="580" MinHeight="580"
                           HorizontalAlignment="Center" VerticalAlignment="Center"
                           UseLayoutRounding="True" Margin="60">
                         
-                        <!-- FIX #12: CONTENEUR ANTI-CLIPPING avec Viewbox pour scaling responsive -->
-                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
-                        <Border x:Name="RingOuterBorder" Width="450" Height="450" 
+                        <!-- FIX #12: Viewbox Min 460×460 pour ne jamais descendre sous MinVisualExtent -->
+                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly"
+                                 MinWidth="460" MinHeight="460">
+                        <Border x:Name="RingOuterBorder" Width="460" Height="460" MinWidth="460" MinHeight="460"
                                 ClipToBounds="False" Padding="25"
                                 UseLayoutRounding="True" SnapsToDevicePixels="True">
                         <Grid x:Name="RingInnerContainer" ClipToBounds="False">
@@ -352,31 +344,32 @@
                                      Stroke="{StaticResource BackgroundLightBrush}" 
                                      StrokeThickness="8"/>
 
-                            <!-- COUCHE 2: Arc de progression avec glow - 300x300, rayon 150 -->
-                            <!-- Glow: BlurRadius=20 étend de 20px dans toutes les directions -->
-                            <Grid Width="300" Height="300"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center"
-                                  ClipToBounds="False"
-                                  Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
-                                  Opacity="{Binding ProgressPercent, Converter={StaticResource ProgressToOpacity}}">
-                                <Grid.Effect>
-                                    <DropShadowEffect Color="{StaticResource AccentRed}"
-                                                      BlurRadius="20" ShadowDepth="0" Opacity="0.8"/>
-                                </Grid.Effect>
-                                <Path Width="300" Height="300"
-                                      StrokeThickness="10"
-                                      StrokeStartLineCap="Round"
-                                      StrokeEndLineCap="Round"
-                                      Data="{Binding ProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=150}">
-                                    <Path.Stroke>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="{StaticResource AccentRed}" Offset="0"/>
-                                            <GradientStop Color="#FFFF8B94" Offset="0.5"/>
-                                            <GradientStop Color="{StaticResource AccentRed}" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Path.Stroke>
-                                </Path>
-                            </Grid>
+                            <!-- COUCHE 2: Arc de progression avec glow - padding pour éviter clipping -->
+                            <Border Padding="50" ClipToBounds="False" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="300" Height="300"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      ClipToBounds="False"
+                                      Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
+                                      Opacity="{Binding ProgressPercent, Converter={StaticResource ProgressToOpacity}}">
+                                    <Grid.Effect>
+                                        <DropShadowEffect Color="{StaticResource AccentRed}"
+                                                          BlurRadius="20" ShadowDepth="0" Opacity="0.8"/>
+                                    </Grid.Effect>
+                                    <Path Width="300" Height="300"
+                                          StrokeThickness="10"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          Data="{Binding ProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=150}">
+                                        <Path.Stroke>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="{StaticResource AccentRed}" Offset="0"/>
+                                                <GradientStop Color="#FFFF8B94" Offset="0.5"/>
+                                                <GradientStop Color="{StaticResource AccentRed}" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Path.Stroke>
+                                    </Path>
+                                </Grid>
+                            </Border>
 
                             <!-- COUCHE 3: Arc de progression principal - 300x300, rayon 150 -->
                             <Path Width="300" Height="300"
@@ -431,10 +424,11 @@
                                          StrokeDashArray="0.04 0.96"/>
                             </Grid>
 
-                            <!-- COUCHE 6: Bouton central - 240x240 -->
-                            <Grid Width="240" Height="240"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Button Command="{Binding StartScanCommand}"
+                            <!-- COUCHE 6: Bouton central - padding pour glow BlurRadius=50 -->
+                            <Border Padding="50" ClipToBounds="False" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="240" Height="240"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Button Command="{Binding StartScanCommand}"
                                     IsEnabled="{Binding CanStartScan}"
                                     Cursor="Hand">
                                 <Button.Template>
@@ -470,6 +464,8 @@
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
+                                </Grid>
+                            </Border>
 
                             <Grid VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <StackPanel Visibility="{Binding IsIdle, Converter={StaticResource BoolToVisibility}}"
@@ -506,24 +502,7 @@
                                             ToolTip="{Binding CancelButtonText}"/>
                                 </StackPanel>
                                 
-                                <StackPanel Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVisibility}}"
-                                            HorizontalAlignment="Center"
-                                            IsHitTestVisible="False">
-                                    <TextBlock Text="{Binding ScoreDisplay}" 
-                                               FontSize="48" FontWeight="Bold"
-                                               Foreground="{Binding GradeDisplay, Converter={StaticResource GradeToColor}}"
-                                               HorizontalAlignment="Center"/>
-                                    <TextBlock Text="/100" FontSize="14"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               HorizontalAlignment="Center" Margin="0,-5,0,5"/>
-                                    <Border CornerRadius="4" Padding="12,4"
-                                            Background="{Binding GradeDisplay, Converter={StaticResource GradeToColor}}"
-                                            HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding GradeDisplay}" 
-                                                   FontSize="18" FontWeight="Bold"
-                                                   Foreground="White"/>
-                                    </Border>
-                                </StackPanel>
+                                <!-- Post-scan: Button returns to idle state immediately (no grade display) -->
                                 
                                 <StackPanel Visibility="{Binding IsError, Converter={StaticResource BoolToVisibility}}"
                                             HorizontalAlignment="Center"
@@ -539,46 +518,36 @@
                                                TextAlignment="Center"/>
                                 </StackPanel>
                             </Grid>
-                        </Grid>
                         </Grid><!-- Fermeture RingInnerContainer -->
-                        </Border><!-- Fermeture RingOuterBorder 400x400 -->
+                        </Border><!-- Fermeture RingOuterBorder 460×460 -->
                         </Viewbox><!-- FIX #12: Fermeture Viewbox pour scaling responsive -->
                     </Grid><!-- Fermeture RingRowContainer -->
                 </Grid>
 
-                <!-- Panneau droit : progression informative -->
+                <!-- Panneau droit : progression informative (coins tous arrondis comme la box) -->
                 <Border Grid.Column="1" Background="{StaticResource BackgroundMediumBrush}" 
                         BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0"
-                        Padding="20,24">
+                        CornerRadius="12" Padding="20,18" ClipToBounds="False">
                     <Grid>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*" MinHeight="120"/>
-                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>  <!-- Bloc 1: Temps écoulé -->
+                            <RowDefinition Height="Auto"/>  <!-- Bloc 2: Étapes -->
+                            <RowDefinition Height="Auto"/>  <!-- Bloc 3: Constats -->
+                            <RowDefinition Height="Auto"/>  <!-- Bloc 4: Speed Test Réseau (même écart 12 qu'entre les autres) -->
                         </Grid.RowDefinitions>
-
-                        <TextBlock Grid.Row="0" FontSize="16" FontWeight="Bold"
-                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16">
-                            <TextBlock.Text>
-                                <MultiBinding StringFormat="{}0}">
-                                    <Binding Path="HealthProgressTitle"/>
-                                </MultiBinding>
-                            </TextBlock.Text>
-                        </TextBlock>
                         
-                        <Border Grid.Row="1" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
+                        <!-- BLOC 1: Temps écoulé (écart 12 comme entre tous les blocs) -->
+                        <Border Grid.Row="0" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Text="{Binding ElapsedTimeLabel}" FontSize="11"
+                                <TextBlock Text="Temps écoulé" FontSize="11"
                                            Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
-                                <TextBlock Text="{Binding ElapsedTime}" FontSize="22" FontWeight="Bold"
+                                <TextBlock Text="{Binding ElapsedTime}" FontSize="28" FontWeight="Bold"
                                            Foreground="{StaticResource AccentRedBrush}"/>
                             </StackPanel>
                         </Border>
-                        
-                        <!-- Section courante supprimée (inutile) -->
 
-                        <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
+                        <!-- BLOC 2: Étapes (même écart 12 qu'entre Temps écoulé et ici) -->
+                        <Border Grid.Row="1" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
                             <StackPanel>
                                 <TextBlock Text="Étapes" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
@@ -707,11 +676,8 @@
                                 </ItemsControl>
                             </StackPanel>
                         </Border>
-                        <!-- FIX #4: Boutons "Rapport intégrale" et "Exporter" supprimés -->
-                        
-                        <!-- FIX #3: Constats en temps réel -->
-                        <Border Grid.Row="3" Style="{StaticResource PanelBorder}" Margin="0,0,0,12"
-                                Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}">
+                        <!-- BLOC 3: Constats en temps réel -->
+                        <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
                             <StackPanel>
                                 <TextBlock Text="Constats" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
@@ -724,6 +690,131 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- BLOC 4: Speed Test Réseau (écart 12 = marge basse de Constats, comme entre Temps écoulé et Étapes) -->
+                        <Border Grid.Row="3" Style="{StaticResource PanelBorder}" Margin="0,0,0,0">
+                            <StackPanel>
+                                <!-- Animation à gauche du titre (référence visuelle : globe puis texte) -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                    <Image x:Name="SpeedTestGlobeImage" Width="24" Height="24" Stretch="Uniform"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Speed Test Réseau" FontSize="14" FontWeight="Bold" 
+                                               VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+                                
+                                <!-- Légende couleurs (écart 12) -->
+                                <StackPanel Margin="0,0,0,12">
+                                    <StackPanel Orientation="Horizontal" Margin="0,2">
+                                        <Ellipse Width="8" Height="8" Fill="#4CAF50" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Bonne connexion" FontSize="10" Foreground="#4CAF50"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2">
+                                        <Ellipse Width="8" Height="8" Fill="#FFB74D" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Connexion moyenne" FontSize="10" Foreground="#FFB74D"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2">
+                                        <Ellipse Width="8" Height="8" Fill="#EF5350" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Mauvaise connexion" FontSize="10" Foreground="#EF5350"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                
+                                <!-- Download / Upload (écart 12) -->
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <!-- Download -->
+                                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                        <TextBlock Text="↓ Download" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                        <TextBlock FontSize="28" FontWeight="Bold" HorizontalAlignment="Center"
+                                                   Foreground="{Binding NetworkDownloadColor, Converter={StaticResource HexToColorBrush}}">
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0:F1}">
+                                                    <Binding Path="NetworkDownloadMbps" FallbackValue="—"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                        <TextBlock Text="Mbps" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                    <!-- Upload -->
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                        <TextBlock Text="↑ Upload" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                        <TextBlock FontSize="28" FontWeight="Bold" HorizontalAlignment="Center"
+                                                   Foreground="{Binding NetworkUploadColor, Converter={StaticResource HexToColorBrush}}">
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0:F1}">
+                                                    <Binding Path="NetworkUploadMbps" FallbackValue="—"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                        <TextBlock Text="Mbps" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                                
+                                <!-- Bouton Toggle Tester/Arrêter (grand, centré, en bas) -->
+                                <Button Command="{Binding ToggleSpeedTestCommand}" 
+                                        HorizontalAlignment="Center" Cursor="Hand"
+                                        Padding="32,12" MinWidth="160"
+                                        Visibility="{Binding AllowExternalNetworkTests, Converter={StaticResource BoolToVisibility}}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource FuturisticButton}">
+                                            <Setter Property="Background" Value="{StaticResource AccentRedBrush}"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="IsEnabled" Value="True"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#FF6B7A"/>
+                                                </Trigger>
+                                                <DataTrigger Binding="{Binding IsSpeedTestRunning}" Value="True">
+                                                    <Setter Property="Background" Value="#FF5252"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                    <Button.Content>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="▶"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSpeedTestRunning}" Value="True">
+                                                                <Setter Property="Text" Value="⏹"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="Tester"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSpeedTestRunning}" Value="True">
+                                                                <Setter Property="Text" Value="Arrêter"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Button.Content>
+                                </Button>
+                                
+                                <!-- Indicateur quand le speed test est désactivé -->
+                                <Border Background="{StaticResource BackgroundLightBrush}" CornerRadius="6" Padding="12,8"
+                                        HorizontalAlignment="Center"
+                                        Visibility="{Binding AllowExternalNetworkTests, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                                    <StackPanel>
+                                        <TextBlock Text="🔒 Tests réseau désactivés" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Activer dans Paramètres → Tests réseau externes" FontSize="9"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -782,6 +873,9 @@
                                                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                                                 <Button.ContextMenu>
                                                     <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                                        <MenuItem Header="{Binding RenameMenuText}"
+                                                                  Command="{Binding RenameScanCommand}"
+                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                                         <MenuItem Header="{Binding ArchiveMenuText}"
                                                                   Command="{Binding ArchiveScanCommand}"
                                                                   CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
@@ -792,7 +886,7 @@
                                                 </Button.ContextMenu>
                                             </Button>
 
-                                            <Border Grid.Column="1" Width="60" Height="60" CornerRadius="8"
+                                            <Border Grid.Column="1" Width="60" Height="60" CornerRadius="12"
                                                     Background="{Binding Grade, Converter={StaticResource GradeToColor}}"
                                                     Margin="0,0,15,0">
                                                 <StackPanel VerticalAlignment="Center">
@@ -854,8 +948,44 @@
                                     </MultiBinding>
                                 </TextBlock.Text>
                             </TextBlock>
-                            <TextBlock Text="{Binding SelectedScanDateDisplay}" 
-                                       FontSize="14" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <!-- Nom du rapport avec option de renommage -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="ReportNameTextBox"
+                                         Text="{Binding SelectedHistoryScan.CustomDisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                         FontSize="14" Padding="4,2" MaxWidth="300" HorizontalAlignment="Left"
+                                         Visibility="Collapsed"/>
+                                <StackPanel Orientation="Horizontal" x:Name="ReportNameDisplay">
+                                    <TextBlock Text="{Binding SelectedHistoryScan.DisplayName}" 
+                                               FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" 
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text=" — " FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" 
+                                               VerticalAlignment="Center"
+                                               Visibility="{Binding SelectedHistoryScan.CustomDisplayName, Converter={StaticResource BoolToVisibility}}"/>
+                                    <TextBlock Text="{Binding SelectedScanDateDisplay}" 
+                                               FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" 
+                                               VerticalAlignment="Center"
+                                               Visibility="{Binding SelectedHistoryScan.CustomDisplayName, Converter={StaticResource BoolToVisibility}}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="✏️" FontSize="12" Padding="6,2" Margin="8,0,0,0"
+                                        Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                        ToolTip="Renommer ce rapport"
+                                        Click="ToggleReportRename">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </Grid>
                         </StackPanel>
                     </DockPanel>
 
@@ -867,63 +997,82 @@
                                            Foreground="{StaticResource AccentRedBrush}"/>
                             </Border>
 
+                            <!-- Bloc Grade unifié (Scan Terminé + Score + Légende compacte) -->
                             <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20">
                                 <StackPanel>
-                                    <TextBlock Text="{Binding ResultsCompletedTitle}" FontWeight="Bold" FontSize="18"
-                                               Foreground="{StaticResource TextPrimaryBrush}"/>
-                                    <TextBlock Text="{Binding ResultsCompletionDisplay}" FontSize="12" Margin="0,4,0,0"
-                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <TextBlock Text="{Binding ResultsStatusDisplay}" FontSize="12" Margin="0,6,0,0"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </Border>
+                                    <!-- En-tête "Scan Terminé" intégré -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                        <TextBlock Text="✓" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentGreenBrush}" 
+                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding ResultsCompletedTitle}" FontWeight="Bold" FontSize="16"
+                                                   Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock Text=" — " FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" 
+                                                   VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding ResultsCompletionDisplay}" FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
 
-                            <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
+                                        <Grid Width="180" Height="180">
+                                            <Ellipse Stroke="{StaticResource BorderBrush}" StrokeThickness="10" Opacity="0.3"/>
+                                            <Path Stroke="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}"
+                                                  StrokeThickness="10" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                  Data="{Binding ScanResult.Summary.Score, Converter={StaticResource ProgressToArc}, ConverterParameter=80}"/>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding ScanResult.Summary.Score}" FontSize="36" FontWeight="Bold"
+                                                           Foreground="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}"/>
+                                                <TextBlock Text="/100" FontSize="12"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
 
-                                    <Grid Width="200" Height="200">
-                                        <Ellipse Stroke="{StaticResource BorderBrush}" StrokeThickness="10" Opacity="0.3"/>
-                                        <Path Stroke="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}"
-                                              StrokeThickness="10" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                              Data="{Binding ScanResult.Summary.Score, Converter={StaticResource ProgressToArc}, ConverterParameter=90}"/>
-                                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding ScanResult.Summary.Score}" FontSize="36" FontWeight="Bold"
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
+                                            <TextBlock Text="{Binding ScanResult.Summary.Grade}" FontSize="40" FontWeight="Bold"
                                                        Foreground="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}"/>
-                                            <TextBlock Text="/100" FontSize="12"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="{Binding StatusWithScore}" FontSize="13" TextWrapping="Wrap"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                                            
+                                            <!-- Score de collecte (confiance des données) -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                                <Border Width="32" Height="32" CornerRadius="16"
+                                                        Background="{Binding ConfidenceColor, Converter={StaticResource HexToColorBrush}}"
+                                                        Cursor="Hand" VerticalAlignment="Center">
+                                                    <Border.InputBindings>
+                                                        <MouseBinding MouseAction="LeftClick" Command="{Binding ShowCollectorErrorsCommand}"/>
+                                                    </Border.InputBindings>
+                                                    <TextBlock Text="{Binding ConfidenceScore}" FontSize="11" FontWeight="Bold"
+                                                               Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding ConfidenceLevel}" FontSize="11"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" 
+                                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                            </StackPanel>
                                         </StackPanel>
                                     </Grid>
-
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
-                                        <TextBlock Text="{Binding ScanResult.Summary.Grade}" FontSize="40" FontWeight="Bold"
-                                                   Foreground="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}"/>
-                                        <TextBlock Text="{Binding StatusWithScore}" FontSize="14" TextWrapping="Wrap"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    </StackPanel>
-                                </Grid>
+                                </StackPanel>
                             </Border>
 
                             <!-- ========== TABLEAU DE SANTÉ PC (8 DOMAINES) ========== -->
                             <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20"
                                     Visibility="{Binding HasHealthReport, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
-                                    <Grid Margin="0,0,0,15">
+                                    <!-- En-tête avec titre et score État uniquement -->
+                                    <Grid Margin="0,0,0,12">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
                                             <!-- Icône santé robuste: texte + Unicode heart (pas emoji problématique) -->
                                             <StackPanel Orientation="Horizontal">
                                                 <Border Width="24" Height="24" CornerRadius="12" 
-                                                        Background="{StaticResource AccentRedBrush}" Margin="0,0,8,0"
+                                                        Background="{StaticResource AccentRedBrush}" Margin="0,0,4,0"
                                                         VerticalAlignment="Center">
                                                     <TextBlock Text="+" FontSize="16" FontWeight="Bold" 
                                                                Foreground="White" HorizontalAlignment="Center" 
@@ -932,29 +1081,11 @@
                                                 <TextBlock Text="Santé de votre PC" FontWeight="Bold" FontSize="18"
                                                            Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <!-- P0.3 / P3: Badge Partiel/Limité si collecte FAILED ou PARTIAL - CLIQUABLE pour voir détails -->
-                                            <Button Visibility="{Binding IsCollectionPartialOrFailed, Converter={StaticResource BoolToVisibility}}"
-                                                    Command="{Binding ShowCollectorErrorsCommand}"
-                                                    Background="#FFF3E0" BorderThickness="0" Padding="8,4" Margin="0,4,0,0"
-                                                    Cursor="Hand" ToolTip="Cliquez pour voir le détail des erreurs collecteur">
-                                                <Button.Template>
-                                                    <ControlTemplate TargetType="Button">
-                                                        <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                            <ContentPresenter/>
-                                                        </Border>
-                                                    </ControlTemplate>
-                                                </Button.Template>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="⚠️" FontSize="12" Margin="0,0,4,0"/>
-                                                    <TextBlock Text="{Binding CollectionStatusBadgeText}" FontSize="11" FontWeight="SemiBold" Foreground="#E65100"/>
-                                                    <TextBlock Text="{Binding CollectorErrorsLogicalDisplay}" FontSize="10" Foreground="#BF360C" Margin="8,0,0,0"/>
-                                                </StackPanel>
-                                            </Button>
                                             <TextBlock Text="{Binding GlobalHealthMessage}" FontSize="12" TextWrapping="Wrap"
                                                        Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                                         </StackPanel>
-                                        <!-- HEALTH SCORE (état machine) -->
-                                        <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                        <!-- HEALTH SCORE (état machine) - Seul écusson ici -->
+                                        <StackPanel Grid.Column="1" Margin="0,0,0,0">
                                             <TextBlock Text="État" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" 
                                                        HorizontalAlignment="Center"/>
                                             <Border Width="60" Height="60" CornerRadius="30"
@@ -967,212 +1098,139 @@
                                                 </StackPanel>
                                             </Border>
                                         </StackPanel>
-                                        <!-- CONFIDENCE SCORE (qualité collecte) - Score distinct de DataReliabilityScore -->
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Collecte" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" 
-                                                       HorizontalAlignment="Center">
-                                                <TextBlock.ToolTip>
-                                                    <ToolTip MaxWidth="300">
-                                                        <StackPanel>
-                                                            <TextBlock Text="Score de Collecte" FontWeight="Bold" Margin="0,0,0,4"/>
-                                                            <TextBlock TextWrapping="Wrap" Text="Mesure si toutes les données ont été collectées sans erreur."/>
-                                                            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Text="• 100 = Collecte complète"/>
-                                                            <TextBlock TextWrapping="Wrap" Text="• &lt;70 = Erreurs détectées"/>
-                                                            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" FontStyle="Italic" Text="Différent de 'Fiabilité données' (UDIS) ci-dessous."/>
-                                                        </StackPanel>
-                                                    </ToolTip>
-                                                </TextBlock.ToolTip>
-                                            </TextBlock>
-                                            <Border Width="60" Height="60" CornerRadius="30"
-                                                    Background="{Binding ConfidenceColor, Converter={StaticResource HexToColorBrush}}"
-                                                    Cursor="Help">
-                                                <Border.ToolTip>
-                                                    <ToolTip MaxWidth="300">
-                                                        <StackPanel>
-                                                            <TextBlock Text="Score de Collecte" FontWeight="Bold" Margin="0,0,0,4"/>
-                                                            <TextBlock TextWrapping="Wrap" Text="Ce score mesure la complétude de la collecte de données, pas la santé de votre PC."/>
-                                                            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" Text="Un score bas signifie que certaines données n'ont pas pu être collectées (manque de permissions, capteurs indisponibles, etc.)."/>
-                                                        </StackPanel>
-                                                    </ToolTip>
-                                                </Border.ToolTip>
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding ConfidenceScore}" FontSize="18" FontWeight="Bold"
-                                                               Foreground="White" HorizontalAlignment="Center"/>
-                                                    <TextBlock Text="{Binding ConfidenceLevel}" FontSize="8"
-                                                               Foreground="White" HorizontalAlignment="Center"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </StackPanel>
                                     </Grid>
+                                    
+                                    <!-- Zone dédiée "Qualité Collecte" - Séparée de l'écusson État -->
+                                    <Border Background="{StaticResource BackgroundLightBrush}" CornerRadius="4" 
+                                            Padding="10,8" Margin="0,0,0,12"
+                                            Visibility="{Binding IsCollectionPartialOrFailed, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            
+                                            <!-- Badge et message d'erreur collecteur -->
+                                            <StackPanel VerticalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="📊" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Qualité collecte" FontWeight="SemiBold" FontSize="12"
+                                                               Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <Button Command="{Binding ShowCollectorErrorsCommand}"
+                                                        Background="#FFF3E0" BorderThickness="0" Padding="6,3" Margin="0,4,0,0"
+                                                        Cursor="Hand" HorizontalAlignment="Left" MaxWidth="280">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="btnBorder" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                                <ContentPresenter/>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="btnBorder" Property="Background" Value="#FFE0B2"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="⚠️" FontSize="11" Margin="0,0,4,0"/>
+                                                        <TextBlock Text="{Binding CollectionStatusBadgeText}" FontSize="10" FontWeight="SemiBold" Foreground="#E65100"/>
+                                                        <TextBlock Text="{Binding CollectorErrorsLogicalDisplay}" FontSize="9" Foreground="#BF360C" Margin="6,0,0,0"/>
+                                                    </StackPanel>
+                                                </Button>
+                                            </StackPanel>
+                                            
+                                            <!-- Score de collecte déplacé vers préambule du rapport détaillé -->
+                                        </Grid>
+                                    </Border>
                                     
                                     <!-- NOTE: Santé machine / Fiabilité UDIS / AutoFix déplacés dans la fenêtre "Détails des erreurs de collecte" -->
                                     <!-- NOTE: Métriques Thermal/Boot/IO/Stabilité supprimées du premier écran (redondantes avec sections détaillées) -->
+                                    <!-- NOTE: Speed Test Réseau déplacé vers la page de scan (panneau droit) -->
                                     
-                                    <!-- Test de vitesse réseau avec Download/Upload/Ping colorés -->
-                                    <Border Background="{StaticResource BackgroundMediumBrush}" CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
-                                        <StackPanel>
-                                            <!-- Ligne 1: Titre + Tier + Planète (à côté du bouton) + Bouton Tester -->
-                                            <Grid Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="Speed Test Réseau" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding NetworkSpeedTier}" FontSize="11" 
-                                                           Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                <!-- Icône planète à côté du bouton Tester : GIF animé (ou fallback emoji si planet.gif absent). Animation Play/Pause depuis code-behind selon IsSpeedTestRunning. -->
-                                                <Grid Grid.Column="2" VerticalAlignment="Center" Margin="0,0,8,0" Width="28" Height="28">
-                                                    <Grid.Resources>
-                                                        <!-- FIX #2: Storyboard for fallback emoji rotation when GIF not available -->
-                                                        <Storyboard x:Key="SpeedTestFallbackRotation">
-                                                            <DoubleAnimation Storyboard.TargetName="SpeedTestPlanetFallback"
-                                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
-                                                                             From="0" To="360" Duration="0:0:1.2"
-                                                                             RepeatBehavior="Forever"/>
-                                                        </Storyboard>
-                                                    </Grid.Resources>
-                                                    <Image x:Name="SpeedTestPlanetImage" Width="28" Height="28" Stretch="Uniform" SnapsToDevicePixels="True"
-                                                           gif:ImageBehavior.RepeatBehavior="Forever" Visibility="Collapsed"/>
-                                                    <TextBlock x:Name="SpeedTestPlanetFallback" Text="🌐" FontSize="14" VerticalAlignment="Center" HorizontalAlignment="Center"
-                                                               RenderTransformOrigin="0.5,0.5">
-                                                        <TextBlock.RenderTransform>
-                                                            <RotateTransform Angle="0"/>
-                                                        </TextBlock.RenderTransform>
-                                                    </TextBlock>
-                                                </Grid>
-                                                <Button Grid.Column="3" Content="🔄 Tester" Command="{Binding RunSpeedTestCommand}" 
-                                                        IsEnabled="{Binding IsSpeedTestRunning, Converter={StaticResource InverseBool}}"
-                                                        Background="{StaticResource AccentBlueBrush}" Foreground="White" Padding="10,4"
-                                                        FontSize="10" VerticalAlignment="Center" Cursor="Hand">
-                                                    <Button.Style>
-                                                        <Style TargetType="Button" BasedOn="{StaticResource FuturisticButton}">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsSpeedTestRunning}" Value="True">
-                                                                    <Setter Property="Content" Value="⏳ Test..."/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Button.Style>
-                                                </Button>
-                                            </Grid>
-                                            <!-- Ligne 2: Download / Upload / Ping -->
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <!-- Download -->
-                                                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                                                    <TextBlock Text="⬇️ Download" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                                    <TextBlock FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"
-                                                               Foreground="{Binding NetworkDownloadColor, Converter={StaticResource HexToColorBrush}}">
-                                                        <TextBlock.Text>
-                                                            <MultiBinding StringFormat="{}{0:F1}">
-                                                                <Binding Path="NetworkDownloadMbps" FallbackValue="—"/>
-                                                            </MultiBinding>
-                                                        </TextBlock.Text>
-                                                    </TextBlock>
-                                                    <TextBlock Text="Mbps" FontSize="8" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                                </StackPanel>
-                                                <!-- Upload -->
-                                                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
-                                                    <TextBlock Text="⬆️ Upload" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                                    <TextBlock FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"
-                                                               Foreground="{Binding NetworkUploadColor, Converter={StaticResource HexToColorBrush}}">
-                                                        <TextBlock.Text>
-                                                            <MultiBinding StringFormat="{}{0:F1}">
-                                                                <Binding Path="NetworkUploadMbps" FallbackValue="—"/>
-                                                            </MultiBinding>
-                                                        </TextBlock.Text>
-                                                    </TextBlock>
-                                                    <TextBlock Text="Mbps" FontSize="8" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                                </StackPanel>
-                                                <!-- Ping -->
-                                                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                                                    <TextBlock Text="📶 Ping" FontSize="9" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                                    <TextBlock FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"
-                                                               Foreground="{Binding NetworkLatencyColor, Converter={StaticResource HexToColorBrush}}">
-                                                        <TextBlock.Text>
-                                                            <MultiBinding StringFormat="{}{0:F0}">
-                                                                <Binding Path="NetworkLatencyMs" FallbackValue="—"/>
-                                                            </MultiBinding>
-                                                        </TextBlock.Text>
-                                                    </TextBlock>
-                                                    <TextBlock Text="ms" FontSize="8" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                                                </StackPanel>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
-                                    
-                                    <!-- Liste des 8 domaines - CLIQUABLES avec expansion -->
+                                    <!-- Liste des 8 domaines - CLIQUABLES avec expansion (sans flèches, effet pressé) -->
                                     <ItemsControl ItemsSource="{Binding HealthSections}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border Background="{StaticResource BackgroundMediumBrush}" 
-                                                        CornerRadius="6" Margin="0,0,0,6">
-                                                    <Expander IsExpanded="False" BorderThickness="0" Background="Transparent">
+                                                <!-- Expandable box with inset styling (no arrows) -->
+                                                <Border CornerRadius="12" Margin="0,0,0,6">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="{StaticResource BackgroundMediumBrush}"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource ExpandableBoxBorderBrush}"/>
+                                                            <Setter Property="BorderThickness" Value="1"/>
+                                                            <Style.Triggers>
+                                                                <!-- Active state (expanded): red background + red border -->
+                                                                <DataTrigger Binding="{Binding IsExpanded, ElementName=SectionExpander}" Value="True">
+                                                                    <Setter Property="Background" Value="{StaticResource ExpandableBoxActiveBrush}"/>
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource ExpandableBoxActiveBorderBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <Expander x:Name="SectionExpander" IsExpanded="False" Style="{StaticResource ExpanderNoArrowStyle}">
                                                         <Expander.Header>
-                                                            <Grid Margin="8,8,8,8">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                </Grid.ColumnDefinitions>
-                                                                
-                                                                <!-- Indicateur expansion : ▲ quand ouvert, ▼ quand fermé (comme maquette) -->
-                                                                <TextBlock Grid.Column="0" FontSize="12" 
-                                                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                                                           VerticalAlignment="Center" Margin="0,0,8,0">
-                                                                    <TextBlock.Style>
-                                                                        <Style TargetType="TextBlock">
-                                                                            <Setter Property="Text" Value="▼"/>
-                                                                            <Style.Triggers>
-                                                                                <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
-                                                                                    <Setter Property="Text" Value="▲"/>
-                                                                                </DataTrigger>
-                                                                            </Style.Triggers>
-                                                                        </Style>
-                                                                    </TextBlock.Style>
-                                                                </TextBlock>
-                                                                
-                                                                <!-- Icône domaine (ex: 🖥️ Système d'exploitation) -->
-                                                                <TextBlock Grid.Column="1" Text="{Binding Icon}" FontSize="20" 
-                                                                           VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                                                
-                                                                <!-- Nom domaine + message (ex: "Système d'exploitation" / "Excellent état") -->
-                                                                <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13"
-                                                                               Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                                    <TextBlock Text="{Binding StatusMessage}" FontSize="11"
-                                                                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                                </StackPanel>
-                                                                
-                                                                <!-- Score (ex: 100/100) -->
-                                                                <TextBlock Grid.Column="3" Text="{Binding Score, StringFormat={}{0}/100}" 
-                                                                           FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
-                                                                           Foreground="{Binding Severity, Converter={StaticResource SeverityToColor}}"
-                                                                           Margin="10,0,10,0"/>
-                                                                
-                                                                <!-- Icône état : cercle avec coche (comme maquette) -->
-                                                                <Border Grid.Column="4" Width="28" Height="28" CornerRadius="14"
-                                                                        Background="{Binding Severity, Converter={StaticResource SeverityToColor}}"
-                                                                        VerticalAlignment="Center">
-                                                                    <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityToIcon}}" 
-                                                                               FontSize="14" FontWeight="Bold" Foreground="White"
-                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                                </Border>
-                                                                
-                                                                <!-- Alerte ! si critique -->
-                                                                <TextBlock Grid.Column="5" Text="!" FontSize="18" FontWeight="Bold"
-                                                                           Foreground="#FF4757" VerticalAlignment="Center" Margin="8,0,0,0"
-                                                                           Visibility="{Binding Severity, Converter={StaticResource SeverityToAlertVisibility}}"/>
-                                                            </Grid>
+                                                            <!-- Clickable box with inset shadow effect -->
+                                                            <Border x:Name="HeaderBorder" CornerRadius="12" Padding="8,12" Cursor="Hand">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Background" Value="Transparent"/>
+                                                                        <Setter Property="Effect" Value="{StaticResource InsetShadowBase}"/>
+                                                                        <Style.Triggers>
+                                                                            <!-- Hover: light gray background with stronger shadow -->
+                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                <Setter Property="Background" Value="{StaticResource ExpandableBoxHoverBrush}"/>
+                                                                                <Setter Property="Effect" Value="{StaticResource InsetShadowHover}"/>
+                                                                            </Trigger>
+                                                                            <!-- Expanded: inherit from parent border styling -->
+                                                                            <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
+                                                                                <Setter Property="Background" Value="Transparent"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    
+                                                                    <!-- Icône domaine (ex: 🖥️ Système d'exploitation) - rapprochée du texte -->
+                                                                    <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="20" 
+                                                                               VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                                    
+                                                                    <!-- Nom domaine + message (ex: "Système d'exploitation" / "Excellent état") -->
+                                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13"
+                                                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                                        <TextBlock Text="{Binding StatusMessage}" FontSize="11"
+                                                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                                    </StackPanel>
+                                                                    
+                                                                    <!-- Score (ex: 100/100) -->
+                                                                    <TextBlock Grid.Column="2" Text="{Binding Score, StringFormat={}{0}/100}" 
+                                                                               FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                                               Foreground="{Binding Severity, Converter={StaticResource SeverityToColor}}"
+                                                                               Margin="10,0,10,0"/>
+                                                                    
+                                                                    <!-- Icône état : cercle avec coche (comme maquette) -->
+                                                                    <Border Grid.Column="3" Width="28" Height="28" CornerRadius="14"
+                                                                            Background="{Binding Severity, Converter={StaticResource SeverityToColor}}"
+                                                                            VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityToIcon}}" 
+                                                                                   FontSize="14" FontWeight="Bold" Foreground="White"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                    </Border>
+                                                                    
+                                                                    <!-- Alerte ! si critique -->
+                                                                    <TextBlock Grid.Column="4" Text="!" FontSize="18" FontWeight="Bold"
+                                                                               Foreground="#FF4757" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                                               Visibility="{Binding Severity, Converter={StaticResource SeverityToAlertVisibility}}"/>
+                                                                </Grid>
+                                                            </Border>
                                                         </Expander.Header>
                                                         
                                                         <!-- Panel de détails (visible quand expanded) -->
@@ -1240,11 +1298,12 @@
                                                                                     <ColumnDefinition Width="*"/>
                                                                                     <ColumnDefinition Width="28"/>
                                                                                 </Grid.ColumnDefinitions>
-                                                                                <!-- FIX #11: Colonne 0: Cercle bleu avec "i" (info) - clickable button with popup -->
+                                                                                <!-- Colonne 0: Cercle bleu avec "i" (info) - CLICK ONLY (pas de hover tooltip) -->
                                                                                 <Button Grid.Column="0" Width="20" Height="20"
                                                                                         VerticalAlignment="Center" HorizontalAlignment="Center"
                                                                                         Cursor="Hand" Click="OpenContextMenu"
-                                                                                        Visibility="{Binding ShouldShowInfoIcon, Converter={StaticResource BoolToVisibility}}">
+                                                                                        Visibility="{Binding ShouldShowInfoIcon, Converter={StaticResource BoolToVisibility}}"
+                                                                                        ToolTipService.IsEnabled="False">
                                                                                     <Button.Template>
                                                                                         <ControlTemplate TargetType="Button">
                                                                                             <Border x:Name="infoBorder" Width="20" Height="20" CornerRadius="10"
@@ -1259,11 +1318,9 @@
                                                                                             </ControlTemplate.Triggers>
                                                                                         </ControlTemplate>
                                                                                     </Button.Template>
-                                                                                    <Button.ToolTip>
-                                                                                        <ToolTip Content="{Binding Tooltip}" MaxWidth="300"/>
-                                                                                    </Button.ToolTip>
+                                                                                    <!-- ContextMenu uniquement - pas de ToolTip hover -->
                                                                                     <Button.ContextMenu>
-                                                                                        <ContextMenu>
+                                                                                        <ContextMenu MaxWidth="350">
                                                                                             <MenuItem Header="{Binding Tooltip}" IsEnabled="False" FontStyle="Italic"/>
                                                                                             <Separator/>
                                                                                             <MenuItem Header="Copier l'info" Click="CopyTooltipToClipboard" 
@@ -1492,34 +1549,6 @@
 
                             <!-- SECTIONS TECHNIQUES SUPPRIMÉES (missing Data, score V2, metadata, findings, errors, sections, paths)
                                  Ces données restent collectées dans le JSON mais ne sont plus affichées dans l'UI -->
-
-                            <Border Style="{StaticResource PanelBorder}" Margin="0,20,0,0">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding ScoreLegendTitle}" FontWeight="Bold" FontSize="16"
-                                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,10"/>
-
-                                    <TextBlock Text="{Binding ScoreRulesTitle}" FontWeight="SemiBold"
-                                               Foreground="{StaticResource AccentRedBrush}" Margin="0,0,0,6"/>
-                                    <StackPanel Margin="10,0,0,10">
-                                        <TextBlock Text="{Binding ScoreRuleInitial}"/>
-                                        <TextBlock Text="{Binding ScoreRuleCritical}"/>
-                                        <TextBlock Text="{Binding ScoreRuleError}"/>
-                                        <TextBlock Text="{Binding ScoreRuleWarning}"/>
-                                        <TextBlock Text="{Binding ScoreRuleMin}"/>
-                                        <TextBlock Text="{Binding ScoreRuleMax}"/>
-                                    </StackPanel>
-
-                                    <TextBlock Text="{Binding ScoreGradesTitle}" FontWeight="SemiBold"
-                                               Foreground="{StaticResource AccentRedBrush}" Margin="0,0,0,6"/>
-                                    <StackPanel Margin="10,0,0,0">
-                                        <TextBlock Text="{Binding ScoreGradeA}"/>
-                                        <TextBlock Text="{Binding ScoreGradeB}"/>
-                                        <TextBlock Text="{Binding ScoreGradeC}"/>
-                                        <TextBlock Text="{Binding ScoreGradeD}"/>
-                                        <TextBlock Text="{Binding ScoreGradeF}"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
                         </StackPanel>
                     </ScrollViewer>
 
@@ -1581,7 +1610,7 @@
                                                                        VerticalAlignment="Center" Margin="0,0,15,0"
                                                                        IsHitTestVisible="False"/>
 
-                                                            <Border Grid.Column="1" Width="60" Height="60" CornerRadius="8"
+                                                            <Border Grid.Column="1" Width="60" Height="60" CornerRadius="12"
                                                                     Background="{Binding Grade, Converter={StaticResource GradeToColor}}"
                                                                     Margin="0,0,15,0">
                                                                 <StackPanel VerticalAlignment="Center">
@@ -1637,9 +1666,10 @@
                     </TextBlock.Text>
                 </TextBlock>
 
-                <StackPanel Grid.Row="1">
-                    <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20"
-                            Height="{StaticResource CompactPanelHeight}">
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20"
+                                Height="{StaticResource CompactPanelHeight}">
                         <StackPanel>
                             <TextBlock Text="{Binding ReportsDirectoryTitle}" FontWeight="Bold" FontSize="16"
                                        Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,10"/>
@@ -1680,41 +1710,137 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
-
+                    
+                    <!-- Sélecteur de thème UI (optionnel) -->
                     <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20">
                         <StackPanel>
-                            <TextBlock Text="Activer la surveillance matérielle (températures CPU/GPU)" FontWeight="Bold" FontSize="16"
-                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
-                            <TextBlock Text="⚠️ Peut déclencher Windows Defender. Recommandé pour obtenir les températures."
-                                       FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,10" TextWrapping="Wrap"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <CheckBox IsChecked="{Binding EnableHardwareMonitoring, Mode=TwoWay}" Content="Surveillance matérielle (LibreHardwareMonitor)"
-                                          Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="🎨" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Thème de l'interface" FontWeight="Bold" FontSize="16"
+                                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <Button Content="Ajouter l'exception Windows Defender (tous les usagers)"
-                                    Style="{StaticResource FuturisticButton}"
-                                    Command="{Binding ApplyDefenderExclusionCommand}"
-                                    HorizontalAlignment="Left"
-                                    Padding="12,8"
-                                    FontSize="11"
-                                    ToolTip="Recommandé après avoir activé la surveillance matérielle. Nécessite droits administrateur."/>
+                            <TextBlock Text="Personnalisez l'apparence de l'application. Le thème par défaut (Dark Futuriste) est recommandé."
+                                       FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,15" TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Thème : " 
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding AvailableThemes}"
+                                          SelectedItem="{Binding SelectedTheme, Mode=TwoWay}"
+                                          DisplayMemberPath="Name"
+                                          Width="200"/>
+                            </StackPanel>
+                            <TextBlock Text="Note: Le thème Empire Star Wars nécessite un redémarrage de l'application pour prendre effet."
+                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" FontStyle="Italic" Margin="0,8,0,0"
+                                       Visibility="{Binding SelectedTheme.Code, Converter={StaticResource BoolToVisibility}, ConverterParameter=Empire}"/>
                         </StackPanel>
                     </Border>
 
-                    <!-- FIX RISK #1: External network tests opt-in setting -->
+                    <!-- Surveillance matérielle avec onboarding Defender progressif et rassurant -->
                     <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20">
                         <StackPanel>
-                            <TextBlock Text="Tests réseau externes (speedtest / ping Internet)" FontWeight="Bold" FontSize="16"
-                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
-                            <TextBlock Text="⚠️ Envoie des requêtes vers Internet. Désactivé par défaut pour respect vie privée."
-                                       FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,10" TextWrapping="Wrap"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <CheckBox IsChecked="{Binding AllowExternalNetworkTests, Mode=TwoWay}" 
-                                          Content="Activer les tests réseau externes (speedtest, ping externe, DNS externe)"
-                                          Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="🌡️" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Surveillance matérielle" FontWeight="Bold" FontSize="16"
+                                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <TextBlock Text="Note: Si désactivé, les tests de latence/bande passante Internet ne seront pas effectués."
-                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" FontStyle="Italic"/>
+                            
+                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12">
+                                Cette option permet de lire les températures CPU et GPU en temps réel via LibreHardwareMonitor.
+                                <LineBreak/>C'est un outil open-source sûr utilisé par de nombreux logiciels de monitoring.
+                            </TextBlock>
+                            
+                            <CheckBox IsChecked="{Binding EnableHardwareMonitoring, Mode=TwoWay}" Margin="0,0,0,15"
+                                      Foreground="{StaticResource TextPrimaryBrush}">
+                                <CheckBox.Content>
+                                    <TextBlock>
+                                        <Run Text="Activer la surveillance matérielle" FontWeight="SemiBold"/>
+                                        <Run Text=" (recommandé pour un diagnostic complet)" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </TextBlock>
+                                </CheckBox.Content>
+                            </CheckBox>
+                            
+                            <!-- Section Defender - Affichée seulement si surveillance activée -->
+                            <Border Background="{StaticResource BackgroundLightBrush}" CornerRadius="6" Padding="12,10"
+                                    Visibility="{Binding EnableHardwareMonitoring, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock Text="🛡️" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Exception Windows Defender" FontWeight="SemiBold" FontSize="13"
+                                                   Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                                        <Border Background="{StaticResource AccentGreenBrush}" CornerRadius="3" Padding="6,2" Margin="10,0,0,0">
+                                            <TextBlock Text="Optionnel" FontSize="9" Foreground="White"/>
+                                        </Border>
+                                    </StackPanel>
+                                    
+                                    <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,10">
+                                        Windows Defender peut parfois signaler LibreHardwareMonitor car il accède à des informations système bas niveau.
+                                        <LineBreak/>Ajouter une exception permet d'éviter les ralentissements et faux positifs.
+                                        <LineBreak/><Run FontStyle="Italic">Cette action est sécuritaire et réversible depuis les paramètres Windows.</Run>
+                                    </TextBlock>
+                                    
+                                    <Button Style="{StaticResource FuturisticButton}"
+                                            Command="{Binding ApplyDefenderExclusionCommand}"
+                                            HorizontalAlignment="Left"
+                                            Padding="14,8"
+                                            FontSize="11">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="✓" Margin="0,0,6,0"/>
+                                            <TextBlock Text="Ajouter l'exception (recommandé)"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Tests réseau externes - Onboarding clair -->
+                    <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="🌐" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Test de débit Internet (Speed Test)" FontWeight="Bold" FontSize="16"
+                                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12">
+                                Cette fonctionnalité permet de mesurer votre vitesse de connexion Internet (download/upload).
+                                <LineBreak/>Le test utilise des serveurs externes pour mesurer la bande passante réelle.
+                            </TextBlock>
+                            
+                            <Border Background="{StaticResource BackgroundLightBrush}" CornerRadius="6" Padding="12,10" Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Accès Internet requis" FontWeight="SemiBold" FontSize="12"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Des données seront envoyées vers des serveurs de test" FontSize="10"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" IsChecked="{Binding AllowExternalNetworkTests, Mode=TwoWay}"
+                                              VerticalAlignment="Center">
+                                        <CheckBox.Content>
+                                            <TextBlock Text="Activer" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        </CheckBox.Content>
+                                    </CheckBox>
+                                </Grid>
+                            </Border>
+                            
+                            <TextBlock FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" FontStyle="Italic">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="✓ Activé — Le bouton 'Tester' sera disponible sur la page de scan"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding AllowExternalNetworkTests}" Value="False">
+                                                <Setter Property="Text" Value="✗ Désactivé — Le speed test ne sera pas disponible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </StackPanel>
                     </Border>
 
@@ -1750,16 +1876,17 @@
                         </StackPanel>
                     </Border>
                     
-                    <Button Content="{Binding SaveSettingsButtonText}" 
-                            Style="{StaticResource FuturisticButton}"
-                            Command="{Binding SaveSettingsCommand}"
-                            IsEnabled="{Binding IsSettingsDirty}"
-                            HorizontalAlignment="Right"
-                            Margin="0,30,0,0"
-                            Padding="30,12"
-                            FontSize="16"
-                            FontWeight="SemiBold"/>
-                </StackPanel>
+                        <Button Content="{Binding SaveSettingsButtonText}" 
+                                Style="{StaticResource FuturisticButton}"
+                                Command="{Binding SaveSettingsCommand}"
+                                IsEnabled="{Binding IsSettingsDirty}"
+                                HorizontalAlignment="Right"
+                                Margin="0,30,0,0"
+                                Padding="30,12"
+                                FontSize="16"
+                                FontWeight="SemiBold"/>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
 
         </Grid>

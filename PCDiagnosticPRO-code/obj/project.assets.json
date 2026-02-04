@@ -341,22 +341,6 @@
             "rid": "win"
           }
         }
-      },
-      "WpfAnimatedGif/2.0.2": {
-        "type": "package",
-        "compile": {
-          "lib/netcoreapp3.0/WpfAnimatedGif.dll": {
-            "related": ".pdb;.xml"
-          }
-        },
-        "runtime": {
-          "lib/netcoreapp3.0/WpfAnimatedGif.dll": {
-            "related": ".pdb;.xml"
-          }
-        },
-        "frameworkReferences": [
-          "Microsoft.WindowsDesktop.App.WPF"
-        ]
       }
     }
   },
@@ -823,36 +807,15 @@
         "useSharedDesignerContext.txt",
         "version.txt"
       ]
-    },
-    "WpfAnimatedGif/2.0.2": {
-      "sha512": "B0j9SqtThyHVTiOPvu6yR+39Te0g3o+7Jjb+qEm7+Iz1HRqbE5/4QV+ntHWOYYBPOUFr9x1mdzGl/EzWP+nKiA==",
-      "type": "package",
-      "path": "wpfanimatedgif/2.0.2",
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "lib/net35/WpfAnimatedGif.dll",
-        "lib/net35/WpfAnimatedGif.pdb",
-        "lib/net35/WpfAnimatedGif.xml",
-        "lib/net40/WpfAnimatedGif.dll",
-        "lib/net40/WpfAnimatedGif.pdb",
-        "lib/net40/WpfAnimatedGif.xml",
-        "lib/netcoreapp3.0/WpfAnimatedGif.dll",
-        "lib/netcoreapp3.0/WpfAnimatedGif.pdb",
-        "lib/netcoreapp3.0/WpfAnimatedGif.xml",
-        "wpfanimatedgif.2.0.2.nupkg.sha512",
-        "wpfanimatedgif.nuspec"
-      ]
     }
   },
   "projectFileDependencyGroups": {
     "net8.0-windows7.0": [
-      "LibreHardwareMonitorLib >= 0.9.2",
-      "WpfAnimatedGif >= 2.0.2"
+      "LibreHardwareMonitorLib >= 0.9.2"
     ]
   },
   "packageFolders": {
-    "C:\\Users\\rams_\\.nuget\\packages\\": {},
+    "C:\\Users\\rams_\\AppData\\Local\\Temp\\cursor-sandbox-cache\\7b1a8e6eb2432f2b9a7202557ab6c684\\nuget": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
@@ -861,7 +824,7 @@
       "projectUniqueName": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
       "projectName": "PCDiagnosticPro",
       "projectPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
-      "packagesPath": "C:\\Users\\rams_\\.nuget\\packages\\",
+      "packagesPath": "C:\\Users\\rams_\\AppData\\Local\\Temp\\cursor-sandbox-cache\\7b1a8e6eb2432f2b9a7202557ab6c684\\nuget",
       "outputPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
@@ -905,10 +868,6 @@
           "LibreHardwareMonitorLib": {
             "target": "Package",
             "version": "[0.9.2, )"
-          },
-          "WpfAnimatedGif": {
-            "target": "Package",
-            "version": "[2.0.2, )"
           }
         },
         "imports": [

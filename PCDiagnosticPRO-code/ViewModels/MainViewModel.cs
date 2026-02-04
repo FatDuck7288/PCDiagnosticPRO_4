@@ -181,21 +181,8 @@ namespace PCDiagnosticPro.ViewModels
                 ["ArchivesButtonText"] = "Archives",
                 ["ArchivesTitle"] = "Archives",
                 ["ArchiveMenuText"] = "Archiver",
+                ["RenameMenuText"] = "Renommer",
                 ["DeleteMenuText"] = "Supprimer",
-                ["ScoreLegendTitle"] = "Légende / Calcul du score",
-                ["ScoreRulesTitle"] = "Règles de score (UDIS)",
-                ["ScoreGradesTitle"] = "Grades",
-                ["ScoreRuleInitial"] = "• Score global = moyenne pondérée des 8 domaines",
-                ["ScoreRuleCritical"] = "• Domaines : OS, CPU, GPU, RAM, Stockage, Réseau, Stabilité, Pilotes",
-                ["ScoreRuleError"] = "• Pénalités : erreurs critiques (-30), erreurs (-10), avertissements (-5)",
-                ["ScoreRuleWarning"] = "• Poids : Stockage (20%), OS/CPU/RAM (15%), GPU/Réseau/Stabilité (10%), Pilotes (5%)",
-                ["ScoreRuleMin"] = "• Score collecte : qualité des données récupérées (plafond 70 si erreurs collecteur)",
-                ["ScoreRuleMax"] = "• Score final = min(score global, score collecte)",
-                ["ScoreGradeA"] = "• 💎 ≥ 95 : A+ (Excellent) | ❤️ ≥ 90 : A (Très bien)",
-                ["ScoreGradeB"] = "• 👍 ≥ 80 : B+ (Bien) | 👌 ≥ 70 : B (Correct)",
-                ["ScoreGradeC"] = "• ⚠️ ≥ 60 : C (Dégradé - Attention)",
-                ["ScoreGradeD"] = "• 💀 ≥ 50 : D (Critique - Intervention)",
-                ["ScoreGradeF"] = "• 🧨 < 50 : F (Critique - Urgence)",
                 ["DeleteScanConfirmTitle"] = "Confirmation",
                 ["DeleteScanConfirmMessage"] = "Voulez-vous vraiment supprimer ce scan ?",
                 // Scan phases labels (localized) - FIX #8: Meaningful, user-understandable phase names
@@ -308,21 +295,8 @@ namespace PCDiagnosticPro.ViewModels
                 ["ArchivesButtonText"] = "Archives",
                 ["ArchivesTitle"] = "Archives",
                 ["ArchiveMenuText"] = "Archive",
+                ["RenameMenuText"] = "Rename",
                 ["DeleteMenuText"] = "Delete",
-                ["ScoreLegendTitle"] = "Legend / Score calculation",
-                ["ScoreRulesTitle"] = "Score rules (UDIS)",
-                ["ScoreGradesTitle"] = "Grades",
-                ["ScoreRuleInitial"] = "• Score = weighted average of 8 domains",
-                ["ScoreRuleCritical"] = "• Domains: OS, CPU, GPU, RAM, Storage, Network, Stability, Drivers",
-                ["ScoreRuleError"] = "• Penalties applied based on detected issues",
-                ["ScoreRuleWarning"] = "• Weights: Storage (20%), OS/CPU/RAM (15%), GPU/Network/Stability (10%), Drivers (5%)",
-                ["ScoreRuleMin"] = "• Minimum score: 0",
-                ["ScoreRuleMax"] = "• Maximum score: 100",
-                ["ScoreGradeA"] = "• 💎 ≥ 95 : A+ (Excellent) | ❤️ ≥ 90 : A (Very Good)",
-                ["ScoreGradeB"] = "• 👍 ≥ 80 : B+ (Good) | 👌 ≥ 70 : B (Acceptable)",
-                ["ScoreGradeC"] = "• ⚠️ ≥ 60 : C (Degraded - Attention)",
-                ["ScoreGradeD"] = "• 💀 ≥ 50 : D (Critical - Intervention)",
-                ["ScoreGradeF"] = "• 🧨 < 50 : F (Critical - Urgent)",
                 ["DeleteScanConfirmTitle"] = "Confirmation",
                 ["DeleteScanConfirmMessage"] = "Do you really want to delete this scan?",
                 // Scan phases labels (localized) - FIX #8: Meaningful phase names
@@ -435,21 +409,8 @@ namespace PCDiagnosticPro.ViewModels
                 ["ArchivesButtonText"] = "Archivos",
                 ["ArchivesTitle"] = "Archivos",
                 ["ArchiveMenuText"] = "Archivar",
+                ["RenameMenuText"] = "Renombrar",
                 ["DeleteMenuText"] = "Eliminar",
-                ["ScoreLegendTitle"] = "Leyenda / Cálculo del puntaje",
-                ["ScoreRulesTitle"] = "Reglas de puntaje (UDIS)",
-                ["ScoreGradesTitle"] = "Calificaciones",
-                ["ScoreRuleInitial"] = "• Puntaje = promedio ponderado de 8 dominios",
-                ["ScoreRuleCritical"] = "• Dominios: SO, CPU, GPU, RAM, Almacenamiento, Red, Estabilidad, Controladores",
-                ["ScoreRuleError"] = "• Penalizaciones aplicadas según problemas detectados",
-                ["ScoreRuleWarning"] = "• Pesos: Almacenamiento (20%), SO/CPU/RAM (15%), GPU/Red/Estabilidad (10%), Controladores (5%)",
-                ["ScoreRuleMin"] = "• Puntaje mínimo: 0",
-                ["ScoreRuleMax"] = "• Puntaje máximo: 100",
-                ["ScoreGradeA"] = "• 💎 ≥ 95 : A+ (Excelente) | ❤️ ≥ 90 : A (Muy bien)",
-                ["ScoreGradeB"] = "• 👍 ≥ 80 : B+ (Bien) | 👌 ≥ 70 : B (Aceptable)",
-                ["ScoreGradeC"] = "• ⚠️ ≥ 60 : C (Degradado - Atención)",
-                ["ScoreGradeD"] = "• 💀 ≥ 40 y < 60 : D",
-                ["ScoreGradeF"] = "• 🧨 < 40 : F",
                 ["DeleteScanConfirmTitle"] = "Confirmación",
                 ["DeleteScanConfirmMessage"] = "¿Desea eliminar este escaneo?",
                 // Scan phases labels (localized) - FIX #8: Meaningful phase names
@@ -756,28 +717,62 @@ namespace PCDiagnosticPro.ViewModels
         public string CpuPerformanceTier => HealthReport?.UdisReport?.CpuPerformanceTier ?? "N/A";
 
         // === UDIS — NETWORK SPEED TEST ===
-        public double? NetworkDownloadMbps => HealthReport?.UdisReport?.DownloadMbps;
-        public double? NetworkUploadMbps => HealthReport?.UdisReport?.UploadMbps;
-        public double? NetworkLatencyMs => HealthReport?.UdisReport?.LatencyMs;
-        public string NetworkSpeedTier => HealthReport?.UdisReport?.NetworkSpeedTier ?? "Non mesuré";
-        public string NetworkRecommendation => HealthReport?.UdisReport?.NetworkRecommendation ?? "";
+        // Standalone backing fields pour permettre le SpeedTest avant/sans scan
+        private double? _standaloneDownloadMbps;
+        private double? _standaloneUploadMbps;
+        private double? _standaloneLatencyMs;
+        private string _standaloneSpeedTier = "Non mesuré";
+        private string _standaloneRecommendation = "";
+        private DateTime? _lastSpeedTestTime;
         
-        // Couleur pour le débit Download (vert > 100, jaune 25-100, rouge < 25)
+        // Propriétés combinées: UdisReport si disponible, sinon standalone
+        public double? NetworkDownloadMbps => HealthReport?.UdisReport?.DownloadMbps ?? _standaloneDownloadMbps;
+        public double? NetworkUploadMbps => HealthReport?.UdisReport?.UploadMbps ?? _standaloneUploadMbps;
+        public double? NetworkLatencyMs => HealthReport?.UdisReport?.LatencyMs ?? _standaloneLatencyMs;
+        public string NetworkSpeedTier => HealthReport?.UdisReport?.NetworkSpeedTier ?? _standaloneSpeedTier;
+        public string NetworkRecommendation => HealthReport?.UdisReport?.NetworkRecommendation ?? _standaloneRecommendation;
+        public string LastSpeedTestDisplay => _lastSpeedTestTime.HasValue 
+            ? $"Dernier test: {_lastSpeedTestTime.Value:HH:mm:ss}" 
+            : "";
+        
+        // Seuils de qualité selon spécification (modifiables en constantes)
+        private const double DOWNLOAD_GOOD_THRESHOLD = 50.0;    // Mbps
+        private const double DOWNLOAD_MEDIUM_THRESHOLD = 15.0;  // Mbps
+        private const double UPLOAD_GOOD_THRESHOLD = 10.0;      // Mbps
+        private const double UPLOAD_MEDIUM_THRESHOLD = 5.0;     // Mbps
+        
+        // Qualité de connexion globale basée sur Download ET Upload
+        public string ConnectionQuality
+        {
+            get
+            {
+                var dl = NetworkDownloadMbps;
+                var ul = NetworkUploadMbps;
+                if (!dl.HasValue || !ul.HasValue) return "NonMesuré";
+                if (dl >= DOWNLOAD_GOOD_THRESHOLD && ul >= UPLOAD_GOOD_THRESHOLD) return "Bonne";
+                if (dl >= DOWNLOAD_MEDIUM_THRESHOLD && ul >= UPLOAD_MEDIUM_THRESHOLD) return "Moyenne";
+                return "Mauvaise";
+            }
+        }
+        
+        // Couleur pour le débit Download (seuils ajustés selon spec)
+        // Bonne: >= 50 Mbps, Moyenne: >= 15 Mbps, Mauvaise: < 15 Mbps
         public string NetworkDownloadColor => NetworkDownloadMbps switch
         {
-            >= 100 => "#22C55E",  // Vert
-            >= 25 => "#F59E0B",   // Orange
-            > 0 => "#EF4444",     // Rouge
-            _ => "#6B7280"        // Gris si non mesuré
+            >= DOWNLOAD_GOOD_THRESHOLD => "#22C55E",    // Vert - Bonne connexion
+            >= DOWNLOAD_MEDIUM_THRESHOLD => "#F59E0B", // Orange - Connexion moyenne
+            > 0 => "#EF4444",                          // Rouge - Mauvaise connexion
+            _ => "#6B7280"                             // Gris si non mesuré
         };
         
-        // Couleur pour le débit Upload (vert > 50, jaune 10-50, rouge < 10)
+        // Couleur pour le débit Upload (seuils ajustés selon spec)
+        // Bonne: >= 10 Mbps, Moyenne: >= 5 Mbps, Mauvaise: < 5 Mbps
         public string NetworkUploadColor => NetworkUploadMbps switch
         {
-            >= 50 => "#22C55E",   // Vert
-            >= 10 => "#F59E0B",   // Orange
-            > 0 => "#EF4444",     // Rouge
-            _ => "#6B7280"        // Gris si non mesuré
+            >= UPLOAD_GOOD_THRESHOLD => "#22C55E",    // Vert - Bonne connexion
+            >= UPLOAD_MEDIUM_THRESHOLD => "#F59E0B", // Orange - Connexion moyenne
+            > 0 => "#EF4444",                        // Rouge - Mauvaise connexion
+            _ => "#6B7280"                           // Gris si non mesuré
         };
         
         // Couleur pour la latence (vert < 30, jaune 30-100, rouge > 100)
@@ -861,6 +856,9 @@ namespace PCDiagnosticPro.ViewModels
             get => _isSpeedTestRunning;
             set => SetProperty(ref _isSpeedTestRunning, value);
         }
+
+        // CancellationTokenSource pour annuler le speed test en cours
+        private CancellationTokenSource? _speedTestCts;
         
         // FIX 7: Allow external network tests (Internet speed test opt-in)
         private bool _allowExternalNetworkTests = false;
@@ -973,7 +971,8 @@ namespace PCDiagnosticPro.ViewModels
         }
 
         /// <summary>
-        /// FIX #3: Met à jour les constats en temps réel basés sur les données collectées.
+        /// Met à jour les constats en temps réel basés sur les données collectées.
+        /// Appelé à chaque phase du scan pour affichage progressif.
         /// </summary>
         private void UpdateLiveFindings()
         {
@@ -981,51 +980,113 @@ namespace PCDiagnosticPro.ViewModels
             {
                 LiveFindings.Clear();
                 
-                if (_lastSensorsResult == null) return;
-                
-                // Température CPU
-                if (_lastSensorsResult.Cpu?.CpuTempC?.Available == true)
+                // === Constats Capteurs & Températures ===
+                if (_lastSensorsResult != null)
                 {
-                    var temp = _lastSensorsResult.Cpu.CpuTempC.Value;
-                    if (temp < 70)
-                        LiveFindings.Add("✅ Température CPU : normale");
-                    else if (temp < 85)
-                        LiveFindings.Add("⚠️ Température CPU : élevée");
-                    else
-                        LiveFindings.Add("🔥 Température CPU : critique");
-                }
-                
-                // Température GPU
-                if (_lastSensorsResult.Gpu?.GpuTempC?.Available == true)
-                {
-                    var temp = _lastSensorsResult.Gpu.GpuTempC.Value;
-                    if (temp < 75)
-                        LiveFindings.Add("✅ Température GPU : normale");
-                    else if (temp < 85)
-                        LiveFindings.Add("⚠️ Température GPU : élevée");
-                    else
-                        LiveFindings.Add("🔥 Température GPU : critique");
-                }
-                
-                // VRAM
-                if (_lastSensorsResult.Gpu?.VramUsedMB?.Available == true && 
-                    _lastSensorsResult.Gpu?.VramTotalMB?.Available == true)
-                {
-                    var total = _lastSensorsResult.Gpu.VramTotalMB.Value;
-                    if (total > 0)
+                    var (availCount, totalCount) = _lastSensorsResult.GetAvailabilitySummary();
+                    if (availCount < totalCount && totalCount > 0)
                     {
-                        var usedPct = _lastSensorsResult.Gpu.VramUsedMB.Value / total * 100;
-                        if (usedPct > 90)
-                            LiveFindings.Add("⚠️ VRAM GPU : saturée");
+                        LiveFindings.Add($"⚠️ Capteurs thermiques partiels ({availCount}/{totalCount})");
+                    }
+                    
+                    // Température CPU
+                    if (_lastSensorsResult.Cpu?.CpuTempC?.Available == true)
+                    {
+                        var temp = _lastSensorsResult.Cpu.CpuTempC.Value;
+                        if (temp < 70)
+                            LiveFindings.Add("✅ Température CPU : normale");
+                        else if (temp < 85)
+                            LiveFindings.Add("⚠️ Température CPU : élevée");
+                        else
+                            LiveFindings.Add("🔥 Température CPU : critique");
+                    }
+                    
+                    // Température GPU
+                    if (_lastSensorsResult.Gpu?.GpuTempC?.Available == true)
+                    {
+                        var temp = _lastSensorsResult.Gpu.GpuTempC.Value;
+                        if (temp < 75)
+                            LiveFindings.Add("✅ Température GPU : normale");
+                        else if (temp < 85)
+                            LiveFindings.Add("⚠️ Température GPU : élevée");
+                        else
+                            LiveFindings.Add("🔥 Température GPU : critique");
+                    }
+                    
+                    // VRAM
+                    if (_lastSensorsResult.Gpu?.VramUsedMB?.Available == true && 
+                        _lastSensorsResult.Gpu?.VramTotalMB?.Available == true)
+                    {
+                        var total = _lastSensorsResult.Gpu.VramTotalMB.Value;
+                        if (total > 0)
+                        {
+                            var usedPct = _lastSensorsResult.Gpu.VramUsedMB.Value / total * 100;
+                            if (usedPct > 90)
+                                LiveFindings.Add("⚠️ VRAM GPU : saturée");
+                        }
                     }
                 }
                 
-                // RAM : HardwareSensorsResult n'a pas de propriété Memory ; on utilise _lastPerfCounterResult si dispo
+                // === Constats Performance ===
                 if (_lastPerfCounterResult?.MemoryAvailableMB is double availMB && availMB < 1024)
                 {
                     LiveFindings.Add("⚠️ RAM : peu de mémoire disponible");
                 }
                 
+                // === Constats Signaux Diagnostiques ===
+                if (_lastDiagnosticSignals?.Signals != null)
+                {
+                    var signals = _lastDiagnosticSignals.Signals;
+                    
+                    // Stabilité drivers (SignalResult utilise Quality: ok, partial, suspect)
+                    if (signals.TryGetValue("DriverStability", out var driverSig) && driverSig.Quality == "ok")
+                    {
+                        LiveFindings.Add("✅ Aucun service critique instable détecté");
+                    }
+                    else if (signals.TryGetValue("DriverStability", out var driverSigWarn) && driverSigWarn.Quality != "ok")
+                    {
+                        LiveFindings.Add("⚠️ Instabilité pilote détectée");
+                    }
+                    
+                    // GPU TDR
+                    if (signals.TryGetValue("GpuRootCause", out var gpuSig) && gpuSig.Quality != "ok")
+                    {
+                        LiveFindings.Add("⚠️ Problème GPU détecté (TDR)");
+                    }
+                    
+                    // CPU Throttle
+                    if (signals.TryGetValue("CpuThrottle", out var cpuSig) && cpuSig.Quality != "ok")
+                    {
+                        LiveFindings.Add("⚠️ Throttling CPU détecté");
+                    }
+                }
+                
+                // === Constats Réseau ===
+                if (_lastNetworkDiagnostics?.Available == true)
+                {
+                    var lossPercent = _lastNetworkDiagnostics.OverallLossPercent;
+                    var latency = _lastNetworkDiagnostics.OverallLatencyMsP50;
+                    
+                    if (lossPercent < 1 && latency < 50)
+                    {
+                        LiveFindings.Add("✅ Réseau stable");
+                    }
+                    else if (lossPercent >= 5)
+                    {
+                        LiveFindings.Add($"🔥 Perte de paquets élevée ({lossPercent:F1}%)");
+                    }
+                    else if (lossPercent >= 1)
+                    {
+                        LiveFindings.Add($"⚠️ Pertes réseau détectées ({lossPercent:F1}%)");
+                    }
+                    
+                    if (latency >= 100)
+                    {
+                        LiveFindings.Add($"⚠️ Latence réseau élevée ({latency:F0}ms)");
+                    }
+                }
+                
+                // Message par défaut si aucun constat
                 if (!LiveFindings.Any())
                 {
                     LiveFindings.Add("📊 Analyse en cours...");
@@ -1049,51 +1110,122 @@ namespace PCDiagnosticPro.ViewModels
         }
 
         /// <summary>
-        /// Lancer le SpeedTest réseau (async, non bloquant).
+        /// Toggle SpeedTest réseau: démarre ou arrête le test.
         /// </summary>
-        private ICommand? _runSpeedTestCommand;
-        public ICommand RunSpeedTestCommand => _runSpeedTestCommand ??= new RelayCommand(async _ =>
+        private ICommand? _toggleSpeedTestCommand;
+        public ICommand ToggleSpeedTestCommand => _toggleSpeedTestCommand ??= new RelayCommand(async _ =>
         {
-            if (IsSpeedTestRunning) return;
+            if (IsSpeedTestRunning)
+            {
+                // Arrêter le test en cours
+                StopSpeedTest();
+                return;
+            }
+
+            // Démarrer un nouveau test
+            await StartSpeedTestAsync();
+        });
+
+        /// <summary>
+        /// Démarre le SpeedTest réseau (async, non bloquant).
+        /// </summary>
+        private async Task StartSpeedTestAsync()
+        {
+            _speedTestCts?.Cancel();
+            _speedTestCts?.Dispose();
+            _speedTestCts = new CancellationTokenSource();
+            var ct = _speedTestCts.Token;
+
             IsSpeedTestRunning = true;
+            
             try
             {
                 App.LogMessage("[SpeedTest] Démarrage du test LibreSpeed...");
+                AddLiveFeedItem("🌐 Test de vitesse réseau en cours...");
                 
                 // Utiliser LibreSpeed CLI en priorité
-                var libreResult = await _libreSpeedService.RunTestAsync();
+                var libreResult = await _libreSpeedService.RunTestAsync(ct);
                 
-                if (libreResult.Success && HealthReport?.UdisReport != null)
+                // Vérifier si annulé
+                if (ct.IsCancellationRequested)
                 {
-                    // Mettre à jour le UdisReport avec les résultats LibreSpeed
-                    HealthReport.UdisReport.DownloadMbps = libreResult.DownloadMbps;
-                    HealthReport.UdisReport.UploadMbps = libreResult.UploadMbps;
-                    HealthReport.UdisReport.LatencyMs = libreResult.PingMs;
-                    HealthReport.UdisReport.NetworkSpeedTier = libreResult.SpeedTier;
-                    HealthReport.UdisReport.NetworkRecommendation = GetSpeedRecommendation(libreResult);
+                    App.LogMessage("[SpeedTest] Test annulé par l'utilisateur");
+                    AddLiveFeedItem("⏹ Test de vitesse annulé");
+                    return;
+                }
+                
+                if (libreResult.Success)
+                {
+                    // TOUJOURS stocker dans les propriétés standalone (fonctionnent sans scan)
+                    _standaloneDownloadMbps = libreResult.DownloadMbps;
+                    _standaloneUploadMbps = libreResult.UploadMbps;
+                    _standaloneLatencyMs = libreResult.PingMs;
+                    _standaloneSpeedTier = libreResult.SpeedTier;
+                    _standaloneRecommendation = GetSpeedRecommendation(libreResult);
+                    _lastSpeedTestTime = DateTime.Now;
+                    
+                    // Aussi mettre à jour UdisReport si disponible
+                    if (HealthReport?.UdisReport != null)
+                    {
+                        HealthReport.UdisReport.DownloadMbps = libreResult.DownloadMbps;
+                        HealthReport.UdisReport.UploadMbps = libreResult.UploadMbps;
+                        HealthReport.UdisReport.LatencyMs = libreResult.PingMs;
+                        HealthReport.UdisReport.NetworkSpeedTier = libreResult.SpeedTier;
+                        HealthReport.UdisReport.NetworkRecommendation = _standaloneRecommendation;
+                    }
                     
                     App.LogMessage($"[SpeedTest] LibreSpeed OK: Down={libreResult.DownloadMbps:F1} Mbps, Up={libreResult.UploadMbps:F1} Mbps, Ping={libreResult.PingMs:F1} ms");
+                    AddLiveFeedItem($"✅ Speed Test: {libreResult.DownloadMbps:F1} Mbps ↓ / {libreResult.UploadMbps:F1} Mbps ↑");
                     
                     // Sauvegarder le résultat en JSON pour inspection LLM
                     var jsonPath = await _libreSpeedService.SaveResultToJsonAsync(libreResult);
                     if (!string.IsNullOrEmpty(jsonPath))
                         App.LogMessage($"[SpeedTest] JSON sauvegardé: {jsonPath}");
                 }
-                else if (HealthReport?.UdisReport != null)
+                else if (!ct.IsCancellationRequested)
                 {
-                    // Fallback sur l'ancienne méthode HTTP
+                    // LibreSpeed échoué - essayer fallback HTTP
                     App.LogMessage($"[SpeedTest] LibreSpeed échoué ({libreResult.Error}), fallback HTTP...");
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                    var updatedUdis = await UnifiedDiagnosticScoreEngine.AddNetworkSpeedTestAsync(HealthReport.UdisReport, cts.Token);
-                    App.LogMessage($"[SpeedTest] Fallback: Download={updatedUdis.DownloadMbps:F1} Mbps");
+                    AddLiveFeedItem($"⚠️ LibreSpeed échoué, essai fallback...");
                     
-                    // Sauvegarder le résultat en JSON même en cas d'erreur
-                    var jsonPath = await _libreSpeedService.SaveResultToJsonAsync(libreResult);
-                    if (!string.IsNullOrEmpty(jsonPath))
-                        App.LogMessage($"[SpeedTest] JSON sauvegardé (avec erreur): {jsonPath}");
+                    try
+                    {
+                        var fallbackResult = await _libreSpeedService.RunFallbackTestAsync(ct);
+                        
+                        if (ct.IsCancellationRequested) return;
+                        
+                        if (fallbackResult.Success && fallbackResult.DownloadMbps.HasValue)
+                        {
+                            _standaloneDownloadMbps = fallbackResult.DownloadMbps;
+                            _standaloneUploadMbps = null; // Fallback ne mesure pas l'upload
+                            _standaloneLatencyMs = fallbackResult.PingMs;
+                            _standaloneSpeedTier = fallbackResult.SpeedTier;
+                            _standaloneRecommendation = "Test partiel (fallback HTTP) - upload non mesuré";
+                            _lastSpeedTestTime = DateTime.Now;
+                            
+                            App.LogMessage($"[SpeedTest] Fallback OK: Download={fallbackResult.DownloadMbps:F1} Mbps");
+                            AddLiveFeedItem($"✅ Speed Test (fallback): {fallbackResult.DownloadMbps:F1} Mbps ↓");
+                        }
+                        else
+                        {
+                            App.LogMessage($"[SpeedTest] Fallback échoué: {fallbackResult.Error}");
+                            AddLiveFeedItem($"❌ Test de vitesse échoué: {fallbackResult.Error}");
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        App.LogMessage("[SpeedTest] Test annulé pendant fallback");
+                        AddLiveFeedItem("⏹ Test de vitesse annulé");
+                        return;
+                    }
+                    catch (Exception fallbackEx)
+                    {
+                        App.LogMessage($"[SpeedTest] Erreur fallback: {fallbackEx.Message}");
+                        AddLiveFeedItem($"❌ Test de vitesse échoué");
+                    }
                 }
                 
-                // Notifier la UI
+                // Notifier la UI de tous les changements
                 OnPropertyChanged(nameof(NetworkDownloadMbps));
                 OnPropertyChanged(nameof(NetworkUploadMbps));
                 OnPropertyChanged(nameof(NetworkLatencyMs));
@@ -1102,16 +1234,41 @@ namespace PCDiagnosticPro.ViewModels
                 OnPropertyChanged(nameof(NetworkDownloadColor));
                 OnPropertyChanged(nameof(NetworkUploadColor));
                 OnPropertyChanged(nameof(NetworkLatencyColor));
+                OnPropertyChanged(nameof(ConnectionQuality));
+                OnPropertyChanged(nameof(LastSpeedTestDisplay));
+            }
+            catch (OperationCanceledException)
+            {
+                App.LogMessage("[SpeedTest] Test annulé par l'utilisateur");
+                AddLiveFeedItem("⏹ Test de vitesse annulé");
             }
             catch (Exception ex)
             {
                 App.LogMessage($"[SpeedTest] Erreur: {ex.Message}");
+                AddLiveFeedItem($"❌ Erreur Speed Test: {ex.Message}");
             }
             finally
             {
                 IsSpeedTestRunning = false;
             }
-        });
+        }
+
+        /// <summary>
+        /// Arrête le SpeedTest en cours.
+        /// </summary>
+        private void StopSpeedTest()
+        {
+            if (_speedTestCts != null && !_speedTestCts.IsCancellationRequested)
+            {
+                App.LogMessage("[SpeedTest] Demande d'arrêt du test...");
+                _speedTestCts.Cancel();
+            }
+            IsSpeedTestRunning = false;
+        }
+
+        // Garder RunSpeedTestCommand pour compatibilité (redirige vers toggle)
+        private ICommand? _runSpeedTestCommand;
+        public ICommand RunSpeedTestCommand => _runSpeedTestCommand ??= ToggleSpeedTestCommand;
         
         private static string GetSpeedRecommendation(LibreSpeedTestService.SpeedTestResult result)
         {
@@ -1230,6 +1387,42 @@ namespace PCDiagnosticPro.ViewModels
             set => SetProperty(ref _isSettingsDirty, value);
         }
 
+        // === THÈME UI ===
+        private string _currentTheme = "Default";
+        public string CurrentTheme
+        {
+            get => _currentTheme;
+            set
+            {
+                if (SetProperty(ref _currentTheme, value) && !_isLoadingSettings)
+                {
+                    IsSettingsDirty = true;
+                    OnPropertyChanged(nameof(SelectedTheme));
+                }
+            }
+        }
+
+        public List<ThemeOption> AvailableThemes { get; } = new()
+        {
+            new ThemeOption { Name = "Dark Futuriste", Code = "Default" },
+            new ThemeOption { Name = "Empire Star Wars", Code = "Empire" }
+        };
+
+        private ThemeOption? _selectedTheme;
+        public ThemeOption? SelectedTheme
+        {
+            get => _selectedTheme ?? AvailableThemes.FirstOrDefault(t => t.Code == CurrentTheme);
+            set
+            {
+                if (SetProperty(ref _selectedTheme, value) && value != null)
+                {
+                    CurrentTheme = value.Code;
+                    // Apply theme dynamically
+                    App.ApplyTheme(value.Code);
+                }
+            }
+        }
+
         private string _currentLanguage = "fr";
         public string CurrentLanguage
         {
@@ -1343,21 +1536,8 @@ namespace PCDiagnosticPro.ViewModels
         public string ArchivesButtonText => GetString("ArchivesButtonText");
         public string ArchivesTitle => GetString("ArchivesTitle");
         public string ArchiveMenuText => GetString("ArchiveMenuText");
+        public string RenameMenuText => GetString("RenameMenuText");
         public string DeleteMenuText => GetString("DeleteMenuText");
-        public string ScoreLegendTitle => GetString("ScoreLegendTitle");
-        public string ScoreRulesTitle => GetString("ScoreRulesTitle");
-        public string ScoreGradesTitle => GetString("ScoreGradesTitle");
-        public string ScoreRuleInitial => GetString("ScoreRuleInitial");
-        public string ScoreRuleCritical => GetString("ScoreRuleCritical");
-        public string ScoreRuleError => GetString("ScoreRuleError");
-        public string ScoreRuleWarning => GetString("ScoreRuleWarning");
-        public string ScoreRuleMin => GetString("ScoreRuleMin");
-        public string ScoreRuleMax => GetString("ScoreRuleMax");
-        public string ScoreGradeA => GetString("ScoreGradeA");
-        public string ScoreGradeB => GetString("ScoreGradeB");
-        public string ScoreGradeC => GetString("ScoreGradeC");
-        public string ScoreGradeD => GetString("ScoreGradeD");
-        public string ScoreGradeF => GetString("ScoreGradeF");
         public string SelectedScanDateDisplay => SelectedHistoryScan != null
             ? string.Format(GetString("ResultsScanDateFormat"), SelectedHistoryScan.DateDisplay)
             : string.Empty;
@@ -1459,6 +1639,7 @@ namespace PCDiagnosticPro.ViewModels
         public ICommand BackToHistoryCommand { get; }
         public ICommand NavigateToArchivesCommand { get; }
         public ICommand ArchiveScanCommand { get; }
+        public ICommand RenameScanCommand { get; }
         public ICommand DeleteScanCommand { get; }
         
         // Commands for detail windows (Drivers and Applications)
@@ -1531,6 +1712,11 @@ namespace PCDiagnosticPro.ViewModels
             SelectedLanguage = AvailableLanguages.FirstOrDefault(l => l.Code == CurrentLanguage)
                                ?? AvailableLanguages.First();
             _isUpdatingLanguage = false;
+            
+            // Sync theme from App (loaded from settings.ini)
+            _currentTheme = App.GetCurrentTheme();
+            _selectedTheme = AvailableThemes.FirstOrDefault(t => t.Code == _currentTheme);
+            
             UpdateLocalizedStrings();
             UpdateScanButtonText();
 
@@ -1553,6 +1739,7 @@ namespace PCDiagnosticPro.ViewModels
             BackToHistoryCommand = new RelayCommand(BackToHistory);
             NavigateToArchivesCommand = new RelayCommand(NavigateToArchives, () => ScanHistory.Count > 0 || ArchivedScanHistory.Count > 0);
             ArchiveScanCommand = new RelayCommand<ScanHistoryItem>(ArchiveScan, item => item != null);
+            RenameScanCommand = new RelayCommand<ScanHistoryItem>(RenameScan, item => item != null);
             DeleteScanCommand = new RelayCommand<ScanHistoryItem>(DeleteScan, item => item != null);
             
             // Commands for detail windows
@@ -1576,6 +1763,9 @@ namespace PCDiagnosticPro.ViewModels
             {
                 StatusMessage = GetString("AdminRequiredWarning");
             }
+
+            // Afficher les 7 étapes dès l'ouverture (Pending) même sans scan lancé
+            InitializeSectionPhases();
 
             App.LogMessage("MainViewModel initialisé");
         }
@@ -1982,6 +2172,9 @@ namespace PCDiagnosticPro.ViewModels
                     
                     // Notify UI of new network diagnostics data
                     NotifyNetworkDiagnosticsChanged();
+                    
+                    // Mettre à jour les constats avec les données réseau
+                    UpdateLiveFindings();
                 }
                 catch (Exception ex)
                 {
@@ -2273,9 +2466,10 @@ namespace PCDiagnosticPro.ViewModels
                 App.LogMessage($"Chart build skipped: {resultsMessage}");
             }
 
-            ScanState = "Completed";
+            // Post-scan: Return to idle state immediately (no grade display on button)
+            ScanState = "Idle";
             App.LogMessage($"=== FIN SCAN ===");
-            App.LogMessage($"IsScanning={IsScanning}, ScanState={ScanState}");
+            App.LogMessage($"IsScanning={IsScanning}, ScanState={ScanState} (reset to Idle)");
             if (forceCompletedStatus)
             {
                 CurrentStep = GetString("ResultsCompletedTitle");
@@ -3629,6 +3823,34 @@ namespace PCDiagnosticPro.ViewModels
             }
         }
 
+        private void RenameScan(ScanHistoryItem? item)
+        {
+            if (item == null) return;
+
+            // Select the item to show detail view, then trigger inline rename
+            SelectedHistoryScan = item;
+            IsViewingArchives = ScanHistory.Contains(item) ? false : true;
+            
+            // Signal that rename mode should be activated
+            // The UI will handle showing the TextBox for inline editing
+            OnPropertyChanged(nameof(IsRenamingReport));
+            _isRenamingReport = true;
+            OnPropertyChanged(nameof(IsRenamingReport));
+        }
+
+        private bool _isRenamingReport;
+        public bool IsRenamingReport
+        {
+            get => _isRenamingReport;
+            set
+            {
+                if (SetProperty(ref _isRenamingReport, value))
+                {
+                    OnPropertyChanged(nameof(IsRenamingReport));
+                }
+            }
+        }
+
         private void DeleteScan(ScanHistoryItem? item)
         {
             if (item == null) return;
@@ -3945,21 +4167,8 @@ namespace PCDiagnosticPro.ViewModels
                 nameof(ArchivesButtonText),
                 nameof(ArchivesTitle),
                 nameof(ArchiveMenuText),
+                nameof(RenameMenuText),
                 nameof(DeleteMenuText),
-                nameof(ScoreLegendTitle),
-                nameof(ScoreRulesTitle),
-                nameof(ScoreGradesTitle),
-                nameof(ScoreRuleInitial),
-                nameof(ScoreRuleCritical),
-                nameof(ScoreRuleError),
-                nameof(ScoreRuleWarning),
-                nameof(ScoreRuleMin),
-                nameof(ScoreRuleMax),
-                nameof(ScoreGradeA),
-                nameof(ScoreGradeB),
-                nameof(ScoreGradeC),
-                nameof(ScoreGradeD),
-                nameof(ScoreGradeF),
                 nameof(SelectedScanDateDisplay)
             };
 
@@ -4060,14 +4269,18 @@ namespace PCDiagnosticPro.ViewModels
         private void InitializeSectionPhases()
         {
             SectionPhases.Clear();
-            // Use localized labels for phases
-            var phaseKeys = new[] { "PowerShell", "Capteurs", "Compteurs", "Signaux", "Telemetrie", "Reseau", "Rapport" };
-            foreach (var key in phaseKeys)
+            // Labels français selon le modèle visuel de référence
+            var phaseLabels = new[] { 
+                "Inventaire système",
+                "Capteurs & températures", 
+                "Performances temps réel",
+                "Stabilité & intégrité",
+                "Analyse processus",
+                "Connectivité réseau",
+                "Génération rapport"
+            };
+            foreach (var label in phaseLabels)
             {
-                var label = GetString($"PhaseLabel_{key}");
-                // Fallback to key if localization not found
-                if (string.IsNullOrEmpty(label) || label.StartsWith("PhaseLabel_"))
-                    label = key;
                 SectionPhases.Add(new SectionPhaseItem { Label = label, Status = "Pending" });
             }
         }
@@ -4205,16 +4418,40 @@ namespace PCDiagnosticPro.ViewModels
     /// <summary>
     /// Élément d'historique de scan
     /// </summary>
-    public class ScanHistoryItem
+    public class ScanHistoryItem : System.ComponentModel.INotifyPropertyChanged
     {
         public DateTime ScanDate { get; set; }
         public int Score { get; set; }
         public string Grade { get; set; } = "N/A";
         public ScanResult? Result { get; set; }
+        
+        // Nom d'affichage personnalisable (sans modifier le chemin de fichier)
+        private string? _customDisplayName;
+        public string? CustomDisplayName 
+        { 
+            get => _customDisplayName;
+            set 
+            {
+                if (_customDisplayName != value)
+                {
+                    _customDisplayName = value;
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(CustomDisplayName)));
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(DisplayName)));
+                }
+            }
+        }
+        
+        // Affiche le nom custom s'il existe, sinon la date par défaut
+        public string DisplayName => string.IsNullOrWhiteSpace(CustomDisplayName) 
+            ? DateDisplay 
+            : CustomDisplayName;
+        
         public string DateDisplay => ScanDate.ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture);
         public string DayDisplay => ScanDate.ToString("dd", CultureInfo.CurrentCulture);
         public string MonthYearDisplay => ScanDate.ToString("MMMM yyyy", CultureInfo.CurrentCulture);
         public string ScoreDisplay => $"{Score}/100 ({Grade})";
+        
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
     }
     
     /// <summary>

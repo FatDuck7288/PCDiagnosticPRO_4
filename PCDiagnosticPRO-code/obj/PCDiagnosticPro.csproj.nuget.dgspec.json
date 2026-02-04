@@ -10,7 +10,7 @@
         "projectUniqueName": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
         "projectName": "PCDiagnosticPro",
         "projectPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
-        "packagesPath": "C:\\Users\\rams_\\.nuget\\packages\\",
+        "packagesPath": "C:\\Users\\rams_\\AppData\\Local\\Temp\\cursor-sandbox-cache\\7b1a8e6eb2432f2b9a7202557ab6c684\\nuget",
         "outputPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
@@ -54,10 +54,6 @@
             "LibreHardwareMonitorLib": {
               "target": "Package",
               "version": "[0.9.2, )"
-            },
-            "WpfAnimatedGif": {
-              "target": "Package",
-              "version": "[2.0.2, )"
             }
           },
           "imports": [
