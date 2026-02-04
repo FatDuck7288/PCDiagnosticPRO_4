@@ -505,10 +505,11 @@ namespace PCDiagnosticPro.Services
             }
             
             // Erreurs de collecteurs : priorité à collectorErrorsLogical (errors[]) pour cohérence JSON↔TXT
+            // FIX #9: Pénalités réduites (était: *3, max 15)
             var collectorErrors = report.CollectorErrorsLogical > 0 ? report.CollectorErrorsLogical : report.ScoreV2.Breakdown.CollectorErrors;
             if (collectorErrors > 0)
             {
-                var penalty = Math.Min(collectorErrors * 3, 15);
+                var penalty = Math.Min(collectorErrors * 2, 10); // FIX #9: Réduit de *3/15 à *2/10
                 model.ConfidenceScore -= penalty;
                 model.Warnings.Add($"Erreurs collecteur: {collectorErrors} (pénalité -{penalty})");
             }
@@ -645,21 +646,42 @@ namespace PCDiagnosticPro.Services
 
         private static ScoreV2Data CalculateLegacyScore(JsonElement root)
         {
-            // Fallback: calculer depuis summary ou sections
-            var score = new ScoreV2Data { Score = 100, BaseScore = 100, Grade = "A" };
+            // FIX RISK #5: Fallback must not invent scores when data is incomplete
+            var score = new ScoreV2Data { Score = -1, BaseScore = 100, Grade = "N/A" };
+            bool hasSummaryData = false;
             
             if (root.ValueKind != JsonValueKind.Object)
+            {
+                // No data - mark as unavailable
+                score.UnavailableReason = "Données JSON absentes ou invalides";
+                App.LogMessage("[HealthReportBuilder] Legacy score: no valid JSON data");
                 return score;
+            }
             
             if (root.TryGetProperty("summary", out var summary) && summary.ValueKind == JsonValueKind.Object)
             {
-                if (summary.TryGetProperty("score", out var s)) score.Score = SafeGetInt(s, 100);
-                if (summary.TryGetProperty("grade", out var g)) score.Grade = g.GetString() ?? "A";
+                if (summary.TryGetProperty("score", out var s)) 
+                {
+                    score.Score = SafeGetInt(s, -1);
+                    hasSummaryData = true;
+                }
+                if (summary.TryGetProperty("grade", out var g)) score.Grade = g.GetString() ?? "N/A";
                 if (summary.TryGetProperty("criticalCount", out var cc)) score.Breakdown.Critical = SafeGetInt(cc, 0);
                 if (summary.TryGetProperty("warningCount", out var wc)) score.Breakdown.Warnings = SafeGetInt(wc, 0);
             }
             
-            score.TotalPenalty = 100 - score.Score;
+            // FIX RISK #5: If summary is absent and we had to calculate legacy, mark as unavailable
+            if (!hasSummaryData || score.Score < 0)
+            {
+                score.Score = -1; // Explicitly mark as unavailable
+                score.Grade = "N/A";
+                score.UnavailableReason = "Score indisponible (données incomplètes)";
+                App.LogMessage("[HealthReportBuilder] Legacy score: summary missing - score unavailable");
+            }
+            else
+            {
+                score.TotalPenalty = 100 - score.Score;
+            }
             return score;
         }
 

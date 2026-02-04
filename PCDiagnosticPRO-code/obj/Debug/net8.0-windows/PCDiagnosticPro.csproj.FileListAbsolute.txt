@@ -1,3 +1,17 @@
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.csproj.AssemblyReference.cache
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.baml
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Styles\FuturisticStyles.baml
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\App.baml
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.g.cs
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\MainWindow.g.cs
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\App.g.cs
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_Content.g.cs
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_MarkupCompile.cache
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_MarkupCompile.lref
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.dll
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\refint\PCDiagnosticPro.dll
+E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.pdb
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\Scripts\Total_PS_PC_Scan_v7.0.ps1
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\PCDiagnosticPro.exe
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\PCDiagnosticPro.deps.json
@@ -8,6 +22,7 @@ D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-detail
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\LibreHardwareMonitorLib.dll
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\System.IO.Ports.dll
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\System.Management.dll
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\WpfAnimatedGif.dll
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\runtimes\linux-arm\lib\netstandard2.0\Mono.Posix.NETStandard.dll
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\runtimes\linux-arm\native\libMonoPosixHelper.so
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\runtimes\linux-arm64\lib\netstandard2.0\Mono.Posix.NETStandard.dll
@@ -36,10 +51,20 @@ D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-detail
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\bin\Debug\net8.0-windows\runtimes\win\lib\net7.0\System.Management.dll
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.csproj.AssemblyReference.cache
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.baml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Styles\FuturisticStyles.baml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\AppsDetailsWindow.baml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\CollectorErrorsWindow.baml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\DriversDetailsWindow.baml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\ListDetailWindow.baml
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\App.baml
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.g.cs
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\MainWindow.g.cs
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\AppsDetailsWindow.g.cs
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\CollectorErrorsWindow.g.cs
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\DriversDetailsWindow.g.cs
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\ListDetailWindow.g.cs
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\App.g.cs
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_Content.g.cs
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_MarkupCompile.cache
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_MarkupCompile.lref
@@ -55,27 +80,3 @@ D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-detail
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.pdb
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.genruntimeconfig.cache
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\ref\PCDiagnosticPro.dll
-d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Styles\FuturisticStyles.baml
-d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_Content.g.cs
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.csproj.AssemblyReference.cache
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.baml
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Styles\FuturisticStyles.baml
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\App.baml
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Controls\ScanAnimationOverlay.g.cs
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\MainWindow.g.cs
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\App.g.cs
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_Content.g.cs
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_MarkupCompile.cache
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro_MarkupCompile.lref
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.dll
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\refint\PCDiagnosticPro.dll
-E:\Games N Dld\PCDiagnosticPRO_4-cursor-affichage-donn-es-coh-rent-8db4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\PCDiagnosticPro.pdb
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\AppsDetailsWindow.baml
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\DriversDetailsWindow.baml
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\AppsDetailsWindow.g.cs
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\DriversDetailsWindow.g.cs
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\CollectorErrorsWindow.baml
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\CollectorErrorsWindow.g.cs
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\ListDetailWindow.baml
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\ListDetailWindow.g.cs

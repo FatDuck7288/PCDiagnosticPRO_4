@@ -193,7 +193,8 @@ $Script:JsonOutputPath = Join-Path $Script:OutputDir "Scan_$($Script:RunId)_$tim
 $Script:ReportWritten = $false
 $Script:JsonWritten = $false
 $Script:RedactionStats = @{ TotalRedactions = 0 }
-$Script:AllowExternalNetworkTests = $true
+# FIX RISK #1: External network tests disabled by default (requires explicit user consent)
+$Script:AllowExternalNetworkTests = $AllowExternalNetworkTests.IsPresent
 $Script:NetworkTestTargets = $NetworkTestTargets
 $Script:DnsTestTargets = $DnsTestTargets
 $Script:ExternalCommandTimeoutSeconds = [math]::Max(1, $ExternalCommandTimeoutSeconds)
@@ -1452,6 +1453,19 @@ function Calculate-ScoreV2 {
         elseif ($errType -match 'COLLECTOR_ERROR') { 
             $penalties.collectorErrors++
             $topPenalties += [ordered]@{ type = 'COLLECTOR_ERROR'; source = $errSource; penalty = 3; msg = $errMsg }
+        }
+        # FIX RISK #2: WMI_ERROR for critical categories (CPU, RAM, disk) should penalize score
+        elseif ($errType -match 'WMI_ERROR') {
+            # Check if it's a critical category (Win32_Processor, Win32_PhysicalMemory, Win32_DiskDrive, Win32_LogicalDisk)
+            $isCriticalWmi = $errSource -match 'Win32_Processor|Win32_PhysicalMemory|Win32_DiskDrive|Win32_LogicalDisk|Win32_OperatingSystem'
+            if ($isCriticalWmi) {
+                $penalties.collectorErrors++
+                $topPenalties += [ordered]@{ type = 'WMI_ERROR'; source = $errSource; penalty = 3; msg = $errMsg }
+            }
+            # Optional WMI categories (ThermalZone, Battery, etc.) get minimal penalty
+            else {
+                $penalties.warnings++
+            }
         }
         elseif ($errType -match 'TIMEOUT') { 
             $penalties.timeouts++
@@ -3506,14 +3520,7 @@ try {
         catch { Write-ReportLine "[ERREUR JSON] $($_.Exception.Message)" }
     }
 
-    try {
-        $reportContent = $Script:ReportLines -join "`n"
-        $sha256 = [System.Security.Cryptography.SHA256]::Create()
-        $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($reportContent))
-        $hashString = [BitConverter]::ToString($hashBytes) -replace '-', ''; $sha256.Dispose()
-        Write-ReportLine ""; Write-ReportLine "Hash (SHA256): $hashString"
-    } catch { }
-
+    # FIX RISK #4: Write file first, then compute hash from actual file bytes (avoids CRLF mismatch)
     Write-Host ""
     try {
         $reportArray = @($Script:ReportLines)
@@ -3521,6 +3528,20 @@ try {
         Try-HardenOutputAcl -Path $Script:OutputDir
         Write-Host "[OK] Rapport: $($Script:OutputPath)" -ForegroundColor Green
         $Script:ReportWritten = $true
+        
+        # Compute SHA256 from actual file bytes written to disk (guarantees match)
+        try {
+            $fileBytes = [System.IO.File]::ReadAllBytes($Script:OutputPath)
+            $sha256 = [System.Security.Cryptography.SHA256]::Create()
+            $hashBytes = $sha256.ComputeHash($fileBytes)
+            $hashString = [BitConverter]::ToString($hashBytes) -replace '-', ''; $sha256.Dispose()
+            # Append hash to the file (re-write with hash included)
+            $hashLine = "`r`nHash (SHA256): $hashString"
+            [System.IO.File]::AppendAllText($Script:OutputPath, $hashLine, (New-Object System.Text.UTF8Encoding($true)))
+            Write-Host "[OK] Hash SHA256 inclus: $hashString" -ForegroundColor DarkGray
+        } catch {
+            Write-Host "[WARN] Hash calculation failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
         try {
             $jsonString = (ConvertTo-JsonSafeObject (Build-JsonSnapshot)) | ConvertTo-Json -Depth 10 -Compress
             [System.IO.File]::WriteAllText($Script:JsonOutputPath, $jsonString, (New-Object System.Text.UTF8Encoding($true)))

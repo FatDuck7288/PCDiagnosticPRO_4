@@ -4,15 +4,9 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- UAC Manifest Options
-             Si vous souhaitez modifier le niveau de contrôle de compte d'utilisateur Windows,
-             remplacez le nœud requestedExecutionLevel par l'un des éléments suivants.
-
-        <requestedExecutionLevel  level="asInvoker" uiAccess="false" />
-        <requestedExecutionLevel  level="requireAdministrator" uiAccess="false" />
-        <requestedExecutionLevel  level="highestAvailable" uiAccess="false" />
-
-        -->
+        <!-- UAC: asInvoker permet dotnet run / F5 sans terminal élevé.
+             L'app propose "Relancer en administrateur" pour un scan complet.
+             Pour un installeur / build de prod exigeant l'admin au lancement, utiliser requireAdministrator. -->
         <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>

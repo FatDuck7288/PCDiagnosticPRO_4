@@ -280,27 +280,23 @@ namespace PCDiagnosticPro.Services
                 else
                     result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale indisponible");
 
-                // VRAM Used: CRITICAL FIX - Prioritize "D3D Dedicated Memory Used" (matches Task Manager)
-                // over "GPU Memory Used" (which shows committed/allocated memory, not actual usage)
-                // IMPORTANT: "D3D Dedicated Memory Used" = what Task Manager shows (actual usage ~3GB typically)
-                //            "GPU Memory Used" = committed/allocated memory (can show 10-11GB on RTX cards)
-                // Order matters: first match wins
+                // FIX #6: VRAM Used - UNIQUEMENT "D3D Dedicated Memory Used" (correspond au Gestionnaire des tâches)
+                // Les fallbacks "Memory Used", "GPU Memory Used" donnent des valeurs incorrectes (mémoire allouée/committed)
+                // qui peuvent afficher 10-11GB au lieu de ~3GB réellement utilisés
                 var vramUsedSensorNames = new[] {
-                    "D3D Dedicated Memory Used",  // Task Manager value - actual dedicated VRAM in use
-                    "Dedicated Memory Used",       // Alternative naming
-                    "Memory Used",                 // Fallback - may be allocated/committed
-                    "VRAM Used", 
-                    "GPU Memory Used"
+                    "D3D Dedicated Memory Used",  // Seul sensor valide - correspond au Gestionnaire des tâches
+                    "Dedicated Memory Used"       // Alternative naming
+                    // SUPPRIMÉ: "Memory Used", "VRAM Used", "GPU Memory Used" - valeurs incorrectes
                 };
                 
                 double? vramUsed = null;
                 string vramUsedSource = "N/A";
                 
-                // Search for VRAM sensor in priority order, tracking which one was found
+                // Recherche exacte du sensor (Equals au lieu de IndexOf pour éviter les faux positifs)
                 foreach (var sensorName in vramUsedSensorNames)
                 {
                     var matchingSensor = sensors.FirstOrDefault(s => 
-                        s.Name.IndexOf(sensorName, StringComparison.OrdinalIgnoreCase) >= 0 && 
+                        s.Name.Equals(sensorName, StringComparison.OrdinalIgnoreCase) && 
                         s.Value.HasValue);
                     
                     if (matchingSensor != null)
@@ -315,18 +311,14 @@ namespace PCDiagnosticPro.Services
                 {
                     result.Gpu.VramUsedMB = Available(vramUsed.Value);
                     result.Gpu.VramUsedSource = vramUsedSource;
-                    
-                    // Log warning if using fallback sensor (not D3D Dedicated)
-                    if (!vramUsedSource.Contains("D3D", StringComparison.OrdinalIgnoreCase) &&
-                        !vramUsedSource.Contains("Dedicated", StringComparison.OrdinalIgnoreCase))
-                    {
-                        App.LogMessage($"[VRAM WARNING] Using fallback sensor '{vramUsedSource}' - value may be higher than Task Manager shows");
-                    }
+                    App.LogMessage($"[VRAM] D3D Dedicated Memory Used trouvé: {vramUsed:F0} MB");
                 }
                 else
                 {
-                    result.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisee indisponible");
+                    // FIX #6: Retourner indisponible plutôt qu'un fallback incorrect
+                    result.Gpu.VramUsedMB = UnavailableDouble("D3D Dedicated Memory Used non disponible");
                     result.Gpu.VramUsedSource = "N/A";
+                    App.LogMessage("[VRAM] D3D Dedicated Memory Used non trouvé - valeur marquée indisponible");
                 }
                 
                 // Debug: Log all GPU memory sensors found for verification

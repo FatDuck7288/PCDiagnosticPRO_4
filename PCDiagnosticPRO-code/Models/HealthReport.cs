@@ -243,14 +243,14 @@ namespace PCDiagnosticPro.Models
                     "Le seuil de 30 jours est une politique interne basée sur les bonnes pratiques, pas une exigence normative.\n\n" +
                     "Un point récent vous permet de revenir à un état stable en cas de problème après une mise à jour ou installation.",
                 
-                // Sécurité — définitions complètes (définition, importance, risque)
-                "bitlocker" => "Définition : BitLocker est une fonctionnalité de chiffrement complet du disque intégrée à certaines éditions de Windows (Pro/Enterprise). Elle protège vos données en chiffrant l'intégralité du volume où est installé le système et/ou d'autres lecteurs.\n\nImportance : Très important pour la confidentialité et la sécurité des données, surtout en cas de vol ou de perte de l'appareil.\n\nRisque si désactivé : Vos données sont vulnérables à l'accès non autorisé si quelqu'un obtient un accès physique à votre appareil. Non disponible sur Windows Home.",
-                "secure boot" => "Définition : Secure Boot est une fonctionnalité de sécurité du micrologiciel UEFI qui garantit que votre ordinateur démarre uniquement avec des logiciels de confiance (comme Windows). Il empêche le chargement de logiciels malveillants ou non autorisés avant même le démarrage du système d'exploitation.\n\nImportance : Fondamental pour protéger le processus de démarrage contre les rootkits et autres menaces persistantes avancées.\n\nRisque si désactivé : L'ordinateur pourrait démarrer avec des logiciels malveillants ou des systèmes d'exploitation non fiables, compromettant la sécurité dès le démarrage.",
-                "uac" => "Définition : Le Contrôle de compte d'utilisateur (UAC) est une fonction de sécurité de Windows qui aide à empêcher les modifications non autorisées sur votre ordinateur. Lorsque l'UAC est actif, les applications et les tâches s'exécutent avec des autorisations limitées, et une invite de consentement est affichée avant que les actions nécessitant des privilèges d'administrateur ne soient exécutées.\n\nImportance : Essentiel pour la protection contre les logiciels malveillants et pour prévenir les modifications accidentelles du système.\n\nRisque si désactivé : Les programmes malveillants peuvent s'exécuter avec des privilèges élevés sans votre consentement, rendant votre système plus vulnérable.",
-                "rdp" => "Définition : Le Protocole de Bureau à distance (RDP) est une technologie de Microsoft qui permet à un utilisateur de se connecter à un ordinateur distant via un réseau et d'afficher le bureau de cet ordinateur. Il est couramment utilisé pour l'administration à distance et le support technique.\n\nImportance : Utile pour l'accès et la gestion à distance, mais doit être sécurisé.\n\nRisque si désactivé : Aucun risque direct de sécurité, mais limite les capacités de gestion à distance.\n\nRisque si activé et mal sécurisé : Peut être une porte d'entrée pour des attaquants s'il est exposé à Internet sans mesures de sécurité robustes (mots de passe faibles, MFA manquant, pas de VPN).",
-                "smbv1" => "Définition : SMBv1 est une ancienne version du protocole Server Message Block, utilisé pour le partage de fichiers, d'imprimantes et de ports série sur un réseau. Il est considéré comme obsolète et a été remplacé par des versions plus sécurisées (SMBv2, SMBv3).\n\nImportance : Ne devrait plus être utilisé. Les versions plus récentes offrent de meilleures performances et une sécurité renforcée.\n\nRisque si désactivé : Aucun risque, au contraire, c'est une bonne pratique de sécurité.\n\nRisque si activé : SMBv1 contient des vulnérabilités de sécurité connues (ex. WannaCry, EternalBlue) et est susceptible d'attaques par rançongiciel et autres exploits. Il est fortement recommandé de le désactiver.",
-                "antivirus" => "Définition : Un antivirus est un logiciel de protection qui détecte, bloque et supprime les logiciels malveillants (virus, trojans, ransomwares, etc.). Windows Defender est l'antivirus intégré à Windows et est activé par défaut.\n\nImportance : Indispensable pour protéger votre ordinateur contre les menaces en ligne et les fichiers infectés.\n\nRisque si désactivé : Votre système est exposé aux malwares, aux rançongiciels et au vol de données. Gardez toujours un antivirus actif.",
-                "pare-feu" => "Définition : Le pare-feu Windows filtre le trafic réseau entrant et sortant selon des règles de sécurité. Il bloque les connexions non autorisées tout en autorisant les communications légitimes.\n\nImportance : Essentiel pour bloquer les accès non sollicités depuis Internet ou le réseau local et pour limiter les programmes qui peuvent communiquer.\n\nRisque si désactivé : Votre ordinateur devient visible et accessible depuis le réseau sans protection, ce qui favorise les intrusions et les attaques.",
+                // FIX #8: Sécurité — définitions complètes avec emojis (définition, importance, risque)
+                "bitlocker" => "📖 Définition : BitLocker est une fonctionnalité de chiffrement complet du disque intégrée à certaines éditions de Windows (Pro/Enterprise). Elle protège vos données en chiffrant l'intégralité du volume où est installé le système et/ou d'autres lecteurs.\n\n⚠️ Importance : Très important pour la confidentialité et la sécurité des données, surtout en cas de vol ou de perte de l'appareil.\n\n🚨 Risque si désactivé : Vos données sont vulnérables à l'accès non autorisé si quelqu'un obtient un accès physique à votre appareil. Non disponible sur Windows Home.",
+                "secure boot" => "📖 Définition : Secure Boot est une fonctionnalité de sécurité du micrologiciel UEFI qui garantit que votre ordinateur démarre uniquement avec des logiciels de confiance (comme Windows). Il empêche le chargement de logiciels malveillants ou non autorisés avant même le démarrage du système d'exploitation.\n\n⚠️ Importance : Fondamental pour protéger le processus de démarrage contre les rootkits et autres menaces persistantes avancées.\n\n🚨 Risque si désactivé : L'ordinateur pourrait démarrer avec des logiciels malveillants ou des systèmes d'exploitation non fiables, compromettant la sécurité dès le démarrage.",
+                "uac" => "📖 Définition : Le Contrôle de compte d'utilisateur (UAC) est une fonction de sécurité de Windows qui aide à empêcher les modifications non autorisées sur votre ordinateur. Lorsque l'UAC est actif, les applications et les tâches s'exécutent avec des autorisations limitées, et une invite de consentement est affichée avant que les actions nécessitant des privilèges d'administrateur ne soient exécutées.\n\n⚠️ Importance : Essentiel pour la protection contre les logiciels malveillants et pour prévenir les modifications accidentelles du système.\n\n🚨 Risque si désactivé : Les programmes malveillants peuvent s'exécuter avec des privilèges élevés sans votre consentement, rendant votre système plus vulnérable.",
+                "rdp" => "📖 Définition : Le Protocole de Bureau à distance (RDP) est une technologie de Microsoft qui permet à un utilisateur de se connecter à un ordinateur distant via un réseau et d'afficher le bureau de cet ordinateur. Il est couramment utilisé pour l'administration à distance et le support technique.\n\n⚠️ Importance : Utile pour l'accès et la gestion à distance, mais doit être sécurisé.\n\n✅ Risque si désactivé : Aucun risque direct de sécurité, mais limite les capacités de gestion à distance.\n\n🚨 Risque si activé et mal sécurisé : Peut être une porte d'entrée pour des attaquants s'il est exposé à Internet sans mesures de sécurité robustes (mots de passe faibles, MFA manquant, pas de VPN).",
+                "smbv1" => "📖 Définition : SMBv1 est une ancienne version du protocole Server Message Block, utilisé pour le partage de fichiers, d'imprimantes et de ports série sur un réseau. Il est considéré comme obsolète et a été remplacé par des versions plus sécurisées (SMBv2, SMBv3).\n\n⚠️ Importance : Ne devrait plus être utilisé. Les versions plus récentes offrent de meilleures performances et une sécurité renforcée.\n\n✅ Risque si désactivé : Aucun risque, au contraire, c'est une bonne pratique de sécurité.\n\n🚨 Risque si activé : SMBv1 contient des vulnérabilités de sécurité connues (ex. WannaCry, EternalBlue) et est susceptible d'attaques par rançongiciel et autres exploits. Il est fortement recommandé de le désactiver.",
+                "antivirus" => "📖 Définition : Un antivirus est un logiciel de protection qui détecte, bloque et supprime les logiciels malveillants (virus, trojans, ransomwares, etc.). Windows Defender est l'antivirus intégré à Windows et est activé par défaut.\n\n⚠️ Importance : Indispensable pour protéger votre ordinateur contre les menaces en ligne et les fichiers infectés.\n\n🚨 Risque si désactivé : Votre système est exposé aux malwares, aux rançongiciels et au vol de données. Gardez toujours un antivirus actif.",
+                "pare-feu" => "📖 Définition : Le pare-feu Windows filtre le trafic réseau entrant et sortant selon des règles de sécurité. Il bloque les connexions non autorisées tout en autorisant les communications légitimes.\n\n⚠️ Importance : Essentiel pour bloquer les accès non sollicités depuis Internet ou le réseau local et pour limiter les programmes qui peuvent communiquer.\n\n🚨 Risque si désactivé : Votre ordinateur devient visible et accessible depuis le réseau sans protection, ce qui favorise les intrusions et les attaques.",
                 
                 // Performance
                 "bottlenecks" or "bottleneck" => "Bottleneck (goulot d'étranglement) : Composant limitant les performances globales car plus lent ou saturé que les autres. Ex: CPU saturé limitant le GPU.",
@@ -264,11 +264,11 @@ namespace PCDiagnosticPro.Models
                 "vram dédiée utilisée" => "VRAM Dédiée : Mémoire GPU réellement utilisée à cet instant. Cette valeur correspond à ce qu'affiche le Gestionnaire des tâches sous 'Mémoire GPU dédiée'. C'est la mémoire physique de votre carte graphique en cours d'utilisation.",
                 "vram allouée (commit)" => "VRAM Allouée/Committed : Mémoire réservée par les applications pour le GPU. Cette valeur peut être significativement plus élevée que la VRAM dédiée car elle inclut les allocations prévues, les buffers, et la mémoire partagée. Pour la valeur exacte de mémoire GPU utilisée, référez-vous au Gestionnaire des tâches ou GPU-Z.",
                 "tdr" or "tdr 30j" or "tdr video" or "tdr (crashes gpu)" => 
-                    "TDR (Timeout Detection and Recovery)\n\n" +
-                    "Définition : Mécanisme Windows qui détecte quand le pilote graphique ne répond plus et tente de le réinitialiser sans redémarrer le système.\n\n" +
-                    "Importance : Des TDR fréquents indiquent un problème avec le pilote graphique, une surchauffe GPU, un overclocking instable, ou un matériel défaillant.\n\n" +
-                    "Risques : Écran noir temporaire, perte de travail non sauvegardé, et dans les cas graves, BSOD.\n\n" +
-                    "Que faire : Mettez à jour le pilote graphique, vérifiez la température GPU, désactivez l'overclocking si présent, ou testez avec une autre carte graphique.",
+                    "🎮 TDR (Timeout Detection and Recovery)\n\n" +
+                    "📖 Définition : Mécanisme Windows qui détecte quand le pilote graphique ne répond plus et tente de le réinitialiser sans redémarrer le système.\n\n" +
+                    "⚠️ Importance : Des TDR fréquents indiquent un problème avec le pilote graphique, une surchauffe GPU, un overclocking instable, ou un matériel défaillant.\n\n" +
+                    "🚨 Risques : Écran noir temporaire, perte de travail non sauvegardé, et dans les cas graves, BSOD.\n\n" +
+                    "🔧 Que faire : Mettez à jour le pilote graphique, vérifiez la température GPU, désactivez l'overclocking si présent, ou testez avec une autre carte graphique.",
                 
                 // CPU
                 "température cpu" or "temp cpu" => "Température CPU : <70°C = Normal, 70-85°C = Élevée (surveiller), >85°C = Critique (throttling activé).",
@@ -295,18 +295,18 @@ namespace PCDiagnosticPro.Models
                 "pilote" or "driver" => "Pilote : Logiciel permettant au système d'exploitation de communiquer avec le matériel.\n\nDes pilotes obsolètes peuvent causer des problèmes de stabilité ou de performance.",
                 "date pilote" => "Date de mise à jour du pilote. Un pilote ancien (>2 ans) peut être mis à jour.",
                 "non signés" => 
-                    "Pilotes non signés\n\n" +
-                    "Définition : Un pilote « non signé » n'est pas signé numériquement par une autorité reconnue (Microsoft, éditeur matériel). Windows peut le bloquer selon les réglages de stratégie (Signature Enforcement).\n\n" +
-                    "Ce n'est pas forcément malveillant mais plus risqué : sources non officielles, vieux drivers non mis à jour, possible compatibilité ou stabilité réduite.\n\n" +
-                    "Actions : Privilégier les pilotes officiels (site fabricant, Windows Update), vérifier l'éditeur, éviter de désactiver les contrôles de sécurité (désactivation du mode test, etc.).",
+                    "⚙️ Pilotes non signés\n\n" +
+                    "📖 Définition : Un pilote « non signé » n'est pas signé numériquement par une autorité reconnue (Microsoft, éditeur matériel). Windows peut le bloquer selon les réglages de stratégie (Signature Enforcement).\n\n" +
+                    "⚠️ Ce n'est pas forcément malveillant mais plus risqué : sources non officielles, vieux drivers non mis à jour, possible compatibilité ou stabilité réduite.\n\n" +
+                    "🔧 Actions : Privilégier les pilotes officiels (site fabricant, Windows Update), vérifier l'éditeur, éviter de désactiver les contrôles de sécurité (désactivation du mode test, etc.).",
                 
                 // Alimentation
                 "power throttling" => 
-                    "Power throttling (limitation de puissance)\n\n" +
-                    "Définition : Limitation volontaire de la puissance du CPU/GPU pour réduire la chaleur et la consommation. Le système réduit les fréquences ou l'utilisation pour rester dans des limites thermiques ou d'alimentation.\n\n" +
-                    "Impact : Baisse des performances, latence accrue, FPS réduits en jeu, tâches lourdes plus lentes.\n\n" +
-                    "Causes typiques : Mode économie d'énergie, limites thermiques atteintes, politiques OEM, chargeur insuffisant sur portable, paramètres Windows ou BIOS.\n\n" +
-                    "Actions : Vérifier le mode d'alimentation (Performances élevées), pilotes chipset à jour, températures (nettoyage, pâte thermique), paramètres Windows (Options d'alimentation), BIOS si pertinent.",
+                    "⚡ Power throttling (limitation de puissance)\n\n" +
+                    "📖 Définition : Limitation volontaire de la puissance du CPU/GPU pour réduire la chaleur et la consommation. Le système réduit les fréquences ou l'utilisation pour rester dans des limites thermiques ou d'alimentation.\n\n" +
+                    "📉 Impact : Baisse des performances, latence accrue, FPS réduits en jeu, tâches lourdes plus lentes.\n\n" +
+                    "⚠️ Causes typiques : Mode économie d'énergie, limites thermiques atteintes, politiques OEM, chargeur insuffisant sur portable, paramètres Windows ou BIOS.\n\n" +
+                    "🔧 Actions : Vérifier le mode d'alimentation (Performances élevées), pilotes chipset à jour, températures (nettoyage, pâte thermique), paramètres Windows (Options d'alimentation), BIOS si pertinent.",
                 
                 // Applications
                 "applications" or "apps" => "Applications installées détectées via le registre Windows et les packages AppX.",
@@ -549,6 +549,18 @@ namespace PCDiagnosticPro.Models
         
         [JsonPropertyName("topPenalties")]
         public List<PenaltyInfo> TopPenalties { get; set; } = new();
+        
+        /// <summary>
+        /// FIX RISK #5: Reason why score is unavailable (if Score == -1)
+        /// </summary>
+        [JsonIgnore]
+        public string? UnavailableReason { get; set; }
+        
+        /// <summary>
+        /// True if score could not be calculated (Score == -1)
+        /// </summary>
+        [JsonIgnore]
+        public bool IsUnavailable => Score < 0;
     }
 
     /// <summary>

@@ -31,6 +31,15 @@
 
   <ItemGroup>
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.2" />
+    <PackageReference Include="WpfAnimatedGif" Version="2.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Speed Test: planète animée. Déposer planet.gif dans ce dossier pour l'afficher. -->
+    <Content Include="Assets\Animations\planet.gif" Condition="Exists('Assets\Animations\planet.gif')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Assets\Animations\planet.gif</Link>
+    </Content>
   </ItemGroup>
 
 </Project>

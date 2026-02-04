@@ -434,18 +434,14 @@ namespace PCDiagnosticPro.Services
                 }
                 else
                 {
-                    // Detailed reason from the sensor collector
-                    var reason = sensors?.Cpu?.CpuTempC?.Reason;
-                    if (string.IsNullOrEmpty(reason))
-                    {
-                        reason = sensors == null ? "capteurs non collectés" : "capteur indisponible";
-                    }
-                    // Clarify WMI thermal zone limitation on desktop
-                    if (reason?.Contains("thermal_zone") == true || reason?.Contains("WMI") == true)
-                    {
-                        reason = "WMI non supporté (desktop typique)";
-                    }
-                    AddUnknown(ev, "Température CPU", reason);
+                    // Message utilisateur clair quand la température CPU est indisponible (WMI non supporté sur beaucoup de cartes gaming)
+                    const string cpuTempUnavailableMessage =
+                        "Température CPU : indisponible (WMI non supporté sur ce matériel). " +
+                        "Solutions : 1) Activer 'Surveillance matérielle' dans les paramètres " +
+                        "2) Lancer HWiNFO64 en parallèle (Sensors Only) " +
+                        "3) Vérifier BIOS : activer ACPI Thermal Zone. " +
+                        "ℹ️ Plusieurs cartes gaming ne publient pas la température via WMI.";
+                    Add(ev, "Température CPU", cpuTempUnavailableMessage, "sensors_csharp.cpu.cpuTempC.unavailable");
                 }
             }
 
@@ -718,10 +714,11 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "VRAM", "limitation WMI - collecte externalisée");
 
             // 8. Charge GPU (capteurs C#)
+            // FIX #1: Remove white ⚠️ glyph - severity shown via color in UI
             if (sensors?.Gpu?.GpuLoadPercent?.Available == true)
             {
                 var load = sensors.Gpu.GpuLoadPercent.Value;
-                var status = load > 90 ? " 🔥" : load > 70 ? " ⚠️" : "";
+                var status = load > 90 ? " (Critique)" : load > 70 ? " (Élevée)" : "";
                 Add(ev, "Charge GPU", $"{load:F0}%{status}", "sensors_csharp.gpu.gpuLoadPercent");
             }
             else
@@ -730,12 +727,12 @@ namespace PCDiagnosticPro.Services
             }
 
             // 9. Température GPU (capteurs C# - UNE SEULE LIGNE + SOURCE pour debug)
-            // Pas de check blanc (✅) à côté de la température
+            // FIX #1: Remove white ⚠️ glyph - severity shown via color in UI
             if (sensors?.Gpu?.GpuTempC?.Available == true)
             {
                 var temp = sensors.Gpu.GpuTempC.Value;
-                // Indicateurs uniquement si problème (pas de check blanc pour état normal)
-                var status = temp > 85 ? " 🔥 Critique" : temp > 75 ? " ⚠️ Élevée" : "";
+                // Textual severity indicator without emoji (color handled by UI)
+                var status = temp > 85 ? " (Critique)" : temp > 75 ? " (Élevée)" : "";
                 // Affiche la source de température pour debug
                 var source = sensors.Gpu.GpuTempSource ?? "LHM";
                 Add(ev, "Température GPU", $"{temp:F0}°C{status}", $"sensors_csharp.gpu.gpuTempC ({source})");
@@ -1710,47 +1707,117 @@ namespace PCDiagnosticPro.Services
         #endregion
 
         #region Performance
-        // Champs: CPU%, RAM%, DiskIO, NetworkIO, Bottlenecks, Températures, TopProcesses
+        // FIX #5: Redesigned Performance section - user-understandable, no abstract scores
+        // Champs: CPU (model/cores/GHz), RAM (used/avail/commit), Storage (health/free), GPU (model/VRAM), Alertes
 
         private static ExtractionResult ExtractPerformance(JsonElement root, HardwareSensorsResult? sensors)
         {
             var ev = new Dictionary<string, string>();
             int expected = 8;
             
-            // 1. CPU % actuel
             var cpuData = GetSectionData(root, "CPU");
+            var memData = GetSectionData(root, "Memory");
+            var signals = GetDiagnosticSignals(root);
+            var alerts = new List<string>();
+            
+            // 1. CPU: model, cores/threads, utilization
             if (cpuData.HasValue)
             {
                 var cpuArray = GetArray(cpuData, "cpus") ?? GetArray(cpuData, "cpuList");
                 if (cpuArray.HasValue)
                 {
                     var first = cpuArray.Value.EnumerateArray().FirstOrDefault();
+                    var model = GetString(first, "name") ?? GetString(first, "model") ?? "CPU";
+                    var cores = GetInt(first, "coreCount") ?? GetInt(first, "cores");
+                    var threads = GetInt(first, "threadCount") ?? GetInt(first, "threads");
+                    var baseGHz = GetDouble(first, "baseClockGHz") ?? GetDouble(first, "baseClock");
+                    var maxGHz = GetDouble(first, "maxClockGHz") ?? GetDouble(first, "maxClock");
                     var load = GetDouble(first, "currentLoad") ?? GetDouble(first, "load");
+                    
+                    // CPU Model
+                    Add(ev, "CPU", model, "scan_powershell.sections.CPU.data.cpus[0].name");
+                    
+                    // Cores/Threads
+                    if (cores.HasValue)
+                    {
+                        var coreInfo = threads.HasValue ? $"{cores}C / {threads}T" : $"{cores} cœurs";
+                        Add(ev, "Cœurs", coreInfo, "scan_powershell.sections.CPU.data.cpus[0].coreCount");
+                    }
+                    
+                    // Frequency
+                    if (baseGHz.HasValue || maxGHz.HasValue)
+                    {
+                        var freqStr = baseGHz.HasValue && maxGHz.HasValue ? $"{baseGHz:F1} - {maxGHz:F1} GHz" 
+                            : baseGHz.HasValue ? $"{baseGHz:F1} GHz" : $"Max {maxGHz:F1} GHz";
+                        Add(ev, "Fréquence", freqStr, "scan_powershell.sections.CPU.data.cpus[0].*Clock");
+                    }
+                    
+                    // CPU Load
                     if (load.HasValue)
                     {
-                        // Indicateurs uniquement si problème (pas de check blanc pour Normal)
-                        var status = load > 90 ? "🔥 Saturé" : load > 70 ? "⚠️ Élevé" : "Normal";
-                        Add(ev, "CPU", $"{load.Value:F0}% {status}", "scan_powershell.sections.CPU.data.cpus[0].currentLoad");
+                        var status = load > 90 ? " (Saturé)" : load > 70 ? " (Élevé)" : "";
+                        Add(ev, "Charge CPU", $"{load:F0}%{status}", "scan_powershell.sections.CPU.data.cpus[0].currentLoad");
+                        if (load > 90) alerts.Add("CPU saturé (>90%)");
                     }
                 }
             }
 
-            // 2. RAM % actuel
-            var memData = GetSectionData(root, "Memory");
+            // 2. RAM: total, used, available, commit
             if (memData.HasValue)
             {
                 var totalGB = GetDouble(memData, "totalGB");
                 var availGB = GetDouble(memData, "availableGB");
-                if (totalGB.HasValue && totalGB > 0 && availGB.HasValue)
+                var commitPct = GetDouble(memData, "commitPercent") ?? GetDouble(memData, "committedPercent");
+                
+                if (totalGB.HasValue && availGB.HasValue)
                 {
-                    var pct = ((totalGB.Value - availGB.Value) / totalGB.Value) * 100;
-                    // Indicateurs uniquement si problème (pas de check blanc pour Normal)
-                    var status = pct > 90 ? "🔥 Saturée" : pct > 80 ? "⚠️ Élevée" : "Normal";
-                    Add(ev, "RAM", $"{pct:F0}% {status}", "scan_powershell.sections.Memory.data (calculé)");
+                    var usedGB = totalGB.Value - availGB.Value;
+                    Add(ev, "RAM totale", $"{totalGB:F1} GB", "scan_powershell.sections.Memory.data.totalGB");
+                    Add(ev, "RAM utilisée", $"{usedGB:F1} GB ({(usedGB / totalGB.Value * 100):F0}%)", "calculé");
+                    Add(ev, "RAM disponible", $"{availGB:F1} GB", "scan_powershell.sections.Memory.data.availableGB");
+                    
+                    if (availGB < 2) alerts.Add("RAM critique (<2 GB libre)");
+                    else if (availGB < 4) alerts.Add("RAM faible (<4 GB libre)");
+                }
+                
+                if (commitPct.HasValue)
+                {
+                    var commitStatus = commitPct > 90 ? " (Critique)" : commitPct > 80 ? " (Élevé)" : "";
+                    Add(ev, "Commit", $"{commitPct:F0}%{commitStatus}", "scan_powershell.sections.Memory.data.commitPercent");
+                    if (commitPct > 90) alerts.Add("Commit mémoire critique (>90%)");
                 }
             }
-
-            // 3. Disk IO
+            
+            // 3. GPU: name, VRAM, load, temp
+            if (sensors?.Gpu != null)
+            {
+                if (sensors.Gpu.Name.Available && !string.IsNullOrEmpty(sensors.Gpu.Name.Value) && sensors.Gpu.Name.Value != "N/A")
+                    Add(ev, "GPU", sensors.Gpu.Name.Value, "sensors_csharp.gpu.name");
+                    
+                if (sensors.Gpu.VramTotalMB.Available && sensors.Gpu.VramTotalMB.Value > 0)
+                {
+                    var vramTotalGB = sensors.Gpu.VramTotalMB.Value / 1024.0;
+                    var vramUsedGB = sensors.Gpu.VramUsedMB.Available ? sensors.Gpu.VramUsedMB.Value / 1024.0 : 0;
+                    Add(ev, "VRAM", $"{vramUsedGB:F1} / {vramTotalGB:F1} GB", "sensors_csharp.gpu.vram*");
+                }
+                
+                if (sensors.Gpu.GpuLoadPercent?.Available == true)
+                {
+                    var load = sensors.Gpu.GpuLoadPercent.Value;
+                    var status = load > 90 ? " (Saturé)" : load > 70 ? " (Élevé)" : "";
+                    Add(ev, "Charge GPU", $"{load:F0}%{status}", "sensors_csharp.gpu.gpuLoadPercent");
+                }
+                
+                if (sensors.Gpu.GpuTempC?.Available == true)
+                {
+                    var temp = sensors.Gpu.GpuTempC.Value;
+                    var status = temp > 85 ? " (Critique)" : temp > 75 ? " (Élevée)" : "";
+                    Add(ev, "Temp. GPU", $"{temp:F0}°C{status}", "sensors_csharp.gpu.gpuTempC");
+                    if (temp > 85) alerts.Add($"GPU en surchauffe ({temp:F0}°C)");
+                }
+            }
+            
+            // 4. Disk I/O activity
             var telemetry = GetNestedElement(root, "process_telemetry");
             if (telemetry.HasValue)
             {
@@ -1758,137 +1825,41 @@ namespace PCDiagnosticPro.Services
                 var writeMBps = GetDouble(telemetry, "diskWriteMBps");
                 if (readMBps.HasValue || writeMBps.HasValue)
                 {
-                    var readStr = readMBps.HasValue ? $"R:{readMBps.Value:F1}" : "R:?";
-                    var writeStr = writeMBps.HasValue ? $"W:{writeMBps.Value:F1}" : "W:?";
-                    Add(ev, "Disk IO", $"{readStr} / {writeStr} MB/s", "process_telemetry.disk*MBps");
+                    var readStr = readMBps.HasValue ? $"R:{readMBps.Value:F1}" : "";
+                    var writeStr = writeMBps.HasValue ? $"W:{writeMBps.Value:F1}" : "";
+                    var ioStr = $"{readStr} {writeStr}".Trim().Replace("  ", " ");
+                    Add(ev, "I/O Disque", $"{ioStr} MB/s", "process_telemetry.disk*MBps");
                 }
             }
-
-            // 4. Network IO
-            var netDiag = GetNestedElement(root, "network_diagnostics");
-            if (netDiag.HasValue)
-            {
-                var download = GetDouble(netDiag, "downloadMbps");
-                var upload = GetDouble(netDiag, "uploadMbps");
-                if (download.HasValue || upload.HasValue)
-                {
-                    var dlStr = download.HasValue ? $"↓{download.Value:F1}" : "↓?";
-                    var ulStr = upload.HasValue ? $"↑{upload.Value:F1}" : "↑?";
-                    Add(ev, "Réseau", $"{dlStr} / {ulStr} Mbps", "network_diagnostics.*Mbps");
-                }
-            }
-
-            // 5. Bottlenecks - TÂCHE 12: Tooltip explicatif via EvidenceTooltips (géré côté HealthReport)
-            var signals = GetDiagnosticSignals(root);
+            
+            // 5. Bottlenecks detected
             if (signals.HasValue)
             {
                 var bottlenecks = new List<string>();
-                
                 if (GetBool(GetSignalResult(signals.Value, "cpu_throttle"), "detected") == true)
-                    bottlenecks.Add("CPU bound");
+                    bottlenecks.Add("CPU throttling");
                 if (GetBool(GetSignalResult(signals.Value, "ram_pressure"), "detected") == true)
-                    bottlenecks.Add("RAM pressure");
+                    bottlenecks.Add("Pression RAM");
                 if (GetBool(GetSignalResult(signals.Value, "disk_saturation"), "detected") == true)
-                    bottlenecks.Add("Disk saturation");
-                if (GetBool(GetSignalResult(signals.Value, "network_saturation"), "detected") == true)
-                    bottlenecks.Add("Network saturation");
-                
-                // Pas de check blanc pour "Aucun détecté"
-                Add(ev, "Bottlenecks", bottlenecks.Count > 0 ? $"⚠️ {string.Join(", ", bottlenecks)}" : "Aucun détecté", 
-                    "diagnostic_signals.*");
-            }
-
-            // TÂCHE 12: Températures et Top CPU/RAM SUPPRIMÉS de cette section 
-            // (déjà présents dans les sections CPU, GPU, Memory respectivement)
-            
-            // TÂCHE 13: Nouveaux indicateurs orientés performance globale
-            
-            // 6. Score CPU relatif (basé sur charge et throttling)
-            var cpuScore = 100;
-            var cpuDetails = new List<string>();
-            if (cpuData.HasValue)
-            {
-                var cpuArray = GetArray(cpuData, "cpus") ?? GetArray(cpuData, "cpuList");
-                if (cpuArray.HasValue)
-                {
-                    var first = cpuArray.Value.EnumerateArray().FirstOrDefault();
-                    var load = GetDouble(first, "currentLoad") ?? GetDouble(first, "load");
-                    if (load.HasValue)
-                    {
-                        if (load > 90) { cpuScore -= 30; cpuDetails.Add("saturé"); }
-                        else if (load > 80) { cpuScore -= 15; cpuDetails.Add("charge élevée"); }
-                        else if (load > 70) { cpuScore -= 5; cpuDetails.Add("charge modérée"); }
-                    }
-                }
-            }
-            if (signals.HasValue && GetBool(GetSignalResult(signals.Value, "cpu_throttle"), "detected") == true)
-            {
-                cpuScore -= 20; cpuDetails.Add("throttling");
-            }
-            // Pas de check blanc pour score OK
-            Add(ev, "Score CPU", $"{cpuScore}/100 {(cpuDetails.Count > 0 ? $"({string.Join(", ", cpuDetails)})" : "")}", 
-                "calculé");
-            
-            // 7. Score GPU relatif (basé sur charge et température)
-            var gpuScore = 100;
-            var gpuDetails = new List<string>();
-            if (sensors?.Gpu != null)
-            {
-                if (sensors.Gpu.GpuLoadPercent?.Available == true)
-                {
-                    var load = sensors.Gpu.GpuLoadPercent.Value;
-                    if (load > 95) { gpuScore -= 20; gpuDetails.Add("saturé"); }
-                    else if (load > 85) { gpuScore -= 10; gpuDetails.Add("charge élevée"); }
-                }
-                if (sensors.Gpu.GpuTempC?.Available == true)
-                {
-                    var temp = sensors.Gpu.GpuTempC.Value;
-                    if (temp > 85) { gpuScore -= 25; gpuDetails.Add("surchauffe"); }
-                    else if (temp > 75) { gpuScore -= 10; gpuDetails.Add("temp élevée"); }
-                }
-            }
-            // Pas de check blanc pour score OK
-            Add(ev, "Score GPU", $"{gpuScore}/100 {(gpuDetails.Count > 0 ? $"({string.Join(", ", gpuDetails)})" : "")}", 
-                "calculé");
-            
-            // 8. RAM headroom (marge disponible)
-            if (memData.HasValue)
-            {
-                var totalGB = GetDouble(memData, "totalGB");
-                var availGB = GetDouble(memData, "availableGB");
-                if (totalGB.HasValue && totalGB > 0 && availGB.HasValue)
-                {
-                    var headroomPct = (availGB.Value / totalGB.Value) * 100;
-                    var headroomIcon = headroomPct < 10 ? "🔴" : headroomPct < 20 ? "🟡" : "🟢";
-                    Add(ev, "RAM headroom", $"{headroomIcon} {availGB.Value:F1} GB libre ({headroomPct:F0}%)", 
-                        "scan_powershell.sections.Memory.data (calculé)");
-                }
-            }
-            
-            // 9. Capacité multitâche estimée (basée sur RAM libre et cœurs CPU)
-            var multitaskScore = "N/A";
-            if (cpuData.HasValue && memData.HasValue)
-            {
-                var cpuArray = GetArray(cpuData, "cpus") ?? GetArray(cpuData, "cpuList");
-                var availGB = GetDouble(memData, "availableGB");
-                if (cpuArray.HasValue && availGB.HasValue)
-                {
-                    var first = cpuArray.Value.EnumerateArray().FirstOrDefault();
-                    var cores = GetInt(first, "coreCount") ?? GetInt(first, "cores") ?? 4;
-                    var threads = GetInt(first, "threadCount") ?? GetInt(first, "threads") ?? cores * 2;
+                    bottlenecks.Add("Saturation disque");
                     
-                    // Estimation simplifiée: bonne capacité si >4GB libre ET >4 threads
-                    if (availGB >= 8 && threads >= 8)
-                        multitaskScore = "🟢 Excellente";
-                    else if (availGB >= 4 && threads >= 4)
-                        multitaskScore = "🟢 Bonne";
-                    else if (availGB >= 2 && threads >= 2)
-                        multitaskScore = "🟡 Correcte";
-                    else
-                        multitaskScore = "🟠 Limitée";
+                if (bottlenecks.Count > 0)
+                {
+                    Add(ev, "Goulots détectés", string.Join(", ", bottlenecks), "diagnostic_signals.*");
+                    alerts.AddRange(bottlenecks);
                 }
             }
-            Add(ev, "Capacité multitâche", multitaskScore, "calculé (RAM libre + threads)");
+            
+            // 6. Summary: "What matters now" (max 3 alerts)
+            if (alerts.Count > 0)
+            {
+                var topAlerts = alerts.Take(3).ToList();
+                Add(ev, "À surveiller", string.Join(" | ", topAlerts), "calculé (alertes principales)");
+            }
+            else
+            {
+                Add(ev, "État global", "Performances normales", "calculé (aucune alerte)");
+            }
 
             return new ExtractionResult { Evidence = ev, ExpectedFields = expected, ActualFields = CountActualFields(ev) };
         }

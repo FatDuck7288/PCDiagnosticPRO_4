@@ -13,8 +13,8 @@
 
   Nom PC                    : DESKTOP-LAKVT49
   Utilisateur               : rams_
-  Date/heure scan           : 2026-02-03 16:46:35
-  Uptime                    : 0j 8h 4m
+  Date/heure scan           : 2026-02-03 19:30:41
+  Uptime                    : 0j 10h 49m
   Version OS                : Microsoft Windows NT 10.0.26200.0
   Architecture              : 64-bit
   Mode Admin                : OUI
@@ -28,28 +28,29 @@
   ▶ SECTION 4 : PERFORMANCE ACTIVITÉ
 ────────────────────────────────────────────────────────────────────────────────
 
-  Charge CPU                : 7%
-  Utilisation RAM           : 25%
-  Débit réseau (test HTTP)  : 33,6 Mbps
+  Charge CPU                : 2%
+  Utilisation RAM           : 23%
+  Débit réseau (test HTTP)  : 4,4 Mbps
 
   Top 5 Processus (CPU):
   ┌────────────────────────────┬──────────┬────────────┐
   │ Processus                  │ CPU %    │ RAM (MB)   │
   ├────────────────────────────┼──────────┼────────────┤
-  │ chrome                     │     4,2% │     582,6 │
-  │ PCDiagnosticPro            │     2,0% │     187,7 │
-  │ System                     │     0,4% │      22,4 │
+  │ PCDiagnosticPro            │     1,3% │     194,4 │
+  │ dwm                        │     1,1% │     164,1 │
+  │ System                     │     0,4% │      22,6 │
+  │ Cursor                     │     0,3% │    1818,4 │
   └────────────────────────────┴──────────┴────────────┘
 
   Top 5 Processus (RAM):
   ┌────────────────────────────┬────────────┬──────────┐
   │ Processus                  │ RAM (MB)   │ CPU %    │
   ├────────────────────────────┼────────────┼──────────┤
-  │ Cursor                     │    1538,3 │     0,0% │
-  │ chrome                     │     764,4 │     0,0% │
-  │ explorer                   │     686,6 │     0,0% │
-  │ chrome                     │     582,6 │     4,2% │
-  │ Microsoft.CodeAnalysis.... │     568,3 │     0,0% │
+  │ Cursor                     │    1818,4 │     0,3% │
+  │ explorer                   │     699,6 │     0,0% │
+  │ chrome                     │     586,5 │     0,0% │
+  │ chrome                     │     566,9 │     0,0% │
+  │ Microsoft.CodeAnalysis.... │     542,3 │     0,0% │
   └────────────────────────────┴────────────┴──────────┘
 
   ▶ SECTION 5 : MÉMOIRE RAM
@@ -59,12 +60,12 @@
   ┌─────────────────────────────┬────────────┬────────────┬──────────┐
   │ Catégorie                   │ Valeur     │ Total      │ %        │
   ├─────────────────────────────┼────────────┼────────────┼──────────┤
-  │ Physique : Utilisée          │    23,56 GB │    95,93 GB │     25% │
-  │ Physique : Disponible        │    72,37 GB │    95,93 GB │     75% │
-  │ Virtuelle : Utilisée         │  2311,15 GB │ 131072,00 GB │      2% │
-  │ Virtuelle : Disponible       │ 128760,85 GB │ 131072,00 GB │     98% │
-  │ Fichier pagination : Utilisé │    36,17 GB │   143,93 GB │     25% │
-  │ Fichier pagination : Libre   │   107,76 GB │   143,93 GB │     75% │
+  │ Physique : Utilisée          │    22,33 GB │    95,93 GB │     23% │
+  │ Physique : Disponible        │    73,60 GB │    95,93 GB │     77% │
+  │ Virtuelle : Utilisée         │  2311,21 GB │ 131072,00 GB │      2% │
+  │ Virtuelle : Disponible       │ 128760,79 GB │ 131072,00 GB │     98% │
+  │ Fichier pagination : Utilisé │    34,21 GB │   143,93 GB │     24% │
+  │ Fichier pagination : Libre   │   109,72 GB │   143,93 GB │     76% │
   └─────────────────────────────┴────────────┴────────────┴──────────┘
 
   Source : C# (GlobalMemoryStatusEx)
@@ -77,7 +78,7 @@
   ┌───────┬────────────┬────────────┬────────────┬───────────┬──────────┐
   │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Utilisé % │ Alerte   │
   ├───────┼────────────┼────────────┼────────────┼───────────┼──────────┤
-  │ C:    │    952,6 GB │    374,2 GB │    578,4 GB │    60,7 %  │ OK       │
+  │ C:    │    952,6 GB │    373,3 GB │    579,4 GB │    60,8 %  │ OK       │
   │ D:    │   1863,0 GB │   1095,1 GB │    767,9 GB │    41,2 %  │ OK       │
   │ E:    │   1862,2 GB │   1492,6 GB │    369,5 GB │    19,8 %  │ OK       │
   │ H:    │   1862,9 GB │    696,0 GB │   1166,9 GB │    62,6 %  │ OK       │
@@ -95,8 +96,8 @@
 ────────────────────────────────────────────────────────────────────────────────
 
   Temp CPU                  : Non disponible sur ce matériel (capteur non exposé par firmware)
-  Temp GPU                  : 66,0°C
-  Temp max disques          : 34°C
+  Temp GPU                  : 82,0°C
+  Temp max disques          : 37°C
   Statut thermique          : ✅ Normal
 
   ▶ SECTION 8 : BATTERIE ET ALIMENTATION
@@ -110,12 +111,12 @@
   ═ DÉBIT INTERNET (FAI) ═
 
   Latence et qualité :
-    Latence P50    : 2,3 ms
-    Latence P95    : 6,0 ms
+    Latence P50    : 2,7 ms
+    Latence P95    : 7,0 ms
     Perte paquets  : 0,0%
-    Jitter P95     : 1,36 ms
+    Jitter P95     : 1,32 ms
     Gateway        : 192.168.2.1
-    DNS P95        : 12 ms
+    DNS P95        : 13 ms
 
   ═ Réseau local / configuration ═
   Adaptateur actif          : VMware Virtual Ethernet Adapter for VMnet8
@@ -288,6 +289,6 @@
     ✓ Tests réseau locaux (sans speedtest externe)
     ✓ Processus temps réel (CPU % mesuré sur 750ms)
 
-  Généré le 2026-02-03 à 16:46:36
+  Généré le 2026-02-03 à 19:30:42
   PC Diagnostic PRO — Rapport Unifié v2.0
 ════════════════════════════════════════════════════════════════════════════════

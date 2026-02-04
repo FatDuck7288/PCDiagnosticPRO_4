@@ -297,19 +297,25 @@ namespace PCDiagnosticPro.Services
 
         /// <summary>
         /// PHASE 3.2: Applique le confidence gating.
-        /// - Si collectorErrorsLogical > 0 => ConfidenceScore plafonné à 70 (choix métier : en cas d'erreurs de collecte, la note de confiance ne peut pas dépasser 70).
+        /// FIX #9: Seuils plus tolérants pour éviter le score figé à 70.
+        /// - Si collectorErrorsLogical > 5 => ConfidenceScore plafonné à 70
+        /// - Si collectorErrorsLogical > 0 => ConfidenceScore plafonné à 85 (plus permissif)
         /// - Si missingData critique => ConfidenceScore plafonné à 75.
-        /// NOTE : La note de collecte affichée (70) lorsque des erreurs collecteur sont présentes est donc intentionnelle, pas un bug.
         /// </summary>
         public static int ApplyConfidenceGating(int baseConfidence, CollectorDiagnosticsResult diagnostics)
         {
             int confidence = baseConfidence;
             
-            // Gate 1: Erreurs collecteur => plafond 70 (par conception)
-            if (diagnostics.CollectorErrorsLogical > 0)
+            // FIX #9: Gate 1 - Seuil plus tolérant pour erreurs collecteur
+            if (diagnostics.CollectorErrorsLogical > 5)
             {
                 confidence = Math.Min(confidence, 70);
-                App.LogMessage($"[ConfidenceGating] Capped to 70 due to {diagnostics.CollectorErrorsLogical} collector errors");
+                App.LogMessage($"[ConfidenceGating] Capped to 70 due to {diagnostics.CollectorErrorsLogical} collector errors (>5)");
+            }
+            else if (diagnostics.CollectorErrorsLogical > 0)
+            {
+                confidence = Math.Min(confidence, 85); // FIX #9: Plafond moins restrictif pour 1-5 erreurs
+                App.LogMessage($"[ConfidenceGating] Capped to 85 due to {diagnostics.CollectorErrorsLogical} collector errors (1-5)");
             }
             
             // Gate 2: Données manquantes critiques

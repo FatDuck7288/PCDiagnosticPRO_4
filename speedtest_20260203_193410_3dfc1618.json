@@ -1,0 +1,12 @@
+{
+  "Timestamp": "2026-02-03T19:34:10.4952169-05:00",
+  "RunId": "3dfc1618",
+  "Provider": "LibreSpeed CLI",
+  "DownloadMbps": 195.39,
+  "UploadMbps": 45.26,
+  "LatencyMs": 21.27,
+  "JitterMs": 0.32,
+  "ServerName": "New York, United States (2) (Clouvider)",
+  "SpeedTier": "Tr\u00E8s rapide",
+  "Success": true
+}

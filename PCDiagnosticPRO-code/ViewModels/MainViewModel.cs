@@ -198,13 +198,13 @@ namespace PCDiagnosticPro.ViewModels
                 ["ScoreGradeF"] = "• 🧨 < 50 : F (Critique - Urgence)",
                 ["DeleteScanConfirmTitle"] = "Confirmation",
                 ["DeleteScanConfirmMessage"] = "Voulez-vous vraiment supprimer ce scan ?",
-                // Scan phases labels (localized)
-                ["PhaseLabel_PowerShell"] = "Pilotes et périphériques",
-                ["PhaseLabel_Capteurs"] = "Capteurs matériel",
-                ["PhaseLabel_Compteurs"] = "Compteurs performances",
-                ["PhaseLabel_Signaux"] = "Signaux diagnostiques",
-                ["PhaseLabel_Telemetrie"] = "Télémétrie processus",
-                ["PhaseLabel_Reseau"] = "Diagnostic réseau",
+                // Scan phases labels (localized) - FIX #8: Meaningful, user-understandable phase names
+                ["PhaseLabel_PowerShell"] = "Inventaire système",
+                ["PhaseLabel_Capteurs"] = "Capteurs & températures",
+                ["PhaseLabel_Compteurs"] = "Performances temps réel",
+                ["PhaseLabel_Signaux"] = "Stabilité & intégrité",
+                ["PhaseLabel_Telemetrie"] = "Analyse processus",
+                ["PhaseLabel_Reseau"] = "Connectivité réseau",
                 ["PhaseLabel_Rapport"] = "Génération rapport",
                 // Live feed messages for phases
                 ["LiveFeed_PhaseStart_PowerShell"] = "▶ Démarrage du scan PowerShell...",
@@ -325,14 +325,14 @@ namespace PCDiagnosticPro.ViewModels
                 ["ScoreGradeF"] = "• 🧨 < 50 : F (Critical - Urgent)",
                 ["DeleteScanConfirmTitle"] = "Confirmation",
                 ["DeleteScanConfirmMessage"] = "Do you really want to delete this scan?",
-                // Scan phases labels (localized)
-                ["PhaseLabel_PowerShell"] = "PowerShell",
-                ["PhaseLabel_Capteurs"] = "Sensors",
-                ["PhaseLabel_Compteurs"] = "Counters",
-                ["PhaseLabel_Signaux"] = "Signals",
-                ["PhaseLabel_Telemetrie"] = "Telemetry",
-                ["PhaseLabel_Reseau"] = "Network",
-                ["PhaseLabel_Rapport"] = "Report",
+                // Scan phases labels (localized) - FIX #8: Meaningful phase names
+                ["PhaseLabel_PowerShell"] = "System Inventory",
+                ["PhaseLabel_Capteurs"] = "Sensors & Temperatures",
+                ["PhaseLabel_Compteurs"] = "Real-time Performance",
+                ["PhaseLabel_Signaux"] = "Stability & Integrity",
+                ["PhaseLabel_Telemetrie"] = "Process Analysis",
+                ["PhaseLabel_Reseau"] = "Network Connectivity",
+                ["PhaseLabel_Rapport"] = "Report Generation",
                 // Live feed messages for phases
                 ["LiveFeed_PhaseStart_PowerShell"] = "▶ Starting PowerShell scan...",
                 ["LiveFeed_PhaseEnd_PowerShell"] = "✅ PowerShell scan completed",
@@ -452,14 +452,14 @@ namespace PCDiagnosticPro.ViewModels
                 ["ScoreGradeF"] = "• 🧨 < 40 : F",
                 ["DeleteScanConfirmTitle"] = "Confirmación",
                 ["DeleteScanConfirmMessage"] = "¿Desea eliminar este escaneo?",
-                // Scan phases labels (localized)
-                ["PhaseLabel_PowerShell"] = "PowerShell",
-                ["PhaseLabel_Capteurs"] = "Sensores",
-                ["PhaseLabel_Compteurs"] = "Contadores",
-                ["PhaseLabel_Signaux"] = "Señales",
-                ["PhaseLabel_Telemetrie"] = "Telemetría",
-                ["PhaseLabel_Reseau"] = "Red",
-                ["PhaseLabel_Rapport"] = "Informe",
+                // Scan phases labels (localized) - FIX #8: Meaningful phase names
+                ["PhaseLabel_PowerShell"] = "Inventario del sistema",
+                ["PhaseLabel_Capteurs"] = "Sensores y temperaturas",
+                ["PhaseLabel_Compteurs"] = "Rendimiento en tiempo real",
+                ["PhaseLabel_Signaux"] = "Estabilidad e integridad",
+                ["PhaseLabel_Telemetrie"] = "Análisis de procesos",
+                ["PhaseLabel_Reseau"] = "Conectividad de red",
+                ["PhaseLabel_Rapport"] = "Generación de informe",
                 // Live feed messages for phases
                 ["LiveFeed_PhaseStart_PowerShell"] = "▶ Iniciando escaneo PowerShell...",
                 ["LiveFeed_PhaseEnd_PowerShell"] = "✅ Escaneo PowerShell completado",
@@ -877,8 +877,28 @@ namespace PCDiagnosticPro.ViewModels
             }
         }
 
+        /// <summary>
+        /// Activer la surveillance matérielle (LibreHardwareMonitor) pour températures CPU/GPU.
+        /// Quand true, le collecteur full est utilisé ; sinon safe (WMI only). Défaut: false.
+        /// </summary>
+        private bool _enableHardwareMonitoring = false;
+        public bool EnableHardwareMonitoring
+        {
+            get => _enableHardwareMonitoring;
+            set
+            {
+                if (SetProperty(ref _enableHardwareMonitoring, value))
+                {
+                    SaveSettingsAsync().ConfigureAwait(false);
+                }
+            }
+        }
+
         // === UDIS — SECTIONS SUMMARY POUR UI ===
         public ObservableCollection<UdisSectionSummary> UdisSectionsSummary { get; } = new();
+
+        // FIX #3: Constats en temps réel affichés pendant le scan
+        public ObservableCollection<string> LiveFindings { get; } = new();
 
         private ObservableCollection<HealthSection> _healthSections = new();
         public ObservableCollection<HealthSection> HealthSections
@@ -950,6 +970,67 @@ namespace PCDiagnosticPro.ViewModels
             OnPropertyChanged(nameof(IsSensorBlocked));
             OnPropertyChanged(nameof(SensorBlockingMessage));
             OnPropertyChanged(nameof(HasSensorBlockingMessage));
+        }
+
+        /// <summary>
+        /// FIX #3: Met à jour les constats en temps réel basés sur les données collectées.
+        /// </summary>
+        private void UpdateLiveFindings()
+        {
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                LiveFindings.Clear();
+                
+                if (_lastSensorsResult == null) return;
+                
+                // Température CPU
+                if (_lastSensorsResult.Cpu?.CpuTempC?.Available == true)
+                {
+                    var temp = _lastSensorsResult.Cpu.CpuTempC.Value;
+                    if (temp < 70)
+                        LiveFindings.Add("✅ Température CPU : normale");
+                    else if (temp < 85)
+                        LiveFindings.Add("⚠️ Température CPU : élevée");
+                    else
+                        LiveFindings.Add("🔥 Température CPU : critique");
+                }
+                
+                // Température GPU
+                if (_lastSensorsResult.Gpu?.GpuTempC?.Available == true)
+                {
+                    var temp = _lastSensorsResult.Gpu.GpuTempC.Value;
+                    if (temp < 75)
+                        LiveFindings.Add("✅ Température GPU : normale");
+                    else if (temp < 85)
+                        LiveFindings.Add("⚠️ Température GPU : élevée");
+                    else
+                        LiveFindings.Add("🔥 Température GPU : critique");
+                }
+                
+                // VRAM
+                if (_lastSensorsResult.Gpu?.VramUsedMB?.Available == true && 
+                    _lastSensorsResult.Gpu?.VramTotalMB?.Available == true)
+                {
+                    var total = _lastSensorsResult.Gpu.VramTotalMB.Value;
+                    if (total > 0)
+                    {
+                        var usedPct = _lastSensorsResult.Gpu.VramUsedMB.Value / total * 100;
+                        if (usedPct > 90)
+                            LiveFindings.Add("⚠️ VRAM GPU : saturée");
+                    }
+                }
+                
+                // RAM : HardwareSensorsResult n'a pas de propriété Memory ; on utilise _lastPerfCounterResult si dispo
+                if (_lastPerfCounterResult?.MemoryAvailableMB is double availMB && availMB < 1024)
+                {
+                    LiveFindings.Add("⚠️ RAM : peu de mémoire disponible");
+                }
+                
+                if (!LiveFindings.Any())
+                {
+                    LiveFindings.Add("📊 Analyse en cours...");
+                }
+            });
         }
 
         private void UpdateUdisSectionsSummary()
@@ -1373,6 +1454,7 @@ namespace PCDiagnosticPro.ViewModels
         public ICommand NavigateToChatCommand { get; }
         public ICommand BrowseReportDirectoryCommand { get; }
         public ICommand SaveSettingsCommand { get; }
+        public ICommand ApplyDefenderExclusionCommand { get; }
         public ICommand SelectHistoryScanCommand { get; }
         public ICommand BackToHistoryCommand { get; }
         public ICommand NavigateToArchivesCommand { get; }
@@ -1466,6 +1548,7 @@ namespace PCDiagnosticPro.ViewModels
             NavigateToChatCommand = new RelayCommand(() => { CurrentView = "Chat"; SelectedHistoryScan = null; IsViewingArchives = false; });
             BrowseReportDirectoryCommand = new RelayCommand(BrowseReportDirectory);
             SaveSettingsCommand = new RelayCommand(SaveSettings, () => IsSettingsDirty);
+            ApplyDefenderExclusionCommand = new RelayCommand(ApplyDefenderExclusion);
             SelectHistoryScanCommand = new RelayCommand<ScanHistoryItem>(SelectHistoryScan);
             BackToHistoryCommand = new RelayCommand(BackToHistory);
             NavigateToArchivesCommand = new RelayCommand(NavigateToArchives, () => ScanHistory.Count > 0 || ArchivedScanHistory.Count > 0);
@@ -1712,9 +1795,10 @@ namespace PCDiagnosticPro.ViewModels
                     }
                 }
 
-                _scanStopwatch.Stop();
-                _liveFeedTimer.Stop();
-                // Ne pas arrêter le timer ici : progression graduelle jusqu'à 100%
+                // FIX #1: Ne pas arrêter le stopwatch ici - il doit continuer jusqu'à FinalizeScan()
+                // _scanStopwatch.Stop();
+                // FIX #6: DO NOT stop live feed timer here - it should continue until report generation is complete
+                // _liveFeedTimer will be stopped at the end of FinalizeScan() when everything is truly finished
 
                 if (timedOut)
                 {
@@ -1761,7 +1845,10 @@ namespace PCDiagnosticPro.ViewModels
                     // Préparer le SignalsOrchestrator avant le parallélisme
                     var signalsOrchestrator = new DiagnosticsSignals.SignalsOrchestrator();
                     signalsOrchestrator.SetAllowExternalNetworkTests(_allowExternalNetworkTests);
-                    
+
+                    // LibreHardwareMonitor (full sensors) uniquement si l'utilisateur a activé la surveillance matérielle
+                    _hardwareSensorsCollector.ForceUnsafeMode = _enableHardwareMonitoring;
+
                     // Lancer les 3 collecteurs en parallèle
                     var sensorsTask = Task.Run(() => _hardwareSensorsCollector.CollectAsync(_scanCts.Token), _scanCts.Token);
                     var countersTask = Task.Run(() => PerfCounterCollector.CollectAsync(_scanCts.Token), _scanCts.Token);
@@ -1802,6 +1889,9 @@ namespace PCDiagnosticPro.ViewModels
                     
                     // Notify UI of sensor blocking status
                     NotifySensorBlockingChanged();
+                    
+                    // FIX #3: Mettre à jour les constats en temps réel
+                    UpdateLiveFindings();
                 }
                 catch (Exception ex)
                 {
@@ -2200,7 +2290,9 @@ namespace PCDiagnosticPro.ViewModels
             UpdateProgress(100, GetString("PhaseLabel_Rapport"));
             SetSectionPhase(6, "Done");
             StopScanProgressTimer();
-            App.LogMessage("Progress=100 / IsScanning=false");
+            // FIX #6: Stop elapsed time timer ONLY when report generation is truly finished
+            _liveFeedTimer.Stop();
+            App.LogMessage("Progress=100 / IsScanning=false / LiveFeedTimer stopped");
         }
 
         private bool TryBuildChartData(ScanResult result, out string reason)
@@ -3629,6 +3721,32 @@ namespace PCDiagnosticPro.ViewModels
             }
         }
 
+        /// <summary>
+        /// Applique l'exception Windows Defender au niveau machine (tous les usagers). Explicite, loggé, visible.
+        /// </summary>
+        private async void ApplyDefenderExclusion()
+        {
+            StatusMessage = "Ajout de l'exception Defender en cours…";
+            var path = WindowsDefenderExclusionService.GetDefaultExclusionPath();
+            App.LogMessage($"[DefenderExclusion] Path à exclure (machine): {path}");
+            try
+            {
+                var (success, message) = await WindowsDefenderExclusionService.AddMachineExclusionAsync(path).ConfigureAwait(false);
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    StatusMessage = success ? message : $"Échec : {message}";
+                });
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[DefenderExclusion] Erreur: {ex.Message}");
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    StatusMessage = $"Erreur : {ex.Message}";
+                });
+            }
+        }
+
         private void SaveSettings()
         {
             try
@@ -3637,11 +3755,12 @@ namespace PCDiagnosticPro.ViewModels
                 {
                     ReportDirectory = ReportDirectory,
                     Language = CurrentLanguage,
-                    AllowExternalNetworkTests = AllowExternalNetworkTests // FIX 7
+                    AllowExternalNetworkTests = AllowExternalNetworkTests, // FIX 7
+                    EnableHardwareMonitoring = EnableHardwareMonitoring
                 };
 
                 var jsonContent = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_configPath, jsonContent, Encoding.UTF8);
+                File.WriteAllText(_configPath, jsonContent, new UTF8Encoding(true)); // UTF-8 with BOM for French accents
                 
                 IsSettingsDirty = false;
                 App.LogMessage("Paramètres sauvegardés");
@@ -3665,11 +3784,12 @@ namespace PCDiagnosticPro.ViewModels
                     {
                         ReportDirectory = ReportDirectory,
                         Language = CurrentLanguage,
-                        AllowExternalNetworkTests = AllowExternalNetworkTests
+                        AllowExternalNetworkTests = AllowExternalNetworkTests,
+                        EnableHardwareMonitoring = EnableHardwareMonitoring
                     };
 
                     var jsonContent = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(_configPath, jsonContent, Encoding.UTF8);
+                    File.WriteAllText(_configPath, jsonContent, new UTF8Encoding(true));
                     App.LogMessage("Paramètres sauvegardés (async)");
                 }
                 catch (Exception ex)
@@ -3710,6 +3830,11 @@ namespace PCDiagnosticPro.ViewModels
                     {
                         _allowExternalNetworkTests = extNetEl.GetBoolean();
                     }
+
+                    if (root.TryGetProperty("EnableHardwareMonitoring", out var hwMonEl))
+                    {
+                        _enableHardwareMonitoring = hwMonEl.GetBoolean();
+                    }
                 }
                 else
                 {
@@ -3719,6 +3844,7 @@ namespace PCDiagnosticPro.ViewModels
 
                 OnPropertyChanged(nameof(ReportDirectory));
                 OnPropertyChanged(nameof(AllowExternalNetworkTests));
+                OnPropertyChanged(nameof(EnableHardwareMonitoring));
             }
             catch (Exception ex)
             {

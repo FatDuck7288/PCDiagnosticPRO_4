@@ -1,7 +1,14 @@
 using System;
+using System.ComponentModel;
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using PCDiagnosticPro.ViewModels;
+using WpfAnimatedGif;
 
 namespace PCDiagnosticPro
 {
@@ -13,12 +20,24 @@ namespace PCDiagnosticPro
         // DEBUG: Timer pour audit layout du ring pendant le scan
         private DispatcherTimer? _ringLayoutAuditTimer;
         private bool _ringAuditLogged = false;
+
+        /// <summary>
+        /// True si le GIF planète est chargé (planet.gif présent). Utilisé pour Play/Pause selon IsSpeedTestRunning.
+        /// </summary>
+        private bool _speedTestPlanetGifLoaded;
         
+        /// <summary>
+        /// FIX #2: Storyboard pour rotation du fallback emoji quand GIF absent
+        /// </summary>
+        private Storyboard? _fallbackRotationStoryboard;
+
         public MainWindow()
         {
             InitializeComponent();
             App.LogMessage("MainWindow initialisé");
-            
+
+            Loaded += OnMainWindowLoaded;
+
             // DEBUG: Audit layout ring - log les tailles réelles après le premier rendu
             Loaded += (s, e) => LogRingLayoutAudit("OnLoaded");
             SizeChanged += (s, e) => LogRingLayoutAudit("OnSizeChanged");
@@ -35,6 +54,96 @@ namespace PCDiagnosticPro
                 }
                 LogRingLayoutAudit($"DuringScan_{auditCount}");
             };
+        }
+
+        /// <summary>
+        /// Charge le GIF planète (Assets/Animations/planet.gif) si présent, et branche Play/Pause sur IsSpeedTestRunning.
+        /// Si planet.gif est absent : fallback emoji affiché, TODO côté déploiement.
+        /// </summary>
+        private void OnMainWindowLoaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var gifPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Animations", "planet.gif");
+                if (File.Exists(gifPath))
+                {
+                    var uri = new Uri(gifPath, UriKind.Absolute);
+                    var bitmap = new BitmapImage(uri);
+                    ImageBehavior.SetAnimatedSource(SpeedTestPlanetImage, bitmap);
+                    SpeedTestPlanetImage.Visibility = Visibility.Visible;
+                    SpeedTestPlanetFallback.Visibility = Visibility.Collapsed;
+                    _speedTestPlanetGifLoaded = true;
+
+                    var controller = ImageBehavior.GetAnimationController(SpeedTestPlanetImage);
+                    controller?.Pause();
+                }
+                else
+                {
+                    // FIX #2: GIF absent - use fallback emoji with rotation storyboard
+                    SpeedTestPlanetFallback.Visibility = Visibility.Visible;
+                    // Get storyboard from XAML resources
+                    if (SpeedTestPlanetFallback.Parent is FrameworkElement parentGrid)
+                    {
+                        _fallbackRotationStoryboard = parentGrid.TryFindResource("SpeedTestFallbackRotation") as Storyboard;
+                    }
+                }
+
+                if (DataContext is MainViewModel vm)
+                {
+                    vm.PropertyChanged += OnMainViewModelPropertyChanged;
+                    if (_speedTestPlanetGifLoaded && vm.IsSpeedTestRunning)
+                    {
+                        var ctrl = ImageBehavior.GetAnimationController(SpeedTestPlanetImage);
+                        ctrl?.Play();
+                    }
+                    else if (!_speedTestPlanetGifLoaded && vm.IsSpeedTestRunning && _fallbackRotationStoryboard != null)
+                    {
+                        // Start fallback rotation if speedtest already running
+                        _fallbackRotationStoryboard.Begin(this, true);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[SpeedTestPlanet] Erreur chargement GIF: {ex.Message}");
+                SpeedTestPlanetFallback.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void OnMainViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(MainViewModel.IsSpeedTestRunning))
+                return;
+            try
+            {
+                var vm = DataContext as MainViewModel;
+                if (vm == null) return;
+                
+                if (_speedTestPlanetGifLoaded)
+                {
+                    // GIF loaded - control via WpfAnimatedGif
+                    var controller = ImageBehavior.GetAnimationController(SpeedTestPlanetImage);
+                    if (controller != null)
+                    {
+                        if (vm.IsSpeedTestRunning)
+                            controller.Play();
+                        else
+                            controller.Pause();
+                    }
+                }
+                else if (_fallbackRotationStoryboard != null)
+                {
+                    // FIX #2: GIF absent - control fallback rotation storyboard
+                    if (vm.IsSpeedTestRunning)
+                        _fallbackRotationStoryboard.Begin(this, true);
+                    else
+                        _fallbackRotationStoryboard.Stop(this);
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[SpeedTestPlanet] Erreur Play/Pause: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -94,6 +203,24 @@ namespace PCDiagnosticPro
         {
             _ringAuditLogged = false;
             _ringLayoutAuditTimer?.Start();
+        }
+
+        /// <summary>
+        /// FIX #7: Copie le contenu du tooltip dans le presse-papiers.
+        /// </summary>
+        private void CopyTooltipToClipboard(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem && menuItem.Tag is string tooltip && !string.IsNullOrEmpty(tooltip))
+            {
+                try
+                {
+                    Clipboard.SetText(tooltip);
+                }
+                catch (Exception ex)
+                {
+                    App.LogMessage($"[CopyTooltip] Erreur: {ex.Message}");
+                }
+            }
         }
 
         private void OpenContextMenu(object sender, RoutedEventArgs e)
