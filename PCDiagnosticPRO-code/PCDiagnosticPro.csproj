@@ -33,10 +33,15 @@
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.2" />
   </ItemGroup>
 
-  <!-- Sprites PNG 1–12 : copie optionnelle vers output (pattern _N- dans le nom). Ne bloque pas la build si absent ou chemin long. -->
+  <!-- Exclure les anciens PNG Cursor (noms trop longs) d'une éventuelle inclusion Content. -->
+  <ItemGroup>
+    <Content Remove="Assets\Animations\c__*.png" />
+  </ItemGroup>
+
+  <!-- Sprites globe 1.png–12.png uniquement (évite MSB3030 sur noms de fichiers trop longs). -->
   <Target Name="CopyGlobeSpritesToOutput" AfterTargets="Build" Condition="Exists('Assets\Animations')">
     <ItemGroup>
-      <_GlobePng Include="Assets\Animations\*.png" />
+      <_GlobePng Include="Assets\Animations\1.png;Assets\Animations\2.png;Assets\Animations\3.png;Assets\Animations\4.png;Assets\Animations\5.png;Assets\Animations\6.png;Assets\Animations\7.png;Assets\Animations\8.png;Assets\Animations\9.png;Assets\Animations\10.png;Assets\Animations\11.png;Assets\Animations\12.png" />
     </ItemGroup>
     <MakeDir Directories="$(OutputPath)Assets\Animations" Condition="!Exists('$(OutputPath)Assets\Animations')" />
     <Copy SourceFiles="@(_GlobePng)" DestinationFolder="$(OutputPath)Assets\Animations" SkipUnchangedFiles="true" Condition="'@(_GlobePng)' != ''" ContinueOnError="true" />

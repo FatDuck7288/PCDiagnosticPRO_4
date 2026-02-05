@@ -13,8 +13,8 @@
 
   Nom PC                    : DESKTOP-LAKVT49
   Utilisateur               : rams_
-  Date/heure scan           : 2026-02-04 16:34:56
-  Uptime                    : 1j 7h 53m
+  Date/heure scan           : 2026-02-04 19:59:12
+  Uptime                    : 1j 11h 17m
   Version OS                : Microsoft Windows NT 10.0.26200.0
   Architecture              : 64-bit
   Mode Admin                : OUI
@@ -28,30 +28,30 @@
   ▶ SECTION 4 : PERFORMANCE ACTIVITÉ
 ────────────────────────────────────────────────────────────────────────────────
 
-  Charge CPU                : 10%
-  Utilisation RAM           : 27%
-  Débit réseau (test HTTP)  : 5,1 Mbps
+  Charge CPU                : 0%
+  Utilisation RAM           : 28%
+  Débit réseau (test HTTP)  : 5,3 Mbps
 
   Top 5 Processus (CPU):
   ┌────────────────────────────┬──────────┬────────────┐
   │ Processus                  │ CPU %    │ RAM (MB)   │
   ├────────────────────────────┼──────────┼────────────┤
-  │ PCDiagnosticPro            │     2,1% │     220,0 │
-  │ System                     │     1,6% │      26,4 │
-  │ dwm                        │     0,8% │     179,0 │
-  │ Cursor                     │     0,8% │    1807,5 │
-  │ MsMpEng                    │     0,7% │     421,1 │
+  │ MsMpEng                    │     1,2% │     413,8 │
+  │ PCDiagnosticPro            │     0,5% │     206,1 │
+  │ RazerAppEngine             │     0,3% │     207,6 │
+  │ System                     │     0,3% │      26,8 │
+  │ SecurityHealthService      │     0,3% │      28,8 │
   └────────────────────────────┴──────────┴────────────┘
 
   Top 5 Processus (RAM):
   ┌────────────────────────────┬────────────┬──────────┐
   │ Processus                  │ RAM (MB)   │ CPU %    │
   ├────────────────────────────┼────────────┼──────────┤
-  │ Cursor                     │    1807,5 │     0,8% │
-  │ explorer                   │    1401,0 │     0,0% │
-  │ chrome                     │     979,1 │     0,0% │
-  │ chrome                     │     803,0 │     0,0% │
-  │ chrome                     │     750,5 │     0,0% │
+  │ Cursor                     │    1683,0 │     0,0% │
+  │ explorer                   │    1378,5 │     0,0% │
+  │ chrome                     │     795,2 │     0,0% │
+  │ chrome                     │     727,0 │     0,0% │
+  │ chrome                     │     661,3 │     0,1% │
   └────────────────────────────┴────────────┴──────────┘
 
   ▶ SECTION 5 : MÉMOIRE RAM
@@ -61,12 +61,12 @@
   ┌─────────────────────────────┬────────────┬────────────┬──────────┐
   │ Catégorie                   │ Valeur     │ Total      │ %        │
   ├─────────────────────────────┼────────────┼────────────┼──────────┤
-  │ Physique : Utilisée          │    26,08 GB │    95,93 GB │     27% │
-  │ Physique : Disponible        │    69,85 GB │    95,93 GB │     73% │
-  │ Virtuelle : Utilisée         │  2311,26 GB │ 131072,00 GB │      2% │
-  │ Virtuelle : Disponible       │ 128760,74 GB │ 131072,00 GB │     98% │
-  │ Fichier pagination : Utilisé │    41,10 GB │   143,93 GB │     29% │
-  │ Fichier pagination : Libre   │   102,83 GB │   143,93 GB │     71% │
+  │ Physique : Utilisée          │    26,43 GB │    95,93 GB │     28% │
+  │ Physique : Disponible        │    69,50 GB │    95,93 GB │     72% │
+  │ Virtuelle : Utilisée         │  2311,09 GB │ 131072,00 GB │      2% │
+  │ Virtuelle : Disponible       │ 128760,91 GB │ 131072,00 GB │     98% │
+  │ Fichier pagination : Utilisé │    38,05 GB │   143,93 GB │     26% │
+  │ Fichier pagination : Libre   │   105,88 GB │   143,93 GB │     74% │
   └─────────────────────────────┴────────────┴────────────┴──────────┘
 
   Source : C# (GlobalMemoryStatusEx)
@@ -79,8 +79,8 @@
   ┌───────┬────────────┬────────────┬────────────┬───────────┬──────────┐
   │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Utilisé % │ Alerte   │
   ├───────┼────────────┼────────────┼────────────┼───────────┼──────────┤
-  │ C:    │    952,6 GB │    369,8 GB │    582,9 GB │    61,2 %  │ OK       │
-  │ D:    │   1863,0 GB │   1095,0 GB │    768,0 GB │    41,2 %  │ OK       │
+  │ C:    │    952,6 GB │    369,5 GB │    583,1 GB │    61,2 %  │ OK       │
+  │ D:    │   1863,0 GB │   1095,0 GB │    768,1 GB │    41,2 %  │ OK       │
   │ E:    │   1862,2 GB │   1492,3 GB │    369,9 GB │    19,9 %  │ OK       │
   │ H:    │   1862,9 GB │    696,0 GB │   1166,9 GB │    62,6 %  │ OK       │
   └───────┴────────────┴────────────┴────────────┴───────────┴──────────┘
@@ -94,9 +94,9 @@
   ▶ SECTION 7 : TEMPÉRATURES ET REFROIDISSEMENT
 ────────────────────────────────────────────────────────────────────────────────
 
-  Temp CPU                  : 70,5°C
-  Temp GPU                  : 80,0°C
-  Temp max disques          : 59°C
+  Temp CPU                  : 63,4°C
+  Temp GPU                  : 78,0°C
+  Temp max disques          : 51°C
   Statut thermique          : ✅ Normal
 
   ▶ SECTION 8 : BATTERIE ET ALIMENTATION
@@ -111,11 +111,11 @@
 
   Latence et qualité :
     Latence P50    : 2,3 ms
-    Latence P95    : 6,0 ms
+    Latence P95    : 9,0 ms
     Perte paquets  : 0,0%
-    Jitter P95     : 1,13 ms
+    Jitter P95     : 2,86 ms
     Gateway        : 192.168.2.1
-    DNS P95        : 3 ms
+    DNS P95        : 5 ms
 
   ═ Réseau local / configuration ═
   Adaptateur actif          : VMware Virtual Ethernet Adapter for VMnet8
@@ -226,7 +226,7 @@
 
   ═ Services Windows ═
   Total services            : 310
-  En cours                  : 133
+  En cours                  : 134
 
   ▶ SECTION 14 : SANTÉ SYSTÈME ET ERREURS
 ────────────────────────────────────────────────────────────────────────────────
@@ -288,6 +288,6 @@
     ✓ Tests réseau locaux (sans speedtest externe)
     ✓ Processus temps réel (CPU % mesuré sur 750ms)
 
-  Généré le 2026-02-04 à 16:34:58
+  Généré le 2026-02-04 à 19:59:13
   PC Diagnostic PRO — Rapport Unifié v2.0
 ════════════════════════════════════════════════════════════════════════════════
