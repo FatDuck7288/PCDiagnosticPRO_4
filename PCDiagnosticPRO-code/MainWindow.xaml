@@ -319,212 +319,217 @@
                     radius=150 → 300, max stroke=14 → 28, blur=50 → 100, marge=32 → 460.
                     Inner doit contenir 300 + 2×(stroke/2 + blur) = 300 + 14 + 100 = 414.
                     Donc Padding = (460 - 414) / 2 = 23 (pas 25) pour que l'arc + glow ne soit jamais coupé.
-                    ClipToBounds=False sur TOUTE la hiérarchie (Viewbox, Border, Grid).
+                    ClipToBounds=False sur toute la hiérarchie (Border, Grid).
                     -->
                     <Grid x:Name="RingRowContainer" Grid.Row="2" ClipToBounds="False" 
                           MinWidth="580" MinHeight="580"
                           HorizontalAlignment="Center" VerticalAlignment="Center"
                           UseLayoutRounding="True" Margin="60">
-                        
-                        <!-- Viewbox: ClipToBounds=False (équivalent SVG overflow="visible") -->
-                        <Viewbox x:Name="RingViewbox" Stretch="Uniform" StretchDirection="DownOnly"
-                                 MinWidth="480" MinHeight="480" ClipToBounds="False">
+                        <Grid.Resources>
+                            <Storyboard x:Key="ScanSpinnerRotation">
+                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                 From="0" To="360" Duration="0:0:1"
+                                                 RepeatBehavior="Forever"/>
+                            </Storyboard>
+                        </Grid.Resources>
                         <Border x:Name="RingOuterBorder" Width="460" Height="460" MinWidth="460" MinHeight="460"
                                 ClipToBounds="False" Padding="20"
                                 UseLayoutRounding="True" SnapsToDevicePixels="True">
                         <Grid x:Name="RingInnerContainer" ClipToBounds="False">
-                            <Grid.Resources>
-                                <Storyboard x:Key="ScanSpinnerRotation">
-                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
-                                                     From="0" To="360" Duration="0:0:1"
-                                                     RepeatBehavior="Forever"/>
-                                </Storyboard>
-                            </Grid.Resources>
-                            
-                            <!-- COUCHE 1: Piste de fond (cercle gris) - 280x280, rayon 140 -->
-                            <Ellipse Width="280" Height="280"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center"
-                                     Stroke="{StaticResource BackgroundLightBrush}" 
-                                     StrokeThickness="8"/>
+                            <Grid x:Name="RingOverlayLayer"
+                                  Panel.ZIndex="10"
+                                  IsHitTestVisible="False"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center">
+                                <!-- COUCHE 1: Piste de fond (cercle gris) - 280x280, rayon 140 -->
+                                <Ellipse Width="280" Height="280"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                                         Stroke="{StaticResource BackgroundLightBrush}" 
+                                         StrokeThickness="8"/>
 
-                            <!-- COUCHE 2: Arc de progression avec glow - padding optimisé pour éviter clipping -->
-                            <Border Padding="50" ClipToBounds="False" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Grid Width="280" Height="280"
+                                <!-- COUCHE 2: Arc de progression avec glow - padding optimisé pour éviter clipping -->
+                                <Border Padding="50" ClipToBounds="False" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Grid Width="280" Height="280"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          ClipToBounds="False"
+                                          Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
+                                          Opacity="{Binding ProgressPercent, Converter={StaticResource ProgressToOpacity}}">
+                                        <Grid.Effect>
+                                            <DropShadowEffect Color="{StaticResource AccentRed}"
+                                                              BlurRadius="20" ShadowDepth="0" Opacity="0.8"/>
+                                        </Grid.Effect>
+                                        <Path Width="280" Height="280"
+                                              StrokeThickness="10"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              Data="{Binding ProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=140}">
+                                            <Path.Stroke>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="{StaticResource AccentRed}" Offset="0"/>
+                                                    <GradientStop Color="#FFFF8B94" Offset="0.5"/>
+                                                    <GradientStop Color="{StaticResource AccentRed}" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Path.Stroke>
+                                        </Path>
+                                    </Grid>
+                                </Border>
+
+                                <!-- COUCHE 3: Arc de progression principal - 280x280, rayon 140 -->
+                                <Path Width="280" Height="280"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      Stroke="{StaticResource AccentRedBrush}"
+                                      StrokeThickness="8"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      Data="{Binding ProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=140}"
+                                      Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"/>
+                                
+                                <!-- COUCHE 4: Cercle décoratif gradient - 280x280 -->
+                                <Ellipse Width="280" Height="280"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                                         StrokeThickness="2"
+                                         Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}">
+                                    <Ellipse.Stroke>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="{StaticResource AccentRed}" Offset="0"/>
+                                            <GradientStop Color="Transparent" Offset="0.5"/>
+                                            <GradientStop Color="{StaticResource AccentRed}" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Ellipse.Stroke>
+                                </Ellipse>
+
+                                <!-- COUCHE 5: Anneau rotatif segmenté - 260x260 -->
+                                <Grid Width="260" Height="260"
                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                       ClipToBounds="False"
                                       Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
-                                      Opacity="{Binding ProgressPercent, Converter={StaticResource ProgressToOpacity}}">
-                                    <Grid.Effect>
-                                        <DropShadowEffect Color="{StaticResource AccentRed}"
-                                                          BlurRadius="20" ShadowDepth="0" Opacity="0.8"/>
-                                    </Grid.Effect>
-                                    <Path Width="280" Height="280"
-                                          StrokeThickness="10"
-                                          StrokeStartLineCap="Round"
-                                          StrokeEndLineCap="Round"
-                                          Data="{Binding ProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=140}">
-                                        <Path.Stroke>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                <GradientStop Color="{StaticResource AccentRed}" Offset="0"/>
-                                                <GradientStop Color="#FFFF8B94" Offset="0.5"/>
-                                                <GradientStop Color="{StaticResource AccentRed}" Offset="1"/>
-                                            </LinearGradientBrush>
-                                        </Path.Stroke>
-                                    </Path>
+                                      RenderTransformOrigin="0.5,0.5">
+                                    <Grid.RenderTransform>
+                                        <RotateTransform/>
+                                    </Grid.RenderTransform>
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsScanning}" Value="True">
+                                                    <DataTrigger.EnterActions>
+                                                        <BeginStoryboard x:Name="ScanRingStoryboard" Storyboard="{StaticResource ScanSpinnerRotation}"/>
+                                                    </DataTrigger.EnterActions>
+                                                    <DataTrigger.ExitActions>
+                                                        <StopStoryboard BeginStoryboardName="ScanRingStoryboard"/>
+                                                    </DataTrigger.ExitActions>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
+                                    <Ellipse Width="260" Height="260"
+                                             Stroke="{StaticResource AccentRedBrush}"
+                                             StrokeThickness="14"
+                                             StrokeDashArray="0.04 0.96"/>
                                 </Grid>
-                            </Border>
-
-                            <!-- COUCHE 3: Arc de progression principal - 280x280, rayon 140 -->
-                            <Path Width="280" Height="280"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center"
-                                  Stroke="{StaticResource AccentRedBrush}"
-                                  StrokeThickness="8"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"
-                                  Data="{Binding ProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=140}"
-                                  Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"/>
-                            
-                            <!-- COUCHE 4: Cercle décoratif gradient - 280x280 -->
-                            <Ellipse Width="280" Height="280"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center"
-                                     StrokeThickness="2"
-                                     Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}">
-                                <Ellipse.Stroke>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="{StaticResource AccentRed}" Offset="0"/>
-                                        <GradientStop Color="Transparent" Offset="0.5"/>
-                                        <GradientStop Color="{StaticResource AccentRed}" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </Ellipse.Stroke>
-                            </Ellipse>
-
-                            <!-- COUCHE 5: Anneau rotatif segmenté - 260x260 -->
-                            <Grid Width="260" Height="260"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center"
-                                  ClipToBounds="False"
-                                  Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
-                                  IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <RotateTransform/>
-                                </Grid.RenderTransform>
-                                <Grid.Style>
-                                    <Style TargetType="Grid">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsScanning}" Value="True">
-                                                <DataTrigger.EnterActions>
-                                                    <BeginStoryboard x:Name="ScanRingStoryboard" Storyboard="{StaticResource ScanSpinnerRotation}"/>
-                                                </DataTrigger.EnterActions>
-                                                <DataTrigger.ExitActions>
-                                                    <StopStoryboard BeginStoryboardName="ScanRingStoryboard"/>
-                                                </DataTrigger.ExitActions>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Grid.Style>
-                                <Ellipse Width="260" Height="260"
-                                         Stroke="{StaticResource AccentRedBrush}"
-                                         StrokeThickness="14"
-                                         StrokeDashArray="0.04 0.96"/>
                             </Grid>
 
-                            <!-- COUCHE 6: Bouton central - padding pour glow BlurRadius=50 -->
-                            <Border Padding="50" ClipToBounds="False" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Grid Width="240" Height="240"
-                                      HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Button Command="{Binding StartScanCommand}"
-                                    IsEnabled="{Binding CanStartScan}"
-                                    Cursor="Hand">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Grid>
-                                            <Ellipse x:Name="ButtonBackground">
-                                                <Ellipse.Fill>
-                                                    <RadialGradientBrush GradientOrigin="0.3,0.3">
-                                                        <GradientStop Color="#FF2D333B" Offset="0"/>
-                                                        <GradientStop Color="#FF161B22" Offset="1"/>
-                                                    </RadialGradientBrush>
-                                                </Ellipse.Fill>
-                                                <Ellipse.Effect>
-                                                    <DropShadowEffect Color="{StaticResource AccentRed}" 
-                                                                      BlurRadius="30" ShadowDepth="0" Opacity="0.5"/>
-                                                </Ellipse.Effect>
-                                            </Ellipse>
-                                            
-                                            <Ellipse Stroke="{StaticResource AccentRedBrush}" 
-                                                     StrokeThickness="2" Margin="10"/>
-                                        </Grid>
-                                        
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="ButtonBackground" Property="Effect">
-                                                    <Setter.Value>
+                            <Grid x:Name="RingButtonLayer"
+                                  Panel.ZIndex="0"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center">
+                                <!-- COUCHE 6: Bouton central - padding pour glow BlurRadius=50 -->
+                                <Border Padding="50" ClipToBounds="False" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Grid Width="240" Height="240"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Button Command="{Binding StartScanCommand}"
+                                        IsEnabled="{Binding CanStartScan}"
+                                        Cursor="Hand">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Grid>
+                                                <Ellipse x:Name="ButtonBackground">
+                                                    <Ellipse.Fill>
+                                                        <RadialGradientBrush GradientOrigin="0.3,0.3">
+                                                            <GradientStop Color="#FF2D333B" Offset="0"/>
+                                                            <GradientStop Color="#FF161B22" Offset="1"/>
+                                                        </RadialGradientBrush>
+                                                    </Ellipse.Fill>
+                                                    <Ellipse.Effect>
                                                         <DropShadowEffect Color="{StaticResource AccentRed}" 
-                                                                      BlurRadius="50" ShadowDepth="0" Opacity="0.8"/>
-                                                    </Setter.Value>
-                                                </Setter>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-                                </Grid>
-                            </Border>
+                                                                          BlurRadius="30" ShadowDepth="0" Opacity="0.5"/>
+                                                    </Ellipse.Effect>
+                                                </Ellipse>
+                                                
+                                                <Ellipse Stroke="{StaticResource AccentRedBrush}" 
+                                                         StrokeThickness="2" Margin="10"/>
+                                            </Grid>
+                                            
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ButtonBackground" Property="Effect">
+                                                        <Setter.Value>
+                                                            <DropShadowEffect Color="{StaticResource AccentRed}" 
+                                                                          BlurRadius="50" ShadowDepth="0" Opacity="0.8"/>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                    </Grid>
+                                </Border>
 
-                            <Grid VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <StackPanel Visibility="{Binding IsIdle, Converter={StaticResource BoolToVisibility}}"
-                                            IsHitTestVisible="False">
-                                    <TextBlock Text="{Binding ScanButtonText}" FontSize="22" FontWeight="Bold"
-                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                               HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding ScanButtonSubtext}" FontSize="10"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               HorizontalAlignment="Center" Margin="0,5,0,0"/>
-                                </StackPanel>
-                                
-                                <StackPanel Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
-                                            HorizontalAlignment="Center">
-                                    <TextBlock Text="{Binding ScanButtonText}" 
-                                               FontSize="18" FontWeight="Bold"
-                                               Foreground="{StaticResource AccentRedBrush}"
-                                               HorizontalAlignment="Center"
-                                               TextAlignment="Center"
-                                               TextWrapping="Wrap"
-                                               MaxWidth="170"
-                                               IsHitTestVisible="False"/>
-                                    <TextBlock Text="{Binding CurrentStep}" 
-                                               FontSize="10" Margin="0,5,0,10"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               HorizontalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis"
-                                               MaxWidth="160" TextAlignment="Center"
-                                               IsHitTestVisible="False"/>
-                                    <Button Content="{Binding CancelButtonText}" Width="60" Height="40"
-                                            FontSize="12" Padding="0"
-                                            Style="{StaticResource FuturisticButton}"
-                                            Command="{Binding CancelScanCommand}"
-                                            ToolTip="{Binding CancelButtonText}"/>
-                                </StackPanel>
-                                
-                                <!-- Post-scan: Button returns to idle state immediately (no grade display) -->
-                                
-                                <StackPanel Visibility="{Binding IsError, Converter={StaticResource BoolToVisibility}}"
-                                            HorizontalAlignment="Center"
-                                            IsHitTestVisible="False">
-                                    <TextBlock Text="❌" FontSize="48" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Erreur" FontSize="14"
-                                               Foreground="{StaticResource AccentRedBrush}"
-                                               HorizontalAlignment="Center" Margin="0,5,0,0"/>
-                                    <TextBlock Text="{Binding ErrorMessage}" FontSize="10"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               HorizontalAlignment="Center" Margin="0,5,0,0"
-                                               TextWrapping="Wrap" MaxWidth="180"
-                                               TextAlignment="Center"/>
-                                </StackPanel>
+                                <Grid VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <StackPanel Visibility="{Binding IsIdle, Converter={StaticResource BoolToVisibility}}"
+                                                IsHitTestVisible="False">
+                                        <TextBlock Text="{Binding ScanButtonText}" FontSize="22" FontWeight="Bold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   HorizontalAlignment="Center"/>
+                                        <TextBlock Text="{Binding ScanButtonSubtext}" FontSize="10"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   HorizontalAlignment="Center" Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                    
+                                    <StackPanel Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
+                                                HorizontalAlignment="Center">
+                                        <TextBlock Text="{Binding ScanButtonText}" 
+                                                   FontSize="18" FontWeight="Bold"
+                                                   Foreground="{StaticResource AccentRedBrush}"
+                                                   HorizontalAlignment="Center"
+                                                   TextAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   MaxWidth="170"
+                                                   IsHitTestVisible="False"/>
+                                        <TextBlock Text="{Binding CurrentStep}" 
+                                                   FontSize="10" Margin="0,5,0,10"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   HorizontalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="160" TextAlignment="Center"
+                                                   IsHitTestVisible="False"/>
+                                        <Button Content="{Binding CancelButtonText}" Width="60" Height="40"
+                                                FontSize="12" Padding="0"
+                                                Style="{StaticResource FuturisticButton}"
+                                                Command="{Binding CancelScanCommand}"
+                                                ToolTip="{Binding CancelButtonText}"/>
+                                    </StackPanel>
+                                    
+                                    <!-- Post-scan: Button returns to idle state immediately (no grade display) -->
+                                    
+                                    <StackPanel Visibility="{Binding IsError, Converter={StaticResource BoolToVisibility}}"
+                                                HorizontalAlignment="Center"
+                                                IsHitTestVisible="False">
+                                        <TextBlock Text="❌" FontSize="48" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Erreur" FontSize="14"
+                                                   Foreground="{StaticResource AccentRedBrush}"
+                                                   HorizontalAlignment="Center" Margin="0,5,0,0"/>
+                                        <TextBlock Text="{Binding ErrorMessage}" FontSize="10"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   HorizontalAlignment="Center" Margin="0,5,0,0"
+                                                   TextWrapping="Wrap" MaxWidth="180"
+                                                   TextAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
                             </Grid>
                         </Grid><!-- Fermeture RingInnerContainer -->
                         </Border><!-- Fermeture RingOuterBorder 460×460, Padding=20 → inner 420 (cercle 280 + stroke 14 + blur 20 = 334, marge 43px) -->
-                        </Viewbox><!-- overflow visible: ClipToBounds=False -->
-                    </Grid><!-- Fermeture RingRowContainer. Checklist: overflow visible partout, ViewBox 480, Padding 20, cx/cy centre, rayon 140 sans stroke dans converter -->
+                    </Grid><!-- Fermeture RingRowContainer. Checklist: overflow visible partout, Padding 20, cx/cy centre, rayon 140 sans stroke dans converter -->
                 </Grid>
 
                 <!-- Panneau droit : progression informative (coins tous arrondis comme la box) -->
