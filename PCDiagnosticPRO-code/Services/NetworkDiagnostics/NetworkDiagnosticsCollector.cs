@@ -24,6 +24,7 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
         private const int ThroughputTestBytes = 25 * 1024 * 1024; // 25 MB max for accurate measurement
         private const int RunCount = 3; // 3 runs, take median
         private const int UploadTestBytes = 2 * 1024 * 1024; // 2 MB for upload test
+        private readonly bool _allowExternalNetworkTests;
 
         private static readonly string[] PingTargets = { "1.1.1.1", "8.8.8.8" };
         private static readonly string[] DnsTestDomains = { 
@@ -32,9 +33,9 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
         
         // Stable download test URLs - use larger files (10MB+) for accurate speed measurement
         private static readonly string[] DownloadTestUrls = {
-            "http://speedtest.tele2.net/10MB.zip",      // 10 MB - primary
-            "http://proof.ovh.net/files/10Mb.dat",      // 10 Mb = 1.25 MB - fallback
-            "http://speedtest.tele2.net/1MB.zip"       // 1 MB - last resort
+            "https://speedtest.tele2.net/10MB.zip",      // 10 MB - primary
+            "https://proof.ovh.net/files/10Mb.dat",      // 10 Mb = 1.25 MB - fallback
+            "https://speedtest.tele2.net/1MB.zip"        // 1 MB - last resort
         };
         
         // Upload test endpoints that accept POST data
@@ -42,6 +43,11 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
             "https://httpbin.org/post",
             "https://postman-echo.com/post"
         };
+
+        public NetworkDiagnosticsCollector(bool allowExternalNetworkTests = false)
+        {
+            _allowExternalNetworkTests = allowExternalNetworkTests;
+        }
 
         public async Task<NetworkDiagnosticsResult> CollectAsync(CancellationToken ct = default)
         {
@@ -56,6 +62,14 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
 
             try
             {
+                if (!_allowExternalNetworkTests)
+                {
+                    result.Available = false;
+                    result.Reason = "external_tests_disabled";
+                    result.Quality = "partial";
+                    return result;
+                }
+
                 // 1. Get gateway
                 result.Gateway = GetDefaultGateway();
 

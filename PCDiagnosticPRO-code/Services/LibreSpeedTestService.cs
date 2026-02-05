@@ -405,7 +405,7 @@ namespace PCDiagnosticPro.Services
                 httpClient.Timeout = TimeSpan.FromSeconds(30);
                 
                 // Test de téléchargement (10 MB)
-                var downloadUrl = "http://speedtest.tele2.net/10MB.zip";
+                var downloadUrl = "https://speedtest.tele2.net/10MB.zip";
                 var sw = Stopwatch.StartNew();
                 
                 var response = await httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseContentRead, cancellationToken);
