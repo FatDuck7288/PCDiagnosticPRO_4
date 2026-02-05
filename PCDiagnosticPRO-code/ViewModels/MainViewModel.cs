@@ -2166,7 +2166,7 @@ namespace PCDiagnosticPro.ViewModels
                     AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Reseau"));
                     SetSectionPhase(5, "Running");
                     UpdateProgress(GetProgressForPhaseInProgress(5, 0.5), GetString("PhaseLabel_Reseau"));
-                    var networkCollector = new NetworkDiagnosticsCollector();
+                    var networkCollector = new NetworkDiagnosticsCollector(_allowExternalNetworkTests);
                     _lastNetworkDiagnostics = await networkCollector.CollectAsync(_scanCts.Token);
                     App.LogMessage($"[NetworkDiagnostics] Completed: latency={_lastNetworkDiagnostics.OverallLatencyMsP50}ms, loss={_lastNetworkDiagnostics.OverallLossPercent}%");
                     
