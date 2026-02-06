@@ -86,6 +86,8 @@ namespace PCDiagnosticPro.ViewModels
         private string _reportsDir = string.Empty;
         private string _resultJsonPath = string.Empty;
         private string _configPath = string.Empty;
+        private string _reportDisplayNamesPath = string.Empty;
+        private Dictionary<string, string> _reportDisplayNames = new();
         private DateTimeOffset _scanStartTime;
         private string? _jsonPathFromOutput;
 
@@ -131,6 +133,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ResultsCompletedTitle"] = "Scan terminé",
                 ["ResultsCompletionFormat"] = "Terminé le {0:dd/MM/yyyy HH:mm}",
                 ["NotAvailable"] = "Non disponible",
+                ["ScoreLegendText"] = "Score = niveau de risque et performance (0–100). A+ = excellent, F = critique.",
                 ["ResultsBreakdownTitle"] = "Répartition des niveaux",
                 ["ResultsBreakdownOk"] = "OK",
                 ["ResultsBreakdownWarning"] = "Avert.",
@@ -245,6 +248,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ResultsCompletedTitle"] = "Scan completed",
                 ["ResultsCompletionFormat"] = "Completed on {0:MM/dd/yyyy HH:mm}",
                 ["NotAvailable"] = "Not available",
+                ["ScoreLegendText"] = "Score = risk and performance level (0–100). A+ = excellent, F = critical.",
                 ["ResultsBreakdownTitle"] = "Severity breakdown",
                 ["ResultsBreakdownOk"] = "OK",
                 ["ResultsBreakdownWarning"] = "Warnings",
@@ -359,6 +363,7 @@ namespace PCDiagnosticPro.ViewModels
                 ["ResultsCompletedTitle"] = "Escaneo finalizado",
                 ["ResultsCompletionFormat"] = "Finalizado el {0:dd/MM/yyyy HH:mm}",
                 ["NotAvailable"] = "No disponible",
+                ["ScoreLegendText"] = "Puntuación = nivel de riesgo y rendimiento (0–100). A+ = excelente, F = crítico.",
                 ["ResultsBreakdownTitle"] = "Distribución por nivel",
                 ["ResultsBreakdownOk"] = "OK",
                 ["ResultsBreakdownWarning"] = "Advert.",
@@ -1542,6 +1547,7 @@ namespace PCDiagnosticPro.ViewModels
             ? string.Format(GetString("ResultsScanDateFormat"), SelectedHistoryScan.DateDisplay)
             : string.Empty;
         public string ResultsCompletedTitle => GetString("ResultsCompletedTitle");
+        public string ScoreLegendText => GetString("ScoreLegendText");
 
         // Collections
         public ObservableCollection<string> LiveFeedItems { get; } = new ObservableCollection<string>();
@@ -1692,6 +1698,7 @@ namespace PCDiagnosticPro.ViewModels
             _reportsDir = Path.Combine(_appDataDir, "Rapports");
             _resultJsonPath = Path.Combine(_reportsDir, "scan_result.json");
             _configPath = Path.Combine(_appDataDir, "config.json");
+            _reportDisplayNamesPath = Path.Combine(_appDataDir, "report_display_names.json");
 
             // Créer le dossier Rapports s'il n'existe pas
             if (!Directory.Exists(_reportsDir))
@@ -1708,6 +1715,22 @@ namespace PCDiagnosticPro.ViewModels
 
             // Charger les paramètres
             LoadSettings();
+            LoadReportDisplayNames();
+            
+            // Après élévation UAC (one-click) : activer les tests réseau et persister
+            var elevationFlagPath = Path.Combine(_appDataDir, "enable_network_after_elevation.flag");
+            if (IsAdmin && File.Exists(elevationFlagPath))
+            {
+                try
+                {
+                    AllowExternalNetworkTests = true;
+                    SaveSettings();
+                    OnPropertyChanged(nameof(AllowExternalNetworkTests));
+                    File.Delete(elevationFlagPath);
+                    App.LogMessage("[Admin] Tests réseau externes activés après élévation (one-click).");
+                }
+                catch (Exception ex) { App.LogMessage($"[Admin] Flag elevation: {ex.Message}"); }
+            }
             _isUpdatingLanguage = true;
             SelectedLanguage = AvailableLanguages.FirstOrDefault(l => l.Code == CurrentLanguage)
                                ?? AvailableLanguages.First();
@@ -3320,6 +3343,8 @@ namespace PCDiagnosticPro.ViewModels
                 Grade = result.Summary.Grade,
                 Result = result
             };
+            if (_reportDisplayNames.TryGetValue(ReportDisplayNameKey(historyItem), out var savedName) && !string.IsNullOrWhiteSpace(savedName))
+                historyItem.CustomDisplayName = savedName;
 
             ScanHistory.Insert(0, historyItem);
 
@@ -3330,6 +3355,39 @@ namespace PCDiagnosticPro.ViewModels
             }
 
             OnPropertyChanged(nameof(HasAnyScan));
+        }
+
+        private static string ReportDisplayNameKey(ScanHistoryItem item) => $"{item.ScanDate.Ticks}_{item.Score}";
+
+        private void LoadReportDisplayNames()
+        {
+            try
+            {
+                if (!File.Exists(_reportDisplayNamesPath)) return;
+                var json = File.ReadAllText(_reportDisplayNamesPath, Encoding.UTF8);
+                var doc = JsonDocument.Parse(json);
+                _reportDisplayNames.Clear();
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                    _reportDisplayNames[prop.Name] = prop.Value.GetString() ?? "";
+            }
+            catch (Exception ex) { App.LogMessage($"[ReportDisplayNames] Load: {ex.Message}"); }
+        }
+
+        /// <summary>Persiste les noms personnalisés des rapports (après renommage).</summary>
+        public void PersistReportDisplayNames()
+        {
+            try
+            {
+                var dict = new Dictionary<string, string>();
+                foreach (var item in ScanHistory.Concat(ArchivedScanHistory))
+                {
+                    if (!string.IsNullOrWhiteSpace(item.CustomDisplayName))
+                        dict[ReportDisplayNameKey(item)] = item.CustomDisplayName;
+                }
+                var json = JsonSerializer.Serialize(dict, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(_reportDisplayNamesPath, json, new UTF8Encoding(false));
+            }
+            catch (Exception ex) { App.LogMessage($"[ReportDisplayNames] Save: {ex.Message}"); }
         }
 
         private void CancelScan()
@@ -3877,26 +3935,23 @@ namespace PCDiagnosticPro.ViewModels
         {
             try
             {
-                var result = AdminService.RestartAsAdmin();
-                
-                switch (result)
+                // Ouvrir le dialog bundle (UAC + Defender + réseau) ; à la fermeture avec succès, activer les tests réseau et persister.
+                var dialog = new AdminPermissionsDialog
                 {
-                    case ElevationResult.UserCancelled:
-                        // L'utilisateur a annulé UAC, ne pas afficher d'erreur
-                        App.LogMessage("Élévation annulée par l'utilisateur");
-                        break;
-                    case ElevationResult.AlreadyElevated:
-                        StatusMessage = GetString("AdminAlreadyElevated");
-                        break;
-                    case ElevationResult.Error:
-                        StatusMessage = GetString("AdminRestartError");
-                        break;
-                    // Success: l'application va se fermer, pas besoin de message
+                    Owner = Application.Current.MainWindow
+                };
+                if (dialog.ShowDialog() == true)
+                {
+                    AllowExternalNetworkTests = true;
+                    SaveSettings();
+                    OnPropertyChanged(nameof(AllowExternalNetworkTests));
+                    StatusMessage = "Autorisations enregistrées. Tests réseau externes activés.";
                 }
+                return;
             }
             catch (Exception ex)
             {
-                App.LogMessage($"Impossible de redémarrer en administrateur: {ex.Message}");
+                App.LogMessage($"Dialog autorisations: {ex.Message}");
                 StatusMessage = GetString("AdminRestartError");
             }
         }
@@ -3987,6 +4042,8 @@ namespace PCDiagnosticPro.ViewModels
                 IsSettingsDirty = false;
                 App.LogMessage("Paramètres sauvegardés");
                 StatusMessage = GetString("StatusSettingsSaved");
+                // Appliquer le thème immédiatement (Empire Star Wars sans redémarrage)
+                App.ApplyTheme(CurrentTheme);
             }
             catch (Exception ex)
             {
@@ -4136,6 +4193,7 @@ namespace PCDiagnosticPro.ViewModels
                 nameof(ResultsHistoryTitle),
                 nameof(ResultsDetailTitle),
                 nameof(ResultsCompletedTitle),
+                nameof(ScoreLegendText),
                 nameof(ResultsCompletionDisplay),
                 nameof(ResultsStatusDisplay),
                 nameof(ResultsBreakdownTitle),

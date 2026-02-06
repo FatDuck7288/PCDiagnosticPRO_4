@@ -277,6 +277,8 @@ namespace PCDiagnosticPro
             var display = FindName("ReportNameDisplay") as StackPanel;
             if (textBox != null) textBox.Visibility = Visibility.Collapsed;
             if (display != null) display.Visibility = Visibility.Visible;
+            if (DataContext is ViewModels.MainViewModel vm)
+                vm.PersistReportDisplayNames();
         }
 
         private void ReportNameTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -287,6 +289,8 @@ namespace PCDiagnosticPro
                 var display = FindName("ReportNameDisplay") as StackPanel;
                 if (textBox != null) textBox.Visibility = Visibility.Collapsed;
                 if (display != null) display.Visibility = Visibility.Visible;
+                if (e.Key == System.Windows.Input.Key.Enter && DataContext is ViewModels.MainViewModel vm)
+                    vm.PersistReportDisplayNames();
             }
         }
     }

@@ -298,7 +298,11 @@ namespace PCDiagnosticPro.Converters
                 radius = parsedRadius;
             }
 
-            var center = new Point(radius, radius);
+            // Padding interne : décale le centre pour que le stroke (centré sur le tracé)
+            // ne dépasse jamais les bounds du Path. Sans ce padding, un stroke de 10px
+            // déborde de 5px au-delà de y=0 et WPF clippe le Shape à ses propres bounds.
+            const double padding = 10.0;
+            var center = new Point(radius + padding, radius + padding);
             var startPoint = new Point(center.X, center.Y - radius);
             
             if (percent >= 100.0)

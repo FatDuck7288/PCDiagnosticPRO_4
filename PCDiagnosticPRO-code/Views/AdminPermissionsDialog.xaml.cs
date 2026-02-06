@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using PCDiagnosticPro.Services;
@@ -49,6 +50,15 @@ namespace PCDiagnosticPro.Views
                 {
                     StatusText.Text = "Demande d'élévation UAC...";
                     AdminStatusIcon.Text = "⏳";
+                    
+                    // Flag pour activer les tests réseau au prochain démarrage (après UAC)
+                    try
+                    {
+                        var appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PCDiagnosticPro");
+                        if (!Directory.Exists(appData)) Directory.CreateDirectory(appData);
+                        File.WriteAllText(Path.Combine(appData, "enable_network_after_elevation.flag"), "");
+                    }
+                    catch { }
                     
                     // This will restart the app as admin
                     AdminHelper.RestartAsAdmin();

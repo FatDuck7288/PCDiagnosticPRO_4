@@ -228,27 +228,25 @@
                 </UniformGrid>
             </Grid>
 
-            <!-- VUE HEALTHCHECK — scroll horizontal/vertical si fenêtre trop petite. ClipToBounds=False pour ne pas couper le halo du ring. -->
-            <ScrollViewer Visibility="{Binding IsHealthcheckView, Converter={StaticResource BoolToVisibility}}"
-                          HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Auto"
-                          CanContentScroll="True"
-                          ClipToBounds="False">
-                <Grid MinWidth="900" ClipToBounds="False">
-                    <Grid.ColumnDefinitions>
-                        <!-- +20 (10 chaque côté) pour ne plus couper le cercle de progression -->
-                        <ColumnDefinition Width="*" MinWidth="600"/>
-                        <ColumnDefinition Width="280"/>
-                    </Grid.ColumnDefinitions>
-
-                <!-- Colonne gauche : grille 3 lignes. Margin bas=8 et Row0=120 pour que Row 2 ait ≥600px (évite clipping anneau). -->
-                <Grid Grid.Column="0" Margin="24,0,20,8" ClipToBounds="False">
+            <!-- VUE HEALTHCHECK — panneau droit hors scroll pour éviter overlay scrollbar. Scroll uniquement à gauche. -->
+            <Grid Visibility="{Binding IsHealthcheckView, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MinWidth="400"/>
+                    <ColumnDefinition Width="280"/>
+                </Grid.ColumnDefinitions>
+                <ScrollViewer Grid.Column="0"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto"
+                              CanContentScroll="True"
+                              ClipToBounds="False">
+                    <!-- Colonne gauche scrollable : grille 3 lignes. -->
+                    <Grid MinWidth="600" Margin="24,0,20,8" ClipToBounds="False">
                     <Grid.RowDefinitions>
                         <!-- Live feed: 120px pour dégager 600px min pour l'anneau (sinon cercle coupé) -->
                         <RowDefinition Height="120"/>
                         <RowDefinition Height="Auto"/>
-                        <!-- MinHeight=600 : doit recevoir au moins 600px (sinon RingRowContainer reçoit &lt;460+60*2) -->
-                        <RowDefinition Height="*" MinHeight="600"/>
+                        <!-- MinHeight=540 : doit recevoir au moins 540px (RingRowContainer 500 + Margin 10*2 = 520) -->
+                        <RowDefinition Height="*" MinHeight="540"/>
                     </Grid.RowDefinitions>
 
                     <!-- ROW 0: Live feed avec pluie de 0/1 en fond, texte au-dessus -->
@@ -317,20 +315,24 @@
                     <!-- 
                     Formule étendue visuelle: (radius×2) + (stroke×2) + (blur×2) + marge_sécurité
                     radius=150 → 300, max stroke=14 → 28, blur=50 → 100, marge=32 → 460.
-                    Inner doit contenir 300 + 2×(stroke/2 + blur) = 300 + 14 + 100 = 414.
-                    Donc Padding = (460 - 414) / 2 = 23 (pas 25) pour que l'arc + glow ne soit jamais coupé.
-                    ClipToBounds=False sur TOUTE la hiérarchie (Viewbox, Border, Grid).
+                    Fix 1 (converter) : centre décalé à (radius+10, radius+10) dans un viewport 300×300
+                    pour que le stroke (8-10px) ne dépasse jamais les bounds du Path.
+                    Fix 2 (layout) : Margin réduit de 60→10, MinHeight de 580→500 pour éviter LayoutClip
+                    (580+120=700 > Row2 600 → LayoutClip à 480). Maintenant 500+20=520 < 540.
+                    Viewbox supprimé : il clippait les DropShadowEffect via son ContainerVisual interne.
+                    ClipToBounds=False sur TOUTE la hiérarchie (Border, Grid).
                     -->
                     <Grid x:Name="RingRowContainer" Grid.Row="2" ClipToBounds="False" 
-                          MinWidth="580" MinHeight="580"
+                          MinWidth="500" MinHeight="500"
                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                          UseLayoutRounding="True" Margin="60">
+                          UseLayoutRounding="True" Margin="10">
                         
-                        <!-- Viewbox: ClipToBounds=False (équivalent SVG overflow="visible") -->
-                        <Viewbox x:Name="RingViewbox" Stretch="Uniform" StretchDirection="DownOnly"
-                                 MinWidth="480" MinHeight="480" ClipToBounds="False">
+                        <!-- Viewbox supprimé : il clippait les DropShadowEffect via son ContainerVisual interne.
+                             Le RingOuterBorder est enfant direct du RingRowContainer (500×500 min, Margin=10),
+                             laissant 20px de marge par côté pour les effets de glow. -->
                         <Border x:Name="RingOuterBorder" Width="460" Height="460" MinWidth="460" MinHeight="460"
                                 ClipToBounds="False" Padding="20"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                 UseLayoutRounding="True" SnapsToDevicePixels="True">
                         <Grid x:Name="RingInnerContainer" ClipToBounds="False">
                             <Grid.Resources>
@@ -347,9 +349,10 @@
                                      Stroke="{StaticResource BackgroundLightBrush}" 
                                      StrokeThickness="8"/>
 
-                            <!-- COUCHE 2: Arc de progression avec glow - padding optimisé pour éviter clipping -->
+                            <!-- COUCHE 2: Arc de progression avec glow
+                                 Viewport 300×300 = 2×(radius 140 + padding 10) pour que le stroke ne dépasse pas les bounds -->
                             <Border Padding="50" ClipToBounds="False" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Grid Width="280" Height="280"
+                                <Grid Width="300" Height="300"
                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                       ClipToBounds="False"
                                       Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
@@ -358,7 +361,7 @@
                                         <DropShadowEffect Color="{StaticResource AccentRed}"
                                                           BlurRadius="20" ShadowDepth="0" Opacity="0.8"/>
                                     </Grid.Effect>
-                                    <Path Width="280" Height="280"
+                                    <Path Width="300" Height="300"
                                           StrokeThickness="10"
                                           StrokeStartLineCap="Round"
                                           StrokeEndLineCap="Round"
@@ -374,8 +377,8 @@
                                 </Grid>
                             </Border>
 
-                            <!-- COUCHE 3: Arc de progression principal - 280x280, rayon 140 -->
-                            <Path Width="280" Height="280"
+                            <!-- COUCHE 3: Arc de progression principal - 300x300 viewport, rayon 140 -->
+                            <Path Width="300" Height="300"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"
                                   Stroke="{StaticResource AccentRedBrush}"
                                   StrokeThickness="8"
@@ -522,12 +525,11 @@
                                 </StackPanel>
                             </Grid>
                         </Grid><!-- Fermeture RingInnerContainer -->
-                        </Border><!-- Fermeture RingOuterBorder 460×460, Padding=20 → inner 420 (cercle 280 + stroke 14 + blur 20 = 334, marge 43px) -->
-                        </Viewbox><!-- overflow visible: ClipToBounds=False -->
-                    </Grid><!-- Fermeture RingRowContainer. Checklist: overflow visible partout, ViewBox 480, Padding 20, cx/cy centre, rayon 140 sans stroke dans converter -->
-                </Grid>
-
-                <!-- Panneau droit : progression informative (coins tous arrondis comme la box) -->
+                        </Border><!-- Fermeture RingOuterBorder 460×460, Padding=20, centré dans RingRowContainer 500×500 Margin=10 -->
+                    </Grid><!-- Fermeture RingRowContainer -->
+                    </Grid>
+                </ScrollViewer>
+                <!-- Panneau droit : fixe, jamais coupé par la scrollbar -->
                 <Border Grid.Column="1" Background="{StaticResource BackgroundMediumBrush}" 
                         BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0"
                         CornerRadius="12" Padding="20,18" ClipToBounds="False">
@@ -822,8 +824,7 @@
                         </Border>
                     </Grid>
                 </Border>
-                </Grid>
-            </ScrollViewer>
+            </Grid>
 
             <!-- VUE CHAT -->
             <Grid Visibility="{Binding IsChatView, Converter={StaticResource BoolToVisibility}}">
@@ -1057,6 +1058,10 @@
                                                            Foreground="{StaticResource TextSecondaryBrush}" 
                                                            VerticalAlignment="Center" Margin="8,0,0,0"/>
                                             </StackPanel>
+                                            <!-- Légende du score (même box, à droite) -->
+                                            <TextBlock Text="{Binding ScoreLegendText}" FontSize="11" TextWrapping="Wrap"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,10,0,0"
+                                                       MaxWidth="280"/>
                                         </StackPanel>
                                     </Grid>
                                 </StackPanel>
@@ -1749,9 +1754,8 @@
                                           DisplayMemberPath="Name"
                                           Width="200"/>
                             </StackPanel>
-                            <TextBlock Text="Note: Le thème Empire Star Wars nécessite un redémarrage de l'application pour prendre effet."
-                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" FontStyle="Italic" Margin="0,8,0,0"
-                                       Visibility="{Binding SelectedTheme.Code, Converter={StaticResource BoolToVisibility}, ConverterParameter=Empire}"/>
+                            <TextBlock Text="Le thème s'applique dès que vous cliquez sur Enregistrer."
+                                       FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" FontStyle="Italic" Margin="0,8,0,0"/>
                         </StackPanel>
                     </Border>
 

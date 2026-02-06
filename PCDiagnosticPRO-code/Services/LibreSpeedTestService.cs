@@ -313,7 +313,8 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
-        /// Sauvegarde le résultat du test de vitesse en JSON pour inspection par LLM
+        /// Sauvegarde le résultat du test de vitesse en JSON (local).
+        /// Note: "Upload" du résultat = (A) envoi vers un serveur/API à implémenter (payload, retry, UI état) ou (B) mesure/affichage upload Mbps — à clarifier avec le demandeur.
         /// </summary>
         public async Task<string?> SaveResultToJsonAsync(SpeedTestResult result, string? outputDir = null)
         {

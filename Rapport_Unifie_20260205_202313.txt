@@ -1,0 +1,308 @@
+﻿════════════════════════════════════════════════════════════════════════════════
+                    PC DIAGNOSTIC PRO — RAPPORT UNIFIÉ
+════════════════════════════════════════════════════════════════════════════════
+
+  ▶ SECTION 1 : RÉSUMÉ GLOBAL
+────────────────────────────────────────────────────────────────────────────────
+
+  Score santé global        : 98/100 (Grade A+)
+  Statut                    : ✅ OK
+
+  ▶ SECTION 2 : INFOS GÉNÉRALES
+────────────────────────────────────────────────────────────────────────────────
+
+  Nom PC                    : DESKTOP-LAKVT49
+  Utilisateur               : rams_
+  Date/heure scan           : 2026-02-05 20:23:13
+  Uptime                    : 0j 12h 53m
+  Version OS                : Microsoft Windows NT 10.0.26200.0
+  Architecture              : 64-bit
+  Mode Admin                : OUI
+
+  ▶ SECTION 3 : MATÉRIEL PRINCIPAL (HARDWARE)
+────────────────────────────────────────────────────────────────────────────────
+
+  GPU                       : NVIDIA GeForce RTX 3090
+  VRAM totale               : 24576 MB
+
+  ▶ SECTION 4 : PERFORMANCE ACTIVITÉ
+────────────────────────────────────────────────────────────────────────────────
+
+  Charge CPU                : 5%
+  Utilisation RAM           : 21%
+  Débit réseau (test HTTP)  : 5,5 Mbps
+
+  Top 5 Processus (CPU):
+  ┌────────────────────────────┬──────────┬────────────┐
+  │ Processus                  │ CPU %    │ RAM (MB)   │
+  ├────────────────────────────┼──────────┼────────────┤
+  │ PCDiagnosticPro            │     1,4% │     216,5 │
+  │ chrome                     │     0,9% │     302,1 │
+  │ System                     │     0,8% │      21,7 │
+  │ RazerAppEngine             │     0,8% │     200,4 │
+  │ chrome                     │     0,7% │     246,3 │
+  └────────────────────────────┴──────────┴────────────┘
+
+  Top 5 Processus (RAM):
+  ┌────────────────────────────┬────────────┬──────────┐
+  │ Processus                  │ RAM (MB)   │ CPU %    │
+  ├────────────────────────────┼────────────┼──────────┤
+  │ Cursor                     │     820,2 │     0,3% │
+  │ explorer                   │     700,6 │     0,0% │
+  │ chrome                     │     584,8 │     0,0% │
+  │ chrome                     │     469,1 │     0,0% │
+  │ chrome                     │     462,0 │     0,0% │
+  └────────────────────────────┴────────────┴──────────┘
+
+  ▶ SECTION 5 : MÉMOIRE RAM
+────────────────────────────────────────────────────────────────────────────────
+
+  Répartition mémoire (instantanée) :
+  ┌─────────────────────────────┬────────────┬────────────┬──────────┐
+  │ Catégorie                   │ Valeur     │ Total      │ %        │
+  ├─────────────────────────────┼────────────┼────────────┼──────────┤
+  │ Physique : Utilisée          │    19,98 GB │    95,93 GB │     21% │
+  │ Physique : Disponible        │    75,95 GB │    95,93 GB │     79% │
+  │ Virtuelle : Utilisée         │  2311,18 GB │ 131072,00 GB │      2% │
+  │ Virtuelle : Disponible       │ 128760,82 GB │ 131072,00 GB │     98% │
+  │ Fichier pagination : Utilisé │    24,01 GB │   143,93 GB │     17% │
+  │ Fichier pagination : Libre   │   119,92 GB │   143,93 GB │     83% │
+  └─────────────────────────────┴────────────┴────────────┴──────────┘
+
+  Source : C# (GlobalMemoryStatusEx)
+
+
+  ▶ SECTION 6 : STOCKAGE ET DISQUES
+────────────────────────────────────────────────────────────────────────────────
+
+  Partitions:
+  ┌───────┬────────────┬────────────┬────────────┬───────────┬──────────┐
+  │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Utilisé % │ Alerte   │
+  ├───────┼────────────┼────────────┼────────────┼───────────┼──────────┤
+  │ C:    │    952,6 GB │    368,7 GB │    583,9 GB │    61,3 %  │ OK       │
+  │ D:    │   1863,0 GB │   1094,9 GB │    768,1 GB │    41,2 %  │ OK       │
+  │ E:    │   1862,2 GB │   1493,3 GB │    368,8 GB │    19,8 %  │ OK       │
+  │ H:    │   1862,9 GB │    696,0 GB │   1166,9 GB │    62,6 %  │ OK       │
+  └───────┴────────────┴────────────┴────────────┴───────────┴──────────┘
+
+  Statut SMART:
+  Micron_2210_MTFDHBA1T0QFD : Détecté par capteurs C#
+  Micron CT2000X9PROSSD9    : Détecté par capteurs C#
+  Samsung SSD 990 PRO with Heatsink 2TB : Détecté par capteurs C#
+  TOSHIBA DT01ACA200        : Détecté par capteurs C#
+
+  ▶ SECTION 7 : TEMPÉRATURES ET REFROIDISSEMENT
+────────────────────────────────────────────────────────────────────────────────
+
+  Temp CPU                  : 73,5°C
+  Temp GPU                  : 47,0°C
+  Temp max disques          : 55°C
+  Statut thermique          : ✅ Normal
+
+  ▶ SECTION 8 : BATTERIE ET ALIMENTATION
+────────────────────────────────────────────────────────────────────────────────
+
+  Batterie                  : Pas de batterie détectée
+
+  ▶ SECTION 9 : RÉSEAU ET INTERNET
+────────────────────────────────────────────────────────────────────────────────
+
+  ═ DÉBIT INTERNET (FAI) ═
+
+  Latence et qualité :
+    Latence P50    : 2,3 ms
+    Latence P95    : 5,0 ms
+    Perte paquets  : 0,0%
+    Jitter P95     : 1,57 ms
+    Gateway        : 192.168.2.1
+    DNS P95        : 13 ms
+
+  ═ Réseau local / configuration ═
+  Adaptateur actif          : VMware Virtual Ethernet Adapter for VMnet8
+  IP locale                 : 192.168.x.x
+
+  ═ Test qualité local ═
+  Perte paquets             : 0,0%
+
+  ▶ SECTION 10 : SÉCURITÉ
+────────────────────────────────────────────────────────────────────────────────
+
+  Windows Defender          : ✅ Actif
+  UAC                       : ✅ Actif
+
+  ▶ SECTION 11 : MISES À JOUR
+────────────────────────────────────────────────────────────────────────────────
+
+  Updates en attente        : 4
+
+  ▶ SECTION 12 : PILOTES (DRIVERS)
+────────────────────────────────────────────────────────────────────────────────
+
+  Pilotes détectés (C#)     : 238
+  Signés                    : 238
+  Périph. en erreur         : 2
+
+  Inventaire pilotes (C# - WMI) :
+  ┌──────────────┬──────────────────────────────────────┬────────────┬────────────┐
+  │ Classe       │ Périphérique                         │ Version    │ Date       │
+  ├──────────────┼──────────────────────────────────────┼────────────┼────────────┤
+  │ DISPLAY      │ NVIDIA GeForce RTX 3090 (NVIDIA)     │ 32.0.15... │ 2025-12-30 │
+      INF: oem1.inf | Statut: Unknown
+  │ MEDIA        │ NVIDIA High Definition Audio (NVI... │ 1.4.5.6    │ 2025-10-25 │
+      INF: oem64.inf | Statut: Unknown
+  │ MEDIA        │ NVIDIA Virtual Audio Device (Wave... │ 4.65.0.12  │ 2025-05-13 │
+      INF: oem13.inf | Statut: Unknown
+  │ MEDIA        │ Realtek High Definition Audio (Re... │ 6.0.9857.1 │ 2025-01-07 │
+      INF: oem79.inf | Statut: Unknown
+  │ MEDIA        │ USB Audio Device (Microsoft)         │ 10.0.26... │ 2026-01-26 │
+      INF: wdma_usb.inf | Statut: Unknown
+  │ NET          │ Bluetooth Device (Personal Area N... │ 10.0.26... │ 2006-06-21 │
+      INF: bthpan.inf | Statut: Unknown
+  │ NET          │ Microsoft Kernel Debug Network Ad... │ 10.0.26... │ 2006-06-21 │
+      INF: kdnic.inf | Statut: Unknown
+  │ NET          │ Microsoft Wi-Fi Direct Virtual Ad... │ 10.0.26... │ 2006-06-21 │
+      INF: netvwifimp.inf | Statut: Unknown
+  │ NET          │ Microsoft Wi-Fi Direct Virtual Ad... │ 10.0.26... │ 2006-06-21 │
+      INF: netvwifimp.inf | Statut: Unknown
+  │ NET          │ Realtek PCIe GbE Family Controlle... │ 1168.28... │ 2025-12-24 │
+      INF: oem16.inf | Statut: Unknown
+  │ NET          │ RZ616 Wi-Fi 6E 160MHz (MediaTek, ... │ 25.40.2... │ 2025-05-12 │
+      INF: oem58.inf | Statut: Unknown
+  │ NET          │ VirtualBox Host-Only Ethernet Ada... │ 7.0.22.... │ 2024-10-14 │
+      INF: oem23.inf | Statut: Unknown
+  │ NET          │ VMware Virtual Ethernet Adapter f... │ 14.0.0.8   │ 2023-11-02 │
+      INF: oem57.inf | Statut: Unknown
+  │ NET          │ VMware Virtual Ethernet Adapter f... │ 14.0.0.8   │ 2023-11-02 │
+      INF: oem57.inf | Statut: Unknown
+  │ NET          │ VMware Virtual Ethernet Adapter f... │ 14.0.0.8   │ 2023-11-02 │
+      INF: oem57.inf | Statut: Unknown
+  └──────────────┴──────────────────────────────────────┴────────────┴────────────┘
+
+  Pilotes essentiels installés :
+  ┌────────────────────┬──────────────────────────────────────────┬─────────────┬────────────┐
+  │ Classe             │ Périphérique                              │ Version     │ Date       │
+  ├────────────────────┼──────────────────────────────────────────┼─────────────┼────────────┤
+  │ BLUETOOTH          │ Bluetooth Device (RFCOMM Protocol TDI)   │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Bluetooth LE Device                      │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Bluetooth LE Generic Attribute Service   │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Device Information Service               │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Generic Access Profile                   │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Generic Attribute Profile                │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Microsoft Bluetooth Enumerator           │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Microsoft Bluetooth LE Enumerator        │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ RZ616 Bluetooth(R) Adapter               │ 1.1038.0... │ 2024-06-28 │
+  │ DISPLAY            │ NVIDIA GeForce RTX 3090                  │ 32.0.15.... │ 2025-12-30 │
+  │ HDC                │ Standard SATA AHCI Controller            │ 10.0.261... │ 2006-06-21 │
+  │ MEDIA              │ NVIDIA High Definition Audio             │ 1.4.5.6     │ 2025-10-25 │
+  │ MEDIA              │ NVIDIA Virtual Audio Device (Wave E...   │ 4.65.0.12   │ 2025-05-13 │
+  │ MEDIA              │ Realtek High Definition Audio            │ 6.0.9857.1  │ 2025-01-07 │
+  │ MEDIA              │ USB Audio Device                         │ 10.0.261... │ 2026-01-26 │
+  └────────────────────┴──────────────────────────────────────────┴─────────────┴────────────┘
+
+  Périphériques en erreur (Top 10):
+  ┌────────────────────────────────────────┬────────────┬─────────────────────┐
+  │ Périphérique                           │ Status     │ Classe              │
+  ├────────────────────────────────────────┼────────────┼─────────────────────┤
+  │ Contrôleur de jeu HID                  │ Unknown    │ HIDClass            │
+  │ Home Hub 3000                          │ Unknown    │ DigitalMediaDevices │
+  │ Périphérique d’entrée USB              │ Unknown    │ HIDClass            │
+  │ VMware USB Device                      │ Error      │ USB                 │
+  │ SanDisk Cruzer Glide USB Device        │ Unknown    │ DiskDrive           │
+  │ Dispositif de stockage de masse USB    │ Unknown    │ USB                 │
+  │ Volume                                 │ Unknown    │ Volume              │
+  │ AMDRyzenMaster Device                  │ Degraded   │ System              │
+  │ Contrôleur XBOX 360 pour Windows       │ Unknown    │ XnaComposite        │
+  └────────────────────────────────────────┴────────────┴─────────────────────┘
+  ⚠️ Périph. en erreur      : 9
+
+
+  ▶ SECTION 13 : DÉMARRAGE ET APPLICATIONS
+────────────────────────────────────────────────────────────────────────────────
+
+  Total programmes démarrage : 10
+
+  Programmes au démarrage (extrait):
+  ┌────────────────────────────────────────┐
+  │ Programme                              │
+  ├────────────────────────────────────────┤
+  │ SecurityHealth                         │
+  │ RtkAudUService                         │
+  │ iTunesHelper                           │
+  │ RazerAppEngine                         │
+  │ OneDrive                               │
+  │ Microsoft.Lists                        │
+  │ Opera Stable                           │
+  │ MicrosoftEdgeAutoLaunch_D801085E5D6... │
+  │ Teams                                  │
+  │ ut                                     │
+  └────────────────────────────────────────┘
+  Total applications installées : 87
+
+
+  ═ Services Windows ═
+  Total services            : 310
+  En cours                  : 131
+
+  ▶ SECTION 14 : SANTÉ SYSTÈME ET ERREURS
+────────────────────────────────────────────────────────────────────────────────
+
+  Statut collecte           : PARTIAL
+  Erreurs collecteur        : 2
+
+  Détail erreurs:           : 
+    [message]               : Unknown error
+    [code]                  : WMI_ERROR
+
+  ▶ SECTION 15 : PÉRIPHÉRIQUES
+────────────────────────────────────────────────────────────────────────────────
+
+  Périphériques audio       : 4
+  Imprimantes               : 4
+  Périph. en erreur         : ⚠️ 9
+
+  ▶ SECTION 16 : VIRTUALISATION
+────────────────────────────────────────────────────────────────────────────────
+
+  Machine virtuelle         : ❌ Non (machine physique)
+
+  ▶ DONNÉES POWERSHELL (BRUT)
+────────────────────────────────────────────────────────────────────────────────
+
+  [WindowsUpdate]
+    cached: false
+    pendingCount: 4
+
+  [StartupPrograms]
+    startupCount: 10
+    startupItems: [Array 10]
+
+  [InstalledApplications]
+    totalCount: 87
+    source: Registry
+
+  [DevicesDrivers]
+    problemDeviceCount: 9
+    problemDevices: [Array 9]
+
+  [Printers]
+    printerCount: 4
+    printers: [Array 4]
+
+  [Audio]
+    deviceCount: 4
+    devices: [Array 4]
+
+════════════════════════════════════════════════════════════════════════════════
+
+  RAPPORT UNIFIÉ GÉNÉRÉ PAR PC DIAGNOSTIC PRO
+
+  Ce rapport combine:
+    ✓ Données système PowerShell (structure, config, events)
+    ✓ Données capteurs hardware C# (températures, charges, VRAM)
+    ✓ UDIS — Unified Diagnostic Intelligence Scoring
+    ✓ Tests réseau locaux (sans speedtest externe)
+    ✓ Processus temps réel (CPU % mesuré sur 750ms)
+
+  Généré le 2026-02-05 à 20:23:15
+  PC Diagnostic PRO — Rapport Unifié v2.0
+════════════════════════════════════════════════════════════════════════════════
