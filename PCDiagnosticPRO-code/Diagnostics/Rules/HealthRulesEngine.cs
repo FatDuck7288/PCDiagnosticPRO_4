@@ -7,7 +7,7 @@ using PCDiagnosticPro.Models;
 namespace PCDiagnosticPro.Diagnostics.Rules
 {
     /// <summary>
-    /// Moteur de score basé sur règles - remplace ScoreV2 et GradeEngine.
+    /// Moteur de score basé sur règles (scoring par règles, complète UDIS).
     /// Calcule ScoreSanté (état machine) et ScoreConfiance (qualité collecte) séparément.
     /// </summary>
     public static class HealthRulesEngine
@@ -685,7 +685,37 @@ namespace PCDiagnosticPro.Diagnostics.Rules
             section.Score = 100;
             section.Status = SectionStatus.OK;
             
-            // TODO: Extract driver issues from PS if available
+            if (psData.HasValue)
+            {
+                try
+                {
+                    if (psData.Value.TryGetProperty("sections", out var sections) &&
+                        sections.TryGetProperty("DevicesDrivers", out var dd) &&
+                        dd.TryGetProperty("data", out var data))
+                    {
+                        // Compter les périphériques en erreur
+                        int errorDevices = 0;
+                        if (data.TryGetProperty("errorDevicesCount", out var edc) && edc.ValueKind == JsonValueKind.Number)
+                            errorDevices = edc.GetInt32();
+                        else if (data.TryGetProperty("ErrorDevicesCount", out edc) && edc.ValueKind == JsonValueKind.Number)
+                            errorDevices = edc.GetInt32();
+                        
+                        section.RawInputs["errorDevicesCount"] = errorDevices.ToString();
+                        
+                        if (errorDevices > 0)
+                        {
+                            int penalty = Math.Min(errorDevices * 5, 25);
+                            section.Score -= penalty;
+                            section.Status = errorDevices >= 3 ? SectionStatus.Degraded : SectionStatus.Warning;
+                            section.AppliedRules.Add(new AppliedRule(
+                                "DriverErrors",
+                                $"{errorDevices} périphérique(s) en erreur",
+                                -penalty));
+                        }
+                    }
+                }
+                catch { /* Pas de données drivers exploitables */ }
+            }
             
             return section;
         }
@@ -978,7 +1008,31 @@ namespace PCDiagnosticPro.Diagnostics.Rules
 
         private static (int pendingSectors, int reallocatedSectors) ExtractSmartIssuesFromPs(JsonElement? psData)
         {
-            // TODO: Parse SmartDetails section
+            if (!psData.HasValue) return (0, 0);
+            
+            try
+            {
+                if (psData.Value.TryGetProperty("sections", out var sections) &&
+                    sections.TryGetProperty("SmartDetails", out var smart) &&
+                    smart.TryGetProperty("data", out var data))
+                {
+                    int pending = 0, reallocated = 0;
+                    
+                    if (data.TryGetProperty("pendingSectorCount", out var ps) && ps.ValueKind == JsonValueKind.Number)
+                        pending = ps.GetInt32();
+                    else if (data.TryGetProperty("PendingSectorCount", out ps) && ps.ValueKind == JsonValueKind.Number)
+                        pending = ps.GetInt32();
+                    
+                    if (data.TryGetProperty("reallocatedSectorCount", out var rs) && rs.ValueKind == JsonValueKind.Number)
+                        reallocated = rs.GetInt32();
+                    else if (data.TryGetProperty("ReallocatedSectorCount", out rs) && rs.ValueKind == JsonValueKind.Number)
+                        reallocated = rs.GetInt32();
+                    
+                    return (pending, reallocated);
+                }
+            }
+            catch { /* SmartDetails non exploitable */ }
+            
             return (0, 0);
         }
 
@@ -1023,7 +1077,32 @@ namespace PCDiagnosticPro.Diagnostics.Rules
 
         private static bool HasThirdPartyAntivirus(JsonElement? psData)
         {
-            // TODO: Check SecurityCenter for third-party AV
+            if (!psData.HasValue) return false;
+            
+            try
+            {
+                if (psData.Value.TryGetProperty("sections", out var sections) &&
+                    sections.TryGetProperty("Security", out var sec) &&
+                    sec.TryGetProperty("data", out var data))
+                {
+                    // Vérifier si un AV tiers est signalé
+                    if (data.TryGetProperty("antivirusName", out var avName) && avName.ValueKind == JsonValueKind.String)
+                    {
+                        var name = avName.GetString()?.ToLowerInvariant() ?? "";
+                        // Windows Defender n'est pas un AV tiers
+                        if (!string.IsNullOrEmpty(name) && !name.Contains("defender") && !name.Contains("microsoft"))
+                            return true;
+                    }
+                    if (data.TryGetProperty("AntivirusName", out avName) && avName.ValueKind == JsonValueKind.String)
+                    {
+                        var name = avName.GetString()?.ToLowerInvariant() ?? "";
+                        if (!string.IsNullOrEmpty(name) && !name.Contains("defender") && !name.Contains("microsoft"))
+                            return true;
+                    }
+                }
+            }
+            catch { /* Pas de données SecurityCenter exploitables */ }
+            
             return false;
         }
 

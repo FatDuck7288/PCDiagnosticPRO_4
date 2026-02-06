@@ -6,7 +6,7 @@ namespace PCDiagnosticPro.Diagnostics.Rules
 {
     /// <summary>
     /// Rapport de score complet basé sur règles.
-    /// Remplace ScoreV2 et GradeEngine.
+    /// Remplace ScoreV2 (scoring par règles indépendant).
     /// </summary>
     public class RulesScoreReport
     {

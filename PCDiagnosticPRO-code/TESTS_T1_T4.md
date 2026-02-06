@@ -48,19 +48,19 @@ Get-Content $env:TEMP\PCDiagnosticPro_ui.log | Select-String "SANITIZE|cpuTempC"
 
 ## T3 — Score final
 
-**Objectif** : Confirmer que le score affiché est le FinalScore (PS + C# avec confidence gating), pas uniquement GradeEngine.
+**Objectif** : Confirmer que le score affiché est le score UDIS (source de vérité unique), pas un score legacy.
 
 1. Après un scan avec `errors[]` non vide ou missingData :
    - **Vérifications** :
-     - `FinalScore` ≠ `ScoreCSharp` seul (sauf si confiance très élevée et pas de cap).
-     - Si `collectorErrorsLogical > 0` : cap appliqué (FinalScore ≤ 70) et mention dans le TXT / logs.
-     - Le grade affiché (UI et TXT) est calculé sur **FinalScore**, pas sur le score C# seul.
-2. Dans le TXT : section `[SCORE ENGINE — FINAL SCORE PS + C#]` doit contenir :
-   - `ScoreV2_PS`, `ScoreCSharp`, `FinalScore`, `ConfidenceScore`, `Source de vérité : FinalScore (moyenne pondérée + confidence gating)`.
+     - Le score affiché = UDIS = 0.7 * MachineHealthScore + 0.2 * DataReliabilityScore + 0.1 * DiagnosticClarityScore.
+     - Si `ConfidenceScore < 50` : garde-fou appliqué (GlobalScore plafonné à 60).
+     - Si `ConfidenceScore < 70` : garde-fou appliqué (GlobalScore plafonné à 75).
+     - Le grade affiché (UI et TXT) est calculé sur le score UDIS.
+2. Dans le log : `ScoreV2_PS=... ; UDIS=... ; FinalScore=... ; FinalGrade=... ; ConfidenceScore=...`
 
 **Commande log** :
 ```powershell
-Get-Content $env:TEMP\PCDiagnosticPro_ui.log | Select-String "ScoreV2_PS|ScoreCSharp|FinalScore|FinalGrade|ConfidenceScore|caps applied"
+Get-Content $env:TEMP\PCDiagnosticPro_ui.log | Select-String "ScoreV2_PS|UDIS|FinalScore|FinalGrade|ConfidenceScore|GARDE-FOU"
 ```
 
 ---
@@ -83,7 +83,7 @@ Le fichier `%TEMP%\PCDiagnosticPro_ui.log` doit contenir (après un scan) :
 
 - `JSON path: ...`
 - `CollectionStatus=... ; errors=... ; collectorErrorsLogical=... ; missingDataCount=...`
-- `ScoreV2_PS=... ; ScoreCSharp=... ; FinalScore=... ; FinalGrade=... ; ConfidenceScore=...`
+- `ScoreV2_PS=... ; UDIS=... ; FinalScore=... ; FinalGrade=... ; ConfidenceScore=...`
 - `COLLECTOR_ERRORS_LOGICAL=... (from errors[]=...)`
 - Événements `[SANITIZE] ... invalid -> hidden` pour les métriques normalisées.
 

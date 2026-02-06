@@ -610,7 +610,9 @@ namespace PCDiagnosticPro.ViewModels
         public string ScoreDisplay => ScanResult?.Summary?.Score.ToString() ?? "0";
         public string GradeDisplay => ScanResult?.Summary?.Grade ?? "N/A";
         public string StatusWithScore => HasScanResult 
-            ? $"Score: {ScanResult!.Summary.Score}/100 | Grade: {ScanResult.Summary.Grade}" 
+            ? (HealthReport?.ConfidenceModel != null
+                ? $"Score: {ScanResult!.Summary.Score}/100 | Grade: {ScanResult.Summary.Grade} | Collecte: {HealthReport.ConfidenceModel.ConfidenceScore}/100 ({HealthReport.ConfidenceModel.ConfidenceLevel})"
+                : $"Score: {ScanResult!.Summary.Score}/100 | Grade: {ScanResult.Summary.Grade}")
             : "Aucun scan effectué";
         public string ResultsCompletionDisplay => ScanResult?.Summary != null
             ? FormatStringSafely(GetString("ResultsCompletionFormat"), ScanResult.Summary.ScanDate)
@@ -648,6 +650,9 @@ namespace PCDiagnosticPro.ViewModels
                     OnPropertyChanged(nameof(ConfidenceLevel));
                     OnPropertyChanged(nameof(ConfidenceDisplay));
                     OnPropertyChanged(nameof(ConfidenceColor));
+                    OnPropertyChanged(nameof(IsLowConfidence));
+                    OnPropertyChanged(nameof(ScoreCircleOpacity));
+                    OnPropertyChanged(nameof(LowConfidenceWarning));
                     OnPropertyChanged(nameof(CollectionStatusBadgeText));
                     OnPropertyChanged(nameof(IsCollectionPartialOrFailed));
                     OnPropertyChanged(nameof(CollectorErrorsLogicalDisplay));
@@ -702,6 +707,14 @@ namespace PCDiagnosticPro.ViewModels
         public string ConfidenceDisplay => $"{ConfidenceScore}/100 ({ConfidenceLevel})";
         public string ConfidenceColor => ConfidenceScore >= 80 ? "#4CAF50" : 
                                           ConfidenceScore >= 60 ? "#FFC107" : "#F44336";
+        /// <summary>True quand la confiance est trop basse pour se fier au score santé.</summary>
+        public bool IsLowConfidence => ConfidenceScore > 0 && ConfidenceScore < 70;
+        /// <summary>Opacité du cercle score : atténuée si confiance faible.</summary>
+        public double ScoreCircleOpacity => IsLowConfidence ? 0.5 : 1.0;
+        /// <summary>Message d'avertissement affiché sous le score quand confiance faible.</summary>
+        public string LowConfidenceWarning => IsLowConfidence 
+            ? $"⚠ Collecte insuffisante ({ConfidenceScore}/100) — score non fiable"
+            : "";
 
         // === UDIS — AFFICHAGE MODE INDUSTRIE (séparé) ===
         public int MachineHealthScore => HealthReport?.MachineHealthScore ?? 0;
@@ -2586,7 +2599,7 @@ namespace PCDiagnosticPro.ViewModels
                     App.LogMessage($"[HealthReport] Construit: Score={healthReport.GlobalScore}, Grade={healthReport.Grade}, " +
                         $"Sections={healthReport.Sections.Count}, Confiance={healthReport.ConfidenceModel.ConfidenceLevel}");
                     App.LogMessage($"CollectionStatus={healthReport.CollectionStatus}; errors={healthReport.Errors?.Count ?? 0}; collectorErrorsLogical={healthReport.CollectorErrorsLogical}; missingDataCount={healthReport.MissingData?.Count ?? 0}");
-                    App.LogMessage($"ScoreV2_PS={healthReport.ScoreV2?.Score ?? 0}; ScoreCSharp={healthReport.Divergence?.GradeEngineScore ?? 0}; FinalScore={healthReport.GlobalScore}; FinalGrade={healthReport.Grade}; ConfidenceScore={healthReport.ConfidenceModel?.ConfidenceScore ?? 0}");
+                    App.LogMessage($"ScoreV2_PS={healthReport.ScoreV2?.Score ?? 0}; UDIS={healthReport.Divergence?.GradeEngineScore ?? 0}; FinalScore={healthReport.GlobalScore}; FinalGrade={healthReport.Grade}; ConfidenceScore={healthReport.ConfidenceModel?.ConfidenceScore ?? 0}");
                     
                     // SYNCHRONISER LE SCORE UNIFIÉ (FinalScore = source de vérité)
                     // On synchronise Summary.Score pour que TOUTE l'UI affiche le même score
@@ -2595,7 +2608,7 @@ namespace PCDiagnosticPro.ViewModels
                     
                     if (result.Summary.Score != unifiedScore)
                     {
-                        App.LogMessage($"[ScoreUnifié] Synchronisation: Legacy={result.Summary.Score} -> GradeEngine={unifiedScore} ({unifiedGrade})");
+                        App.LogMessage($"[ScoreUnifié] Synchronisation: Legacy={result.Summary.Score} -> UDIS={unifiedScore} ({unifiedGrade})");
                         App.LogMessage($"[ScoreUnifié] Divergence PS({healthReport.ScoreV2.Score}) vs App({unifiedScore}) = delta {healthReport.Divergence.Delta}");
                         result.Summary.Score = unifiedScore;
                         result.Summary.Grade = unifiedGrade;
@@ -2893,7 +2906,7 @@ namespace PCDiagnosticPro.ViewModels
                 var jsonContent = await File.ReadAllTextAsync(_resultJsonPath, Encoding.UTF8);
                 using var doc = JsonDocument.Parse(jsonContent);
 
-                // PHASE 1+6: Build DiagnosticSnapshot with schemaVersion 2.0.0
+                // Build DiagnosticSnapshot with schemaVersion 2.2.0 (contractual)
                 var snapshotBuilder = new DiagnosticSnapshotBuilder()
                     .AddCpuMetrics(sensorsResult)
                     .AddGpuMetrics(sensorsResult)

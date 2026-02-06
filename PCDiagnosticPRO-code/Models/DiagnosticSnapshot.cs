@@ -10,9 +10,12 @@ namespace PCDiagnosticPro.Models
     /// </summary>
     public class DiagnosticSnapshot
     {
-        /// <summary>Fixed schema version for contract compliance (bumped for PS/C# integration)</summary>
+        /// <summary>Version contractuelle unique. Toute modification de structure doit incrémenter cette version.</summary>
+        public const string CURRENT_SCHEMA_VERSION = "2.2.0";
+
+        /// <summary>Fixed schema version for contract compliance</summary>
         [JsonPropertyName("schemaVersion")]
-        public string SchemaVersion { get; } = "2.2.0";
+        public string SchemaVersion { get; } = CURRENT_SCHEMA_VERSION;
 
         /// <summary>Generation timestamp (ISO 8601 UTC)</summary>
         [JsonPropertyName("generatedAt")]

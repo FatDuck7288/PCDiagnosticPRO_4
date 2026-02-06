@@ -178,14 +178,32 @@ namespace PCDiagnosticPro.Services
             // Calculate collection quality
             int total = 0;
             int available = 0;
+            var violations = new List<string>();
 
-            foreach (var group in _snapshot.Metrics.Values)
+            foreach (var (domain, group) in _snapshot.Metrics)
             {
-                foreach (var metric in group.Values)
+                foreach (var (key, metric) in group)
                 {
                     total++;
                     if (metric.Available)
+                    {
                         available++;
+                    }
+                    else
+                    {
+                        // VALIDATION CONTRACTUELLE : toute métrique unavailable doit avoir une reason
+                        if (string.IsNullOrWhiteSpace(metric.Reason))
+                        {
+                            metric.Reason = "reason_not_provided";
+                            violations.Add($"{domain}.{key}: available=false mais reason manquante (auto-corrigé)");
+                        }
+                        // Confidence doit être 0 quand unavailable
+                        if (metric.Confidence != 0)
+                        {
+                            violations.Add($"{domain}.{key}: available=false mais confidence={metric.Confidence} (forcé à 0)");
+                            metric.Confidence = 0;
+                        }
+                    }
                 }
             }
 
@@ -196,16 +214,53 @@ namespace PCDiagnosticPro.Services
                 ? Math.Round((double)available / total * 100, 1) 
                 : 0;
             
+            if (violations.Count > 0)
+            {
+                LogBuild($"[Build] ⚠ {violations.Count} violation(s) contractuelle(s) auto-corrigées:");
+                foreach (var v in violations)
+                    LogBuild($"  - {v}");
+            }
+            
             LogBuild($"[Build] Completed: {available}/{total} metrics available ({_snapshot.CollectionQuality.CoveragePercent}%)");
+            LogBuild($"[Build] SchemaVersion={_snapshot.SchemaVersion}");
             WriteLogToTemp();
 
             return _snapshot;
         }
         
-        #region PS Section Mapping (Schema 2.1.0)
+        #region PS Section Mapping (Schema 2.2.0)
+        
+        // ═══════════════════════════════════════════════════════════════
+        // CONTRAT DE MAPPING PS → SNAPSHOT (schemaVersion 2.2.0)
+        // ═══════════════════════════════════════════════════════════════
+        //
+        // SECTIONS PRIORITAIRES (consommées par le scoring et l'IA) :
+        //   1. OS          → snapshot.metrics["os"][...]         (uptime, version, build)
+        //   2. Memory      → snapshot.metrics["memory"][...]     (RAM, usage, pagefile)
+        //   3. Security    → snapshot.metrics["security"][...]   (AV, firewall, UAC, BitLocker)
+        //   4. Stability   → snapshot.metrics["stability"][...]  (BSOD, WHEA, reliability)
+        //   5. Storage     → snapshot.metrics["storage"][...]    (SMART, disk health)
+        //   6. Network     → snapshot.metrics["network"][...]    (adapters, speed)
+        //   7. Updates     → snapshot.metrics["updates"][...]    (pending, last install)
+        //
+        // SECTIONS SECONDAIRES (contexte, pas de scoring direct) :
+        //   8. Startup     → snapshot.metrics["startup"][...]    (boot items count)
+        //   9. Devices     → snapshot.metrics["devices"][...]    (driver issues)
+        //  10. Boot        → snapshot.metrics["boot"][...]       (UEFI, SecureBoot)
+        //
+        // HIÉRARCHIE IA (ordre de priorité pour l'interprétation) :
+        //   CRITIQUE : WHEA/Kernel-Power 41/BugCheck/SMART failure > Sécurité désactivée
+        //   ÉLEVÉ    : Driver TDR/GPU crash > Mises à jour critiques > RAM saturée
+        //   MOYEN    : Startup excessif > Performances dégradées > Réseau lent
+        //   FAIBLE   : Logs applicatifs > Cosmétique
+        //
+        // RÈGLE CONTRACTUELLE :
+        //   Toute métrique absente DOIT avoir available=false + reason explicite.
+        //   Le JSON final ne contient aucun champ null implicite pour les métriques critiques.
+        // ═══════════════════════════════════════════════════════════════
         
         /// <summary>
-        /// Maps all PowerShell sections to the snapshot
+        /// Maps all PowerShell sections to the snapshot (see mapping contract above)
         /// </summary>
         public DiagnosticSnapshotBuilder AddPowerShellData(JsonElement? psRoot)
         {
@@ -217,22 +272,28 @@ namespace PCDiagnosticPro.Services
             
             var root = psRoot.Value;
             
-            // Map sections to snapshot domains
+            // Map sections to snapshot domains (skip empty/error sections = noise filter)
             if (TryGetPropertyCaseInsensitive(root, out var sections, "sections") && sections.ValueKind == JsonValueKind.Object)
             {
-                AddOsMetricsFromPs(sections);
-                AddMemoryMetricsFromPs(sections);
-                AddNetworkMetricsFromPs(sections);
-                AddUpdatesMetricsFromPs(sections);
-                AddSecurityMetricsFromPs(sections);
-                AddStartupMetricsFromPs(sections);
-                AddDevicesMetricsFromPs(sections);
-                AddStabilityMetricsFromPs(sections);
-                AddBootMetricsFromPs(sections);
-                AddStorageExtrasFromPs(sections);
+                int mapped = 0, skipped = 0;
+                
+                // Prioritaires (scoring + IA) — alias pour tolérer les variations de noms PS
+                mapped += TryMapSection(sections, AddOsMetricsFromPs, ref skipped, "OS");
+                mapped += TryMapSection(sections, AddMemoryMetricsFromPs, ref skipped, "Memory", "MemoryInfo");
+                mapped += TryMapSection(sections, AddSecurityMetricsFromPs, ref skipped, "Security");
+                mapped += TryMapSection(sections, AddStabilityMetricsFromPs, ref skipped, "Stability", "EventLogs", "ReliabilityHistory");
+                mapped += TryMapSection(sections, AddStorageExtrasFromPs, ref skipped, "Storage");
+                mapped += TryMapSection(sections, AddNetworkMetricsFromPs, ref skipped, "Network");
+                mapped += TryMapSection(sections, AddUpdatesMetricsFromPs, ref skipped, "WindowsUpdate", "Updates", "WindowsUpdateInfo");
+                
+                // Secondaires (contexte)
+                mapped += TryMapSection(sections, AddStartupMetricsFromPs, ref skipped, "StartupPrograms", "Startup", "StartupInfo");
+                mapped += TryMapSection(sections, AddDevicesMetricsFromPs, ref skipped, "DevicesDrivers", "Devices", "PnPDevices");
+                mapped += TryMapSection(sections, AddBootMetricsFromPs, ref skipped, "Boot", "PerformanceCounters", "DynamicSignals");
+                
                 AddPowerShellSummary(sections);
                 
-                LogBuild($"[AddPowerShellData] Mapped sections to snapshot domains");
+                LogBuild($"[AddPowerShellData] Mapped {mapped} sections, skipped {skipped} empty/error sections");
             }
             
             // Map machine info from MachineIdentity and OS sections
@@ -589,6 +650,46 @@ namespace PCDiagnosticPro.Services
             }
         }
 
+        /// <summary>Essaie de mapper une section PS (supporte plusieurs alias). Retourne 1 si mappée, 0 sinon.</summary>
+        private int TryMapSection(JsonElement sections, Action<JsonElement> mapper, ref int skipped, params string[] sectionNames)
+        {
+            try
+            {
+                if (!TryGetSectionData(sections, out var data, sectionNames))
+                {
+                    skipped++;
+                    LogBuild($"[NoiseFilter] Section '{string.Join("/", sectionNames)}' absente ou vide — ignorée");
+                    return 0;
+                }
+                // Vérifier si la section est en erreur (status = "Error" ou "Failed")
+                foreach (var name in sectionNames)
+                {
+                    if (TryGetPropertyCaseInsensitive(sections, out var sectionObj, name)
+                        && sectionObj.ValueKind == JsonValueKind.Object
+                        && TryGetPropertyCaseInsensitive(sectionObj, out var statusEl, "status")
+                        && statusEl.ValueKind == JsonValueKind.String)
+                    {
+                        var status = statusEl.GetString()?.ToLowerInvariant();
+                        if (status == "error" || status == "failed")
+                        {
+                            skipped++;
+                            LogBuild($"[NoiseFilter] Section '{name}' en erreur (status={status}) — ignorée");
+                            return 0;
+                        }
+                        break; // Trouvé une section non-erreur, on continue
+                    }
+                }
+                mapper(sections);
+                return 1;
+            }
+            catch (Exception ex)
+            {
+                skipped++;
+                LogBuild($"[NoiseFilter] Exception mapping section '{sectionNames[0]}': {ex.Message}");
+                return 0;
+            }
+        }
+        
         private void AddPowerShellSummary(JsonElement sections)
         {
             try
@@ -1111,12 +1212,14 @@ namespace PCDiagnosticPro.Services
         
         #region Logging
         
+        [System.Diagnostics.Conditional("DEBUG")]
         private void LogBuild(string message)
         {
             _buildLog.Add($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
             App.LogMessage(message);
         }
         
+        [System.Diagnostics.Conditional("DEBUG")]
         private void WriteLogToTemp()
         {
             try

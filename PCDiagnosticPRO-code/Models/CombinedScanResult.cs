@@ -16,7 +16,7 @@ namespace PCDiagnosticPro.Models
         public HardwareSensorsResult SensorsCsharp { get; set; } = new HardwareSensorsResult();
         
         /// <summary>
-        /// PHASE 1: DiagnosticSnapshot with schemaVersion 2.0.0
+        /// DiagnosticSnapshot with schemaVersion 2.2.0 (contractual)
         /// Contains all normalized metrics and findings
         /// </summary>
         [JsonPropertyName("diagnostic_snapshot")]

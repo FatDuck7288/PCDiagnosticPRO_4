@@ -81,45 +81,81 @@ namespace PCDiagnosticPro.DiagnosticsSignals
             return result;
         }
         
+        /// <summary>Collecteurs critiques : un retry automatique en cas d'échec (WHEA, DriverStability, CpuThrottle).</summary>
+        private static readonly HashSet<string> CriticalCollectors = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "whea", "driverStability", "cpuThrottle"
+        };
+
         private async Task<SignalResult> RunCollectorAsync(ISignalCollector collector, CancellationToken ct)
         {
-            var sw = Stopwatch.StartNew();
-            SignalsLogger.LogStart(collector.Name);
+            var maxAttempts = CriticalCollectors.Contains(collector.Name) ? 2 : 1;
             
-            try
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(collector.DefaultTimeout);
+                var sw = Stopwatch.StartNew();
+                if (attempt == 1) SignalsLogger.LogStart(collector.Name);
+                else SignalsLogger.LogInfo(collector.Name, $"Retry attempt {attempt}/{maxAttempts}");
                 
-                var result = await collector.CollectAsync(cts.Token);
-                sw.Stop();
-                result.DurationMs = sw.ElapsedMilliseconds;
-                
-                if (result.Available)
+                try
                 {
-                    SignalsLogger.LogSuccess(collector.Name, sw.ElapsedMilliseconds, 
-                        result.Notes ?? $"quality={result.Quality}");
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    cts.CancelAfter(collector.DefaultTimeout);
+                    
+                    var result = await collector.CollectAsync(cts.Token);
+                    sw.Stop();
+                    result.DurationMs = sw.ElapsedMilliseconds;
+                    
+                    if (result.Available)
+                    {
+                        SignalsLogger.LogSuccess(collector.Name, sw.ElapsedMilliseconds, 
+                            result.Notes ?? $"quality={result.Quality}");
+                        return result;
+                    }
+                    else
+                    {
+                        SignalsLogger.LogFail(collector.Name, sw.ElapsedMilliseconds, 
+                            result.Reason ?? "unknown");
+                        if (attempt < maxAttempts)
+                        {
+                            await Task.Delay(500, ct); // Brief pause before retry
+                            continue;
+                        }
+                        return result;
+                    }
                 }
-                else
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested && attempt < maxAttempts)
                 {
-                    SignalsLogger.LogFail(collector.Name, sw.ElapsedMilliseconds, 
-                        result.Reason ?? "unknown");
+                    sw.Stop();
+                    SignalsLogger.LogInfo(collector.Name, $"Timeout on attempt {attempt}, will retry");
+                    await Task.Delay(300, ct);
+                    continue;
                 }
-                
-                return result;
+                catch (OperationCanceledException)
+                {
+                    sw.Stop();
+                    SignalsLogger.LogTimeout(collector.Name, collector.DefaultTimeout);
+                    return SignalResult.Unavailable(collector.Name, 
+                        maxAttempts > 1 ? $"timeout_after_{maxAttempts}_attempts" : "timeout", "collector");
+                }
+                catch (Exception ex) when (attempt < maxAttempts)
+                {
+                    sw.Stop();
+                    SignalsLogger.LogInfo(collector.Name, $"Exception on attempt {attempt}: {ex.Message}, will retry");
+                    await Task.Delay(300, ct);
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    sw.Stop();
+                    SignalsLogger.LogException(collector.Name, ex);
+                    return SignalResult.Unavailable(collector.Name, 
+                        maxAttempts > 1 ? $"exception_after_{maxAttempts}_attempts: {ex.Message}" : $"exception: {ex.Message}", "collector");
+                }
             }
-            catch (OperationCanceledException)
-            {
-                sw.Stop();
-                SignalsLogger.LogTimeout(collector.Name, collector.DefaultTimeout);
-                return SignalResult.Unavailable(collector.Name, "timeout", "collector");
-            }
-            catch (Exception ex)
-            {
-                sw.Stop();
-                SignalsLogger.LogException(collector.Name, ex);
-                return SignalResult.Unavailable(collector.Name, $"exception: {ex.Message}", "collector");
-            }
+            
+            // Shouldn't reach here, but safety net
+            return SignalResult.Unavailable(collector.Name, "exhausted_retries", "collector");
         }
     }
     

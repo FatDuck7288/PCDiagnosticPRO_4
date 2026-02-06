@@ -95,7 +95,7 @@ namespace PCDiagnosticPro.Models
         /// <summary>Modèle de confiance (coverage + cohérence)</summary>
         public ConfidenceModel ConfidenceModel { get; set; } = new();
         
-        /// <summary>Divergence entre score PS et score GradeEngine (legacy)</summary>
+        /// <summary>Divergence entre score PS et score UDIS</summary>
         public ScoreDivergence Divergence { get; set; } = new();
 
         /// <summary>UDIS — Machine Health Score 0-100 (70% du total)</summary>
@@ -646,8 +646,13 @@ namespace PCDiagnosticPro.Models
         /// <summary>Score de confiance global 0-100</summary>
         public int ConfidenceScore { get; set; } = 100;
         
-        /// <summary>Niveau de confiance textuel</summary>
-        public string ConfidenceLevel { get; set; } = "Élevé";
+        /// <summary>Niveau de confiance textuel — calculé automatiquement depuis le score.
+        /// ≥90 = Fiable, ≥70 = Moyen, &lt;70 = Faible.</summary>
+        public string ConfidenceLevel
+        {
+            get => ConfidenceScore >= 90 ? "Fiable" : ConfidenceScore >= 70 ? "Moyen" : "Faible";
+            set { /* setter conservé pour compatibilité JSON mais la valeur est toujours recalculée */ }
+        }
         
         /// <summary>Ratio de couverture des sections PS (0-1)</summary>
         public double SectionsCoverage { get; set; } = 1.0;
@@ -664,12 +669,12 @@ namespace PCDiagnosticPro.Models
         /// <summary>Avertissements sur la qualité des données</summary>
         public List<string> Warnings { get; set; } = new();
         
-        /// <summary>Indique si le score est fiable</summary>
+        /// <summary>Indique si le score est fiable (seuil : ≥70)</summary>
         public bool IsReliable => ConfidenceScore >= 70;
     }
 
     /// <summary>
-    /// Traçabilité de la divergence entre score PS et score GradeEngine
+    /// Traçabilité de la divergence entre score PS et score UDIS
     /// </summary>
     public class ScoreDivergence
     {
@@ -679,10 +684,10 @@ namespace PCDiagnosticPro.Models
         /// <summary>Grade original du PowerShell</summary>
         public string PowerShellGrade { get; set; } = "N/A";
         
-        /// <summary>Score calculé par GradeEngine (UI)</summary>
+        /// <summary>Score calculé par UDIS (legacy field name conservé pour compat JSON)</summary>
         public int GradeEngineScore { get; set; }
         
-        /// <summary>Grade calculé par GradeEngine (UI)</summary>
+        /// <summary>Grade calculé par UDIS</summary>
         public string GradeEngineGrade { get; set; } = "N/A";
         
         /// <summary>Différence absolue entre les deux scores</summary>
@@ -695,6 +700,6 @@ namespace PCDiagnosticPro.Models
         public string Explanation { get; set; } = "";
         
         /// <summary>Source de vérité utilisée pour l'affichage UI</summary>
-        public string SourceOfTruth { get; set; } = "GradeEngine";
+        public string SourceOfTruth { get; set; } = "UDIS";
     }
 }

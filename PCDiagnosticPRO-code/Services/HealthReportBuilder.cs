@@ -8,14 +8,14 @@ using PCDiagnosticPro.Models;
 namespace PCDiagnosticPro.Services
 {
     /// <summary>
-    /// Construit un HealthReport industriel depuis le JSON PowerShell.
-    /// Utilise scoreV2 du PS comme source de vérité pour le score.
+    /// Construit un HealthReport depuis le JSON PowerShell + capteurs C#.
+    /// Source de vérité: UDIS (étape 7 de Build()).
     /// </summary>
     public static class HealthReportBuilder
     {
         /// <summary>
         /// Mapping des sections JSON vers les domaines de santé
-        /// Extended to cover all PS sections (Schema 2.1.0)
+        /// Mapping complet PS sections → domaines de santé (Schema 2.2.0)
         /// </summary>
         private static readonly Dictionary<string, HealthDomain> SectionToDomain = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -128,7 +128,7 @@ namespace PCDiagnosticPro.Services
 
         /// <summary>
         /// Construit un HealthReport depuis le JSON brut du PowerShell AVEC données capteurs hardware.
-        /// P0/P1: collectorErrorsLogical, missingData/topPenalties flexibles, FinalScoreCalculator, DataSanitizer.
+        /// P0/P1: collectorErrorsLogical, missingData/topPenalties flexibles, UDIS scoring, DataSanitizer.
         /// </summary>
         public static HealthReport Build(
             string jsonContent,
@@ -146,13 +146,13 @@ namespace PCDiagnosticPro.Services
                 // 1. Extraire metadata
                 report.Metadata = ExtractMetadata(root);
                 
-                // 2. Extraire scoreV2 (SOURCE DE VÉRITÉ PS)
+                // 2. Extraire scoreV2 (base initiale, écrasé par UDIS à l'étape 7)
                 report.ScoreV2 = ExtractScoreV2(root);
                 report.GlobalScore = report.ScoreV2.Score;
                 report.Grade = report.ScoreV2.Grade;
                 report.GlobalSeverity = HealthReport.ScoreToSeverity(report.GlobalScore);
                 
-                // 3. DIAGNOSTICS COLLECTE (P0.1, P1.2): Analyse root + sanitize sensors, missingData/topPenalties flexibles
+                // 3. Diagnostics collecte
                 var diagnostics = CollectorDiagnosticsService.Analyze(root, sensors);
                 report.Errors = diagnostics.Errors;
                 report.MissingData = diagnostics.MissingDataNormalized;
@@ -164,24 +164,24 @@ namespace PCDiagnosticPro.Services
                 
                 App.LogMessage($"COLLECTOR_ERRORS_LOGICAL={report.CollectorErrorsLogical} (from errors[]={report.Errors.Count})");
                 
-                // 4. Construire les sections par domaine avec extraction complète (PS + C# sensors + diagnostics)
+                // 4. Sections par domaine
                 report.Sections = BuildHealthSections(root, report.ScoreV2, sensors);
                 
-                // 4.1 Injecter les données C# pour Drivers / Updates si disponibles
+                // 4b. Enrichissement C# (Drivers / Updates)
                 if (driverInventory != null)
                     InjectDriverInventory(report, driverInventory);
                 if (updatesCsharp != null)
                     InjectUpdatesCsharp(report, updatesCsharp);
                 
-                // 5. INJECTER LES DONNÉES CAPTEURS HARDWARE (déjà sanitized par Analyze)
+                // 5. Capteurs hardware C#
                 if (sensors != null)
                     InjectHardwareSensors(report, sensors);
                 
-                // 6. Modèle de confiance (pour DRS et affichage)
+                // 6. Modèle de confiance
                 report.ConfidenceModel = BuildConfidenceModel(report, sensors);
                 report.ConfidenceModel.ConfidenceScore = CollectorDiagnosticsService.ApplyConfidenceGating(report.ConfidenceModel.ConfidenceScore, diagnostics);
                 
-                // 7. UDIS — Unified Diagnostic Intelligence Scoring (remplace GradeEngine + ScoreV2)
+                // 7. UDIS — Unified Diagnostic Intelligence Scoring (source de vérité unique)
                 var udis = UnifiedDiagnosticScoreEngine.Compute(report, root, sensors, diagnostics);
                 report.GlobalScore = udis.UdisScore;
                 report.Grade = udis.Grade;
@@ -195,11 +195,32 @@ namespace PCDiagnosticPro.Services
                 report.UdisReport = udis;
                 report.Divergence.PowerShellScore = report.ScoreV2.Score;
                 report.Divergence.PowerShellGrade = report.ScoreV2.Grade;
-                report.Divergence.GradeEngineScore = udis.UdisScore;
+                report.Divergence.GradeEngineScore = udis.UdisScore;  // Rempli par UDIS (legacy field name)
                 report.Divergence.GradeEngineGrade = udis.Grade;
-                report.Divergence.SourceOfTruth = "UDIS (Unified Diagnostic Intelligence Scoring)";
+                report.Divergence.SourceOfTruth = "UDIS";
                 
-                // 8. Verdict si collecte FAILED/PARTIAL
+                // 8. Garde-fou confiance : plafonner si collecte insuffisante
+                var confScore = report.ConfidenceModel?.ConfidenceScore ?? 0;
+                if (confScore < 50 && report.GlobalScore > 60)
+                {
+                    var originalScore = report.GlobalScore;
+                    report.GlobalScore = Math.Min(report.GlobalScore, 60);
+                    report.Grade = ScoreToGrade(report.GlobalScore);
+                    report.GlobalSeverity = HealthReport.ScoreToSeverity(report.GlobalScore);
+                    report.GlobalMessage = $"Score plafonné ({originalScore}→{report.GlobalScore}) : collecte trop faible ({confScore}/100)";
+                    App.LogMessage($"[HealthReportBuilder] GARDE-FOU: Score plafonné {originalScore}→{report.GlobalScore} (confiance={confScore})");
+                }
+                else if (confScore < 70 && report.GlobalScore > 75)
+                {
+                    var originalScore = report.GlobalScore;
+                    report.GlobalScore = Math.Min(report.GlobalScore, 75);
+                    report.Grade = ScoreToGrade(report.GlobalScore);
+                    report.GlobalSeverity = HealthReport.ScoreToSeverity(report.GlobalScore);
+                    report.GlobalMessage = $"Score ajusté ({originalScore}→{report.GlobalScore}) : collecte partielle ({confScore}/100)";
+                    App.LogMessage($"[HealthReportBuilder] GARDE-FOU: Score ajusté {originalScore}→{report.GlobalScore} (confiance={confScore})");
+                }
+                
+                // 8b. Verdict collecte
                 if (report.CollectionStatus == "FAILED" || report.CollectionStatus == "PARTIAL")
                 {
                     report.GlobalMessage = report.CollectionStatus == "FAILED"
@@ -392,6 +413,10 @@ namespace PCDiagnosticPro.Services
                     : "Inventaire pilotes détecté via WMI (Windows).";
             }
         }
+
+        /// <summary>Score → Grade (A+ … F), identique à UnifiedDiagnosticScoreEngine.</summary>
+        private static string ScoreToGrade(int score) =>
+            score switch { >= 95 => "A+", >= 90 => "A", >= 80 => "B+", >= 70 => "B", >= 60 => "C", >= 50 => "D", _ => "F" };
 
         /// <summary>
         /// Injecte le statut Windows Update C# dans la section OS (UI).

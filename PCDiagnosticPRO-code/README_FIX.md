@@ -1,6 +1,6 @@
 # README_FIX.md — PC Diagnostic PRO Implementation Report
 
-## Date: 2026-01-30 | Schema Version: 2.0.0 | FIX PLAN APPLIED
+## Date: 2026-01-30 | Schema Version: 2.2.0 | FIX PLAN APPLIED
 
 ---
 
@@ -9,15 +9,15 @@
 ### PHASE 1 — DiagnosticSnapshot + NormalizedMetric
 
 **Fichiers créés:**
-- `Models/DiagnosticSnapshot.cs` - Structure principale avec schemaVersion 2.0.0
+- `Models/DiagnosticSnapshot.cs` - Structure principale avec schemaVersion 2.2.0
 - `Models/NormalizedMetric.cs` - Format normalisé + MetricFactory helpers
 - `Services/DiagnosticSnapshotBuilder.cs` - Construction avec validation sentinelles
 
-**Contrat schemaVersion 2.0.0:**
+**Contrat schemaVersion 2.2.0:**
 ```json
 {
   "diagnostic_snapshot": {
-    "schemaVersion": "2.0.0",
+    "schemaVersion": "2.2.0",
     "generatedAt": "2026-01-30T...",
     "machine": { "hostname": "...", "os": "...", "isAdmin": true },
     "metrics": {
@@ -86,7 +86,7 @@ Le JSON combiné inclut maintenant:
 {
   "scan_powershell": { ... },
   "sensors_csharp": { ... },
-  "diagnostic_snapshot": { "schemaVersion": "2.0.0", ... },
+  "diagnostic_snapshot": { "schemaVersion": "2.2.0", ... },
   "diagnostic_signals": { ... },
   "process_telemetry": { ... },
   "network_diagnostics": { ... }
@@ -142,11 +142,11 @@ dotnet run
 
 ## PREUVES DE CORRECTION
 
-### 1. SchemaVersion 2.0.0
+### 1. SchemaVersion 2.2.0
 Vérifier dans `scan_result_combined.json`:
 ```json
 "diagnostic_snapshot": {
-  "schemaVersion": "2.0.0"
+  "schemaVersion": "2.2.0"
 }
 ```
 
@@ -200,7 +200,7 @@ foreach (var f in failures) Console.WriteLine($"  FAIL: {f}");
 ### Tests inclus
 | Test | Vérifie |
 |------|---------|
-| Test_SchemaVersion_Is_2_0_0 | schemaVersion = "2.0.0" |
+| Test_SchemaVersion_Is_2_2_0 | schemaVersion = "2.2.0" |
 | Test_CpuTemp_Zero_Returns_Unavailable | Sentinelle 0 → unavailable |
 | Test_DiskTemp_Zero_Returns_Unavailable | Sentinelle 0 → unavailable |
 | Test_PerfCounter_MinusOne_Returns_Unavailable | Sentinelle -1 → unavailable |
@@ -216,7 +216,7 @@ foreach (var f in failures) Console.WriteLine($"  FAIL: {f}");
 
 | Critère | Status |
 |---------|--------|
-| diagnostic_snapshot existe avec schemaVersion 2.0.0 | ✅ |
+| diagnostic_snapshot existe avec schemaVersion 2.2.0 | ✅ |
 | Chaque métrique a: value, unit, available, source, reason, timestamp, confidence | ✅ |
 | CPU temp 0 → available=false, confidence=0, reason explicite | ✅ |
 | Disk temp 0 → available=false, reason explicite | ✅ |

@@ -9,7 +9,7 @@ namespace PCDiagnosticPro.Services
     /// <summary>
     /// Unified Diagnostic Intelligence Scoring (UDIS).
     /// UDIS = 0.7 * MachineHealthScore + 0.2 * DataReliabilityScore + 0.1 * DiagnosticClarityScore.
-    /// Ne lit que les sorties JSON/TXT ; ne recrée pas ScoreV2 ni GradeEngine.
+    /// Source de vérité unique pour le scoring. Lit les sorties JSON/TXT du scan.
     /// </summary>
     public static class UnifiedDiagnosticScoreEngine
     {
