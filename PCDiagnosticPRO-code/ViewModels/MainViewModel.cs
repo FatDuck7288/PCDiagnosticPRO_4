@@ -1182,18 +1182,45 @@ namespace PCDiagnosticPro.ViewModels
                     _standaloneRecommendation = GetSpeedRecommendation(libreResult);
                     _lastSpeedTestTime = DateTime.Now;
                     
-                    // Aussi mettre à jour UdisReport si disponible
+                    App.LogMessage($"[SpeedTest] LibreSpeed OK: Down={libreResult.DownloadMbps:F1} Mbps, Up={libreResult.UploadMbps:F1} Mbps, Ping={libreResult.PingMs:F1} ms");
+                    AddLiveFeedItem($"✅ Speed Test: {libreResult.DownloadMbps:F1} Mbps ↓ / {libreResult.UploadMbps:F1} Mbps ↑");
+                    
+                    // CROSS-CHECK UPLOAD: LibreSpeed CLI may under-report upload speed
+                    // (single server, distant location, limited concurrency).
+                    // Always run our own parallel multi-stream upload test and take the MAX.
+                    try
+                    {
+                        AddLiveFeedItem("↑ Vérification upload (multi-stream)...");
+                        App.LogMessage("[SpeedTest] Cross-check upload: running parallel upload test...");
+                        var netCollector = new Services.NetworkDiagnostics.NetworkDiagnosticsCollector();
+                        var netResult = await netCollector.CollectUploadOnlyAsync(ct);
+                        if (netResult.HasValue && netResult.Value > 0)
+                        {
+                            App.LogMessage($"[SpeedTest] Cross-check upload result: {netResult.Value:F1} Mbps (LibreSpeed was {libreResult.UploadMbps:F1} Mbps)");
+                            double libreUp = libreResult.UploadMbps ?? 0;
+                            double bestUpload = Math.Max(libreUp, netResult.Value);
+                            if (netResult.Value > libreUp * 1.2) // Our test is >20% higher
+                            {
+                                App.LogMessage($"[SpeedTest] Using cross-check upload ({bestUpload:F1} Mbps) over LibreSpeed ({libreUp:F1} Mbps)");
+                                _standaloneUploadMbps = bestUpload;
+                                AddLiveFeedItem($"✅ Upload corrigé: {bestUpload:F1} Mbps ↑ (multi-stream)");
+                            }
+                        }
+                    }
+                    catch (Exception crossEx)
+                    {
+                        App.LogMessage($"[SpeedTest] Cross-check upload failed (using LibreSpeed value): {crossEx.Message}");
+                    }
+                    
+                    // Mettre à jour UdisReport si disponible
                     if (HealthReport?.UdisReport != null)
                     {
-                        HealthReport.UdisReport.DownloadMbps = libreResult.DownloadMbps;
-                        HealthReport.UdisReport.UploadMbps = libreResult.UploadMbps;
+                        HealthReport.UdisReport.DownloadMbps = _standaloneDownloadMbps;
+                        HealthReport.UdisReport.UploadMbps = _standaloneUploadMbps;
                         HealthReport.UdisReport.LatencyMs = libreResult.PingMs;
                         HealthReport.UdisReport.NetworkSpeedTier = libreResult.SpeedTier;
                         HealthReport.UdisReport.NetworkRecommendation = _standaloneRecommendation;
                     }
-                    
-                    App.LogMessage($"[SpeedTest] LibreSpeed OK: Down={libreResult.DownloadMbps:F1} Mbps, Up={libreResult.UploadMbps:F1} Mbps, Ping={libreResult.PingMs:F1} ms");
-                    AddLiveFeedItem($"✅ Speed Test: {libreResult.DownloadMbps:F1} Mbps ↓ / {libreResult.UploadMbps:F1} Mbps ↑");
                     
                     // Sauvegarder le résultat en JSON pour inspection LLM
                     var jsonPath = await _libreSpeedService.SaveResultToJsonAsync(libreResult);
@@ -1215,14 +1242,40 @@ namespace PCDiagnosticPro.ViewModels
                         if (fallbackResult.Success && fallbackResult.DownloadMbps.HasValue)
                         {
                             _standaloneDownloadMbps = fallbackResult.DownloadMbps;
-                            _standaloneUploadMbps = null; // Fallback ne mesure pas l'upload
                             _standaloneLatencyMs = fallbackResult.PingMs;
                             _standaloneSpeedTier = fallbackResult.SpeedTier;
-                            _standaloneRecommendation = "Test partiel (fallback HTTP) - upload non mesuré";
                             _lastSpeedTestTime = DateTime.Now;
                             
                             App.LogMessage($"[SpeedTest] Fallback OK: Download={fallbackResult.DownloadMbps:F1} Mbps");
                             AddLiveFeedItem($"✅ Speed Test (fallback): {fallbackResult.DownloadMbps:F1} Mbps ↓");
+                            
+                            // FIX #4: Fallback upload — use NetworkDiagnosticsCollector's upload test
+                            // instead of leaving upload as null
+                            try
+                            {
+                                AddLiveFeedItem("↑ Mesure upload en cours...");
+                                var netCollector = new Services.NetworkDiagnostics.NetworkDiagnosticsCollector();
+                                var netResult = await netCollector.CollectAsync(ct);
+                                if (netResult.Throughput?.UploadMbpsMedian.HasValue == true)
+                                {
+                                    _standaloneUploadMbps = netResult.Throughput.UploadMbpsMedian;
+                                    _standaloneRecommendation = $"Download: fallback HTTP, Upload: test direct ({_standaloneUploadMbps:F1} Mbps)";
+                                    App.LogMessage($"[SpeedTest] Fallback upload OK: {_standaloneUploadMbps:F1} Mbps");
+                                    AddLiveFeedItem($"✅ Upload (fallback): {_standaloneUploadMbps:F1} Mbps ↑");
+                                }
+                                else
+                                {
+                                    _standaloneUploadMbps = null;
+                                    _standaloneRecommendation = "Test partiel (fallback HTTP) - upload non mesuré";
+                                    App.LogMessage("[SpeedTest] Fallback upload failed");
+                                }
+                            }
+                            catch (Exception uploadEx)
+                            {
+                                _standaloneUploadMbps = null;
+                                _standaloneRecommendation = "Test partiel (fallback HTTP) - upload non mesuré";
+                                App.LogMessage($"[SpeedTest] Fallback upload error: {uploadEx.Message}");
+                            }
                         }
                         else
                         {

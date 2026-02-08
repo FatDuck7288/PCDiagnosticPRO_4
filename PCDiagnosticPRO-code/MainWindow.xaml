@@ -228,50 +228,106 @@
                 </UniformGrid>
             </Grid>
 
-            <!-- VUE HEALTHCHECK — panneau droit hors scroll pour éviter overlay scrollbar. Scroll uniquement à gauche. -->
-            <Grid Visibility="{Binding IsHealthcheckView, Converter={StaticResource BoolToVisibility}}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" MinWidth="400"/>
-                    <ColumnDefinition Width="280"/>
-                </Grid.ColumnDefinitions>
-                <ScrollViewer Grid.Column="0"
-                              HorizontalScrollBarVisibility="Auto"
-                              VerticalScrollBarVisibility="Auto"
-                              CanContentScroll="True"
-                              ClipToBounds="False">
-                    <!-- Colonne gauche scrollable : grille 3 lignes. -->
-                    <Grid MinWidth="600" Margin="24,0,20,8" ClipToBounds="False">
+            <!-- VUE HEALTHCHECK — scrollbar à l'extrême droite de la fenêtre.
+                 Margin="0,0,-30,0" annule le padding-right du parent (Margin="30") pour
+                 que le scrollbar touche le bord droit du viewport.
+                 VerticalScrollBarVisibility="Visible" réserve toujours l'espace → zéro reflow. -->
+            <ScrollViewer Visibility="{Binding IsHealthcheckView, Converter={StaticResource BoolToVisibility}}"
+                          Margin="0,0,-30,0"
+                          VerticalScrollBarVisibility="Visible"
+                          HorizontalScrollBarVisibility="Disabled"
+                          CanContentScroll="True"
+                          ClipToBounds="True">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="400"/>
+                        <ColumnDefinition Width="280"/>
+                    </Grid.ColumnDefinitions>
+                    <!-- Colonne gauche : grille 3 lignes (scroll géré par le ScrollViewer parent). -->
+                    <Grid Grid.Column="0" MinWidth="480" Margin="24,0,20,8" ClipToBounds="False">
                     <Grid.RowDefinitions>
-                        <!-- Live feed: 120px pour dégager 600px min pour l'anneau (sinon cercle coupé) -->
-                        <RowDefinition Height="120"/>
+                        <!-- FIX #3: Live feed élargi (150px) pour section active + progress bar + log -->
+                        <RowDefinition Height="150"/>
                         <RowDefinition Height="Auto"/>
                         <!-- MinHeight=540 : doit recevoir au moins 540px (RingRowContainer 500 + Margin 10*2 = 520) -->
                         <RowDefinition Height="*" MinHeight="540"/>
                     </Grid.RowDefinitions>
 
-                    <!-- ROW 0: Live feed avec pluie de 0/1 en fond, texte au-dessus -->
+                    <!-- ROW 0: Live feed amélioré — Section active + progress bar + flux rapide -->
                     <Border Grid.Row="0" Background="#161B22" CornerRadius="12" Padding="12,8"
                             BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                            Margin="0,0,0,12" ClipToBounds="False">
+                            Margin="0,0,0,12" ClipToBounds="True">
                         <Grid>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>  <!-- Titre + section active -->
+                                <RowDefinition Height="Auto"/>  <!-- Progress bar -->
+                                <RowDefinition Height="*"/>     <!-- Log défilant -->
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,6"
-                                       Foreground="{StaticResource AccentRedBrush}" VerticalAlignment="Center">
-                                <TextBlock.Text>
-                                    <MultiBinding StringFormat="📡 {0}">
-                                        <Binding Path="LiveFeedLabel"/>
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
-                            <Grid Grid.Row="1" ClipToBounds="True">
-                                <!-- Live feed simplifié (pluie binaire supprimée) -->
+                            
+                            <!-- Ligne 0: Titre feed + Section en cours (toujours visible) -->
+                            <Grid Grid.Row="0" Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" FontWeight="SemiBold" FontSize="11"
+                                           Foreground="{StaticResource AccentRedBrush}" VerticalAlignment="Center">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="📡 {0}">
+                                            <Binding Path="LiveFeedLabel"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <!-- Section en cours: pulsation subtile pendant le scan -->
+                                <TextBlock Grid.Column="1" Text="{Binding CurrentSectionDisplay}"
+                                           FontSize="10" FontWeight="SemiBold" FontFamily="Consolas"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="250">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsScanning}" Value="True">
+                                                    <DataTrigger.EnterActions>
+                                                        <BeginStoryboard x:Name="SectionPulse">
+                                                            <Storyboard RepeatBehavior="Forever">
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                 From="0.5" To="1" Duration="0:0:1"
+                                                                                 AutoReverse="True"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.EnterActions>
+                                                    <DataTrigger.ExitActions>
+                                                        <StopStoryboard BeginStoryboardName="SectionPulse"/>
+                                                    </DataTrigger.ExitActions>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                            
+                            <!-- Ligne 1: Barre de progression linéaire (4px, slim, moderne) -->
+                            <ProgressBar Grid.Row="1" Height="4" Margin="0,0,0,6"
+                                         Minimum="0" Maximum="100"
+                                         Value="{Binding ProgressPercent, Mode=OneWay}"
+                                         Foreground="{StaticResource AccentRedBrush}"
+                                         Background="#30363D" BorderThickness="0"
+                                         Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
+                                         AutomationProperties.Name="Scan progress">
+                                <ProgressBar.Clip>
+                                    <RectangleGeometry RadiusX="2" RadiusY="2" Rect="0,0,10000,4"/>
+                                </ProgressBar.Clip>
+                            </ProgressBar>
+                            
+                            <!-- Ligne 2: Log défilant rapide avec virtualization -->
+                            <Grid Grid.Row="2" ClipToBounds="True">
                                 <ListBox ItemsSource="{Binding FilteredLiveFeedItems}"
                                          Background="Transparent" BorderThickness="0"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         ScrollViewer.CanContentScroll="False"
+                                         IsSynchronizedWithCurrentItem="True"
                                          FontFamily="Consolas" FontSize="10"
                                          Padding="0,2"
                                          VirtualizingPanel.IsVirtualizing="True"
@@ -279,8 +335,20 @@
                                     <ListBox.ItemContainerStyle>
                                         <Style TargetType="ListBoxItem">
                                             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                            <Setter Property="Padding" Value="0,2"/>
+                                            <Setter Property="Padding" Value="0,1"/>
                                             <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="Margin" Value="0"/>
+                                            <!-- Highlight flash on load (newest item highlight) -->
+                                            <Style.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                             From="1" To="0.7" Duration="0:0:0.6"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Style.Triggers>
                                         </Style>
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
@@ -307,7 +375,7 @@
                         </Grid>
                     </Border>
 
-                    <!-- ROW 1: Espace réservé (indicateur section supprimé) -->
+                    <!-- ROW 1: Espace réservé -->
 
                     <!-- ================================================================== -->
                     <!-- ROW 2: ANNEAU DE PROGRESSION - AUCUN CLIPPING (équivalent overflow:visible) -->
@@ -528,11 +596,11 @@
                         </Border><!-- Fermeture RingOuterBorder 460×460, Padding=20, centré dans RingRowContainer 500×500 Margin=10 -->
                     </Grid><!-- Fermeture RingRowContainer -->
                     </Grid>
-                </ScrollViewer>
-                <!-- Panneau droit : fixe, jamais coupé par la scrollbar -->
-                <Border Grid.Column="1" Background="{StaticResource BackgroundMediumBrush}" 
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0"
-                        CornerRadius="12" Padding="20,18" ClipToBounds="False">
+                    <!-- Panneau droit : gutter 12px à droite entre contenu et scrollbar -->
+                    <Border Grid.Column="1" Background="{StaticResource BackgroundMediumBrush}" 
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0"
+                            CornerRadius="12" Padding="20,18" Margin="0,0,12,0"
+                            VerticalAlignment="Top" ClipToBounds="False">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>  <!-- Bloc 1: Temps écoulé -->
@@ -701,11 +769,12 @@
                         <!-- BLOC 4: Speed Test Réseau (écart 12 = marge basse de Constats, comme entre Temps écoulé et Étapes) -->
                         <Border Grid.Row="3" Style="{StaticResource PanelBorder}" Margin="0,0,0,0">
                             <StackPanel>
-                                <!-- Titre à gauche, animation globe à droite (comme référence visuelle) -->
+                                <!-- Titre à gauche, animation globe à droite (sprite 30fps avec 30 PNG) -->
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                                     <TextBlock Text="Speed Test Réseau" FontSize="14" FontWeight="Bold" 
                                                VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,8,0"/>
-                                    <Image x:Name="SpeedTestGlobeImage" Width="24" Height="24" Stretch="Uniform"
+                                    <!-- Animation sprite 30fps: 30 frames PNG alternées via DispatcherTimer -->
+                                    <Image x:Name="SpeedTestGlobeImage" Width="18" Height="18" Stretch="Uniform"
                                            VerticalAlignment="Center"/>
                                 </StackPanel>
                                 
@@ -824,7 +893,8 @@
                         </Border>
                     </Grid>
                 </Border>
-            </Grid>
+                </Grid>
+            </ScrollViewer>
 
             <!-- VUE CHAT -->
             <Grid Visibility="{Binding IsChatView, Converter={StaticResource BoolToVisibility}}">

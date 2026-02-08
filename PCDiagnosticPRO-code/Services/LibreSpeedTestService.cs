@@ -176,7 +176,7 @@ namespace PCDiagnosticPro.Services
                 var psi = new ProcessStartInfo
                 {
                     FileName = _exePath,
-                    Arguments = "--json --no-icmp", // Format JSON, pas de ping ICMP (évite problèmes admin)
+                    Arguments = "--json --no-icmp --concurrent 6", // JSON, pas de ICMP, 6 connexions parallèles pour saturer le lien
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -215,6 +215,9 @@ namespace PCDiagnosticPro.Services
                     App.LogMessage($"[LibreSpeed] Exit code {process.ExitCode}: {error}");
                     return result;
                 }
+
+                // Log JSON brut pour diagnostic
+                App.LogMessage($"[LibreSpeed] JSON output (first 500 chars): {jsonOutput.Substring(0, Math.Min(500, jsonOutput.Length))}");
 
                 // Parser le JSON
                 result = ParseJsonResult(jsonOutput);
@@ -258,25 +261,39 @@ namespace PCDiagnosticPro.Services
                     ? root[0]
                     : root;
 
-                // LibreSpeed CLI --json : vitesses en bit/s (doc officielle). Conversion bps → Mbps si valeur > 10_000.
-                const double bpsToMbps = 1.0 / 1_000_000.0;
-                static double ToMbps(double raw)
+                // FIX #4: LibreSpeed CLI --json outputs speeds in Mbit/s (NOT bps).
+                // Previous code had wrong threshold logic that could misinterpret fast connections.
+                // Now: direct passthrough with sane-range validation (0.01 - 10000 Mbps).
+                static double? ValidateMbps(double raw, string label)
                 {
-                    if (raw <= 0) return 0;
-                    return raw >= 10_000 ? raw * bpsToMbps : raw; // déjà en Mbps si petit
+                    if (raw <= 0)
+                    {
+                        App.LogMessage($"[LibreSpeed] {label}: raw={raw} → rejected (<=0)");
+                        return null;
+                    }
+                    if (raw > 10_000)
+                    {
+                        // Absurd value (>10 Gbps) — likely bps from a non-standard server
+                        var converted = raw / 1_000_000.0;
+                        App.LogMessage($"[LibreSpeed] {label}: raw={raw} → {converted:F2} Mbps (assumed bps, converted)");
+                        return converted;
+                    }
+                    App.LogMessage($"[LibreSpeed] {label}: raw={raw:F2} Mbps (direct)");
+                    return raw;
                 }
+
                 if (testResult.TryGetProperty("download", out var dl))
                 {
-                    var raw = dl.GetDouble();
-                    result.DownloadMbps = ToMbps(raw);
-                    App.LogMessage($"[LibreSpeed] Download: raw={raw} → {result.DownloadMbps:F2} Mbps");
+                    result.DownloadMbps = ValidateMbps(dl.GetDouble(), "Download");
                 }
                 
                 if (testResult.TryGetProperty("upload", out var ul))
                 {
-                    var raw = ul.GetDouble();
-                    result.UploadMbps = ToMbps(raw);
-                    App.LogMessage($"[LibreSpeed] Upload: raw={raw} → {result.UploadMbps:F2} Mbps");
+                    double rawUpload = ul.GetDouble();
+                    App.LogMessage($"[LibreSpeed] Upload RAW value from JSON: {rawUpload:F2}");
+                    result.UploadMbps = ValidateMbps(rawUpload, "Upload");
+                    if (result.UploadMbps.HasValue)
+                        App.LogMessage($"[LibreSpeed] Upload FINAL: {result.UploadMbps:F2} Mbps");
                 }
                 
                 if (testResult.TryGetProperty("ping", out var ping))

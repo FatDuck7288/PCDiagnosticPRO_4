@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -22,8 +23,11 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
         private const int PingTimeoutMs = 1000;
         private const int OperationTimeoutMs = 8000;
         private const int ThroughputTestBytes = 25 * 1024 * 1024; // 25 MB max for accurate measurement
-        private const int RunCount = 3; // 3 runs, take median
-        private const int UploadTestBytes = 2 * 1024 * 1024; // 2 MB for upload test
+        private const int RunCount = 3; // 3 runs, take median/max
+        private const int UploadTestBytes = 20 * 1024 * 1024; // 20 MB — must be large enough for TCP to ramp up on fast links (300+ Mbps)
+        private const int UploadWarmupBytes = 512 * 1024; // 512 KB warmup to prime TCP + TLS
+        private const int UploadMinElapsedMs = 200; // Discard samples shorter than 200ms
+        private const int UploadParallelStreams = 4; // Parallel streams to saturate the link (like speedtest.net)
 
         private static readonly string[] PingTargets = { "1.1.1.1", "8.8.8.8" };
         private static readonly string[] DnsTestDomains = { 
@@ -37,10 +41,10 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
             "http://speedtest.tele2.net/1MB.zip"       // 1 MB - last resort
         };
         
-        // Upload test endpoints that accept POST data
+        // Upload endpoints — Cloudflare CDN first (edge servers globally), Tele2 as fallback.
         private static readonly string[] UploadTestUrls = {
-            "https://httpbin.org/post",
-            "https://postman-echo.com/post"
+            "https://speed.cloudflare.com/__up",        // Cloudflare CDN — global edge servers, closest to user
+            "http://speedtest.tele2.net/upload.php"     // Tele2 — Europe (Sweden), fallback
         };
 
         public async Task<NetworkDiagnosticsResult> CollectAsync(CancellationToken ct = default)
@@ -211,11 +215,15 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
         {
             var result = new ThroughputResult { Available = false };
             var downloadSamples = new List<double>();
-            var uploadSamples = new List<double>();
 
-            using var httpClient = new HttpClient
+            using var httpClient = new HttpClient(new SocketsHttpHandler
             {
-                Timeout = TimeSpan.FromMilliseconds(OperationTimeoutMs * 2) // More time for larger files
+                MaxConnectionsPerServer = UploadParallelStreams * 2,
+                EnableMultipleHttp2Connections = false
+            })
+            {
+                DefaultRequestVersion = HttpVersion.Version11, // Force HTTP/1.1: one TCP conn per stream
+                Timeout = TimeSpan.FromSeconds(60)
             };
 
             // === DOWNLOAD TEST ===
@@ -279,53 +287,14 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
                 result.Reason = "download_test_failed";
             }
 
-            // === UPLOAD TEST ===
-            foreach (var url in UploadTestUrls)
+            // === UPLOAD TEST — delegate to shared helper ===
+            var uploadResult = await RunParallelUploadAsync(httpClient, ct, "NetworkDiagnostics");
+
+            if (uploadResult.HasValue)
             {
-                if (ct.IsCancellationRequested) break;
-
-                for (int run = 0; run < RunCount && !ct.IsCancellationRequested; run++)
-                {
-                    try
-                    {
-                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                        cts.CancelAfter(OperationTimeoutMs);
-
-                        // Generate random data for upload
-                        var uploadData = new byte[UploadTestBytes];
-                        new Random().NextBytes(uploadData);
-
-                        var sw = Stopwatch.StartNew();
-                        
-                        using var content = new ByteArrayContent(uploadData);
-                        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
-                        
-                        using var response = await httpClient.PostAsync(url, content, cts.Token);
-                        
-                        sw.Stop();
-
-                        if (response.IsSuccessStatusCode && sw.ElapsedMilliseconds > 100)
-                        {
-                            double mbps = (UploadTestBytes * 8.0) / (sw.ElapsedMilliseconds * 1000.0); // Mbps
-                            uploadSamples.Add(Math.Round(mbps, 2));
-                            App.LogMessage($"[NetworkDiagnostics] Upload sample: {UploadTestBytes / 1024}KB in {sw.ElapsedMilliseconds}ms = {mbps:F2} Mbps");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        App.LogMessage($"[NetworkDiagnostics] Upload test failed ({url}): {ex.Message}");
-                    }
-                }
-
-                if (uploadSamples.Count >= RunCount) break;
-            }
-
-            if (uploadSamples.Count > 0)
-            {
-                uploadSamples.Sort();
-                result.UploadMbpsMedian = uploadSamples[uploadSamples.Count / 2];
-                result.UploadSamples = uploadSamples;
-                result.UploadReason = null; // Success
+                result.UploadMbpsMedian = uploadResult.Value;
+                result.UploadSamples = new List<double> { uploadResult.Value };
+                result.UploadReason = null;
             }
             else
             {
@@ -334,6 +303,175 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Runs ONLY the upload test (parallel multi-stream) — no ping, DNS, or download.
+        /// Used as a cross-check when LibreSpeed upload seems low.
+        /// Returns the best upload speed in Mbps, or null on failure.
+        /// </summary>
+        public async Task<double?> CollectUploadOnlyAsync(CancellationToken ct = default)
+        {
+            using var httpClient = new HttpClient(new SocketsHttpHandler
+            {
+                MaxConnectionsPerServer = UploadParallelStreams * 2,
+                EnableMultipleHttp2Connections = false
+            })
+            {
+                DefaultRequestVersion = HttpVersion.Version11, // Force HTTP/1.1: separate TCP connection per stream
+                Timeout = TimeSpan.FromSeconds(60)
+            };
+
+            return await RunParallelUploadAsync(httpClient, ct, "UploadCrossCheck");
+        }
+
+        /// <summary>
+        /// Core parallel upload engine. Tries ALL servers, uses N parallel HTTP/1.1 streams per run,
+        /// measures upload time precisely (until server confirms receipt via ResponseHeadersRead),
+        /// and takes the global MAX across all servers and all runs.
+        /// </summary>
+        private async Task<double?> RunParallelUploadAsync(HttpClient httpClient, CancellationToken ct, string logPrefix)
+        {
+            var allSamples = new List<double>();
+            var uploadData = new byte[UploadTestBytes];
+            new Random().NextBytes(uploadData);
+            int perStreamBytes = UploadTestBytes / UploadParallelStreams;
+
+            // Try ALL servers (don't break early) — take the best result across all.
+            // Different servers may be closer/faster depending on user's location.
+            foreach (var url in UploadTestUrls)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                App.LogMessage($"[{logPrefix}] Testing upload to {url} ...");
+
+                // Warmup: prime TCP + TLS on multiple connections (separate HTTP/1.1 connections)
+                try
+                {
+                    var warmupData = new byte[UploadWarmupBytes];
+                    var warmupTasks = new List<Task>();
+                    for (int s = 0; s < UploadParallelStreams; s++)
+                    {
+                        warmupTasks.Add(Task.Run(async () =>
+                        {
+                            try
+                            {
+                                using var wCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                                wCts.CancelAfter(OperationTimeoutMs);
+                                using var req = new HttpRequestMessage(HttpMethod.Post, url)
+                                {
+                                    Version = HttpVersion.Version11, // Force HTTP/1.1
+                                    Content = new ByteArrayContent(warmupData)
+                                };
+                                req.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+                                using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, wCts.Token);
+                                // Drain body to recycle connection
+                                if (resp.Content != null)
+                                    await resp.Content.ReadAsByteArrayAsync(wCts.Token).ConfigureAwait(false);
+                            }
+                            catch { }
+                        }, ct));
+                    }
+                    await Task.WhenAll(warmupTasks);
+                    App.LogMessage($"[{logPrefix}] Warmup done ({UploadParallelStreams} streams, {url})");
+                }
+                catch { }
+
+                // Immediately run test (no idle gap — preserves TCP congestion window)
+                for (int run = 0; run < RunCount && !ct.IsCancellationRequested; run++)
+                {
+                    try
+                    {
+                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        cts.CancelAfter(OperationTimeoutMs * 4);
+
+                        App.LogMessage($"[{logPrefix}] Upload run {run + 1}/{RunCount} ({UploadParallelStreams} streams × {perStreamBytes / (1024*1024)}MB = {UploadTestBytes / (1024*1024)}MB total)");
+
+                        // Each stream records its own upload completion time (until server ACKs via response headers).
+                        // The wall-clock upload duration = MAX of all stream completion times.
+                        var streamCompletionMs = new ConcurrentBag<long>();
+                        var streamSuccess = new ConcurrentBag<bool>();
+                        var sw = Stopwatch.StartNew();
+
+                        var streamTasks = new List<Task>();
+                        for (int s = 0; s < UploadParallelStreams; s++)
+                        {
+                            int streamIdx = s;
+                            streamTasks.Add(Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    // Each stream gets its own data chunk
+                                    var streamData = new byte[perStreamBytes];
+                                    Array.Copy(uploadData, streamIdx * perStreamBytes, streamData, 0, perStreamBytes);
+
+                                    using var req = new HttpRequestMessage(HttpMethod.Post, url)
+                                    {
+                                        Version = HttpVersion.Version11, // Force HTTP/1.1 = separate TCP conn
+                                        Content = new ByteArrayContent(streamData)
+                                    };
+                                    req.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+                                    // ResponseHeadersRead: returns when server sends response headers
+                                    // = server has fully received our upload body (that's the upload time).
+                                    using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+
+                                    // Record completion time BEFORE reading response body
+                                    streamCompletionMs.Add(sw.ElapsedMilliseconds);
+                                    streamSuccess.Add(resp.IsSuccessStatusCode);
+
+                                    // Drain response body to recycle the TCP connection for next run
+                                    if (resp.Content != null)
+                                        await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
+                                }
+                                catch
+                                {
+                                    streamSuccess.Add(false);
+                                }
+                            }, cts.Token));
+                        }
+
+                        await Task.WhenAll(streamTasks);
+
+                        int successCount = streamSuccess.Count(ok => ok);
+                        long uploadMs = streamCompletionMs.Count > 0 ? streamCompletionMs.Max() : sw.ElapsedMilliseconds;
+                        long totalBytes = (long)successCount * perStreamBytes;
+
+                        App.LogMessage($"[{logPrefix}] Upload timing: {uploadMs}ms, {successCount}/{UploadParallelStreams} streams OK, totalBytes={totalBytes}, per-stream=[{string.Join(", ", streamCompletionMs.Select(t => t + "ms"))}]");
+
+                        if (successCount > 0 && uploadMs > UploadMinElapsedMs)
+                        {
+                            // Mbps = (bytes × 8) / (ms × 1000) = megabits / second
+                            double mbps = (totalBytes * 8.0) / (uploadMs * 1000.0);
+                            allSamples.Add(Math.Round(mbps, 2));
+                            App.LogMessage($"[{logPrefix}] Upload sample: {totalBytes / 1024}KB in {uploadMs}ms = {mbps:F2} Mbps");
+                        }
+                        else if (successCount > 0)
+                        {
+                            App.LogMessage($"[{logPrefix}] Upload sample discarded (too fast: {uploadMs}ms < {UploadMinElapsedMs}ms)");
+                        }
+                        else
+                        {
+                            App.LogMessage($"[{logPrefix}] Upload failed: all streams failed for {url}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        App.LogMessage($"[{logPrefix}] Upload failed ({url}): {ex.Message}");
+                    }
+                }
+            }
+
+            if (allSamples.Count > 0)
+            {
+                allSamples.Sort();
+                double best = allSamples[allSamples.Count - 1];
+                App.LogMessage($"[{logPrefix}] FINAL upload: best={best:F2} Mbps, all samples=[{string.Join(", ", allSamples.Select(s => s.ToString("F2")))}]");
+                return best;
+            }
+
+            App.LogMessage($"[{logPrefix}] No valid upload samples collected");
+            return null;
         }
 
         private List<NetworkRecommendation> GenerateRecommendations(NetworkDiagnosticsResult result)
@@ -470,6 +608,7 @@ namespace PCDiagnosticPro.Services.NetworkDiagnostics
             catch { }
             return null;
         }
+
     }
 
     #region Result Models

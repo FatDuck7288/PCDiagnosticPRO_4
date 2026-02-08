@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PCDiagnosticPro.ViewModels;
@@ -17,12 +15,12 @@ namespace PCDiagnosticPro
     /// </summary>
     public partial class MainWindow : Window
     {
-        // Animation sprite globe (12 frames, 12 FPS)
+        // Animation sprite globe (30 frames, 30 FPS)
         private DispatcherTimer? _globeSpriteTimer;
         private BitmapImage[]? _globeSpriteFrames;
         private int _currentGlobeSpriteFrame = 0;
-        private const int GLOBE_SPRITE_FPS = 12;
-        private const int GLOBE_SPRITE_FRAME_COUNT = 12;
+        private const int GLOBE_SPRITE_FPS = 30;
+        private const int GLOBE_SPRITE_FRAME_COUNT = 30;
 
         public MainWindow()
         {
@@ -33,7 +31,7 @@ namespace PCDiagnosticPro
         }
 
         /// <summary>
-        /// Charge les sprites globe (12 PNG) et branche PropertyChanged pour animation.
+        /// Charge les 30 frames sprites PNG et initialise le timer d'animation 30fps.
         /// </summary>
         private void OnMainWindowLoaded(object sender, RoutedEventArgs e)
         {
@@ -46,76 +44,66 @@ namespace PCDiagnosticPro
         }
 
         /// <summary>
-        /// Charge les 12 frames sprites depuis Assets/Animations.
-        /// Priorité : 1.png à 12.png, sinon pattern _N- dans le nom de fichier.
+        /// Charge les 30 frames sprites depuis eEART2/ (00.png à 29.png).
+        /// Priorité: eEART2/, sinon Assets/Animations/.
         /// </summary>
         private void LoadGlobeSpriteFrames()
         {
             try
             {
-                var animDir = Path.Combine(AppContext.BaseDirectory, "Assets", "Animations");
-                if (!Directory.Exists(animDir))
+                // Rechercher eEART2/ en remontant l'arborescence depuis l'exe
+                // (bin/Debug/net8.0-windows/ → projet → solution → racine)
+                string? sourceDir = FindDirectoryUpward(AppContext.BaseDirectory, "eEART2");
+                
+                // Sinon chercher dans Assets/Animations/ (dans le dossier de sortie, copié par le .csproj)
+                if (sourceDir == null)
                 {
-                    App.LogMessage("[GlobeSprite] Dossier Assets/Animations non trouvé");
+                    var animDir = Path.Combine(AppContext.BaseDirectory, "Assets", "Animations");
+                    if (Directory.Exists(animDir))
+                        sourceDir = animDir;
+                }
+
+                if (sourceDir == null)
+                {
+                    App.LogMessage("[GlobeSprite] Dossiers eEART2/ et Assets/Animations/ non trouvés");
                     return;
                 }
 
-                var frameDict = new Dictionary<int, string>();
-
-                // Priorité : fichiers 1.png, 2.png, ... 12.png
-                for (int i = 1; i <= GLOBE_SPRITE_FRAME_COUNT; i++)
-                {
-                    var simplePath = Path.Combine(animDir, $"{i}.png");
-                    if (File.Exists(simplePath))
-                    {
-                        frameDict[i] = simplePath;
-                    }
-                }
-
-                // Sinon : extraire le numéro depuis le pattern _N- dans le nom
-                if (frameDict.Count < GLOBE_SPRITE_FRAME_COUNT)
-                {
-                    var pngFiles = Directory.GetFiles(animDir, "*.png");
-                    var frameRegex = new Regex(@"_(\d+)-[a-f0-9-]+\.png$", RegexOptions.IgnoreCase);
-                    foreach (var file in pngFiles)
-                    {
-                        var fileName = Path.GetFileName(file);
-                        var match = frameRegex.Match(fileName);
-                        if (match.Success && int.TryParse(match.Groups[1].Value, out int frameNum))
-                        {
-                            if (frameNum >= 1 && frameNum <= GLOBE_SPRITE_FRAME_COUNT && !frameDict.ContainsKey(frameNum))
-                            {
-                                frameDict[frameNum] = file;
-                            }
-                        }
-                    }
-                }
-
-                if (frameDict.Count < GLOBE_SPRITE_FRAME_COUNT)
-                {
-                    App.LogMessage($"[GlobeSprite] Seulement {frameDict.Count}/{GLOBE_SPRITE_FRAME_COUNT} frames trouvées");
-                }
-
-                if (frameDict.Count == 0)
-                {
-                    App.LogMessage("[GlobeSprite] Aucune frame valide trouvée");
-                    return;
-                }
-
-                // Charger les frames dans l'ordre 1-12
+                // Charger les 30 frames (00.png à 29.png)
                 _globeSpriteFrames = new BitmapImage[GLOBE_SPRITE_FRAME_COUNT];
-                for (int i = 1; i <= GLOBE_SPRITE_FRAME_COUNT; i++)
+                int loadedCount = 0;
+
+                for (int i = 0; i < GLOBE_SPRITE_FRAME_COUNT; i++)
                 {
-                    if (frameDict.TryGetValue(i, out var filePath))
+                    var framePath = Path.Combine(sourceDir, $"{i:D2}.png");
+                    if (!File.Exists(framePath))
+                    {
+                        App.LogMessage($"[GlobeSprite] Frame {i:D2}.png non trouvée dans {sourceDir}");
+                        continue;
+                    }
+
+                    try
                     {
                         var bitmap = new BitmapImage();
                         bitmap.BeginInit();
-                        bitmap.UriSource = new Uri(filePath, UriKind.Absolute);
-                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmap.UriSource = new Uri(framePath, UriKind.Absolute);
+                        bitmap.CacheOption = BitmapCacheOption.OnLoad; // Préchargement immédiat
                         bitmap.EndInit();
-                        bitmap.Freeze(); // Thread-safe, meilleure perf
-                        _globeSpriteFrames[i - 1] = bitmap;
+                        bitmap.Freeze(); // Thread-safe, meilleure performance
+                        _globeSpriteFrames[i] = bitmap;
+                        loadedCount++;
                     }
+                    catch (Exception ex)
+                    {
+                        App.LogMessage($"[GlobeSprite] Erreur chargement frame {i:D2}: {ex.Message}");
+                    }
+                }
+
+                if (loadedCount == 0)
+                {
+                    App.LogMessage("[GlobeSprite] Aucune frame valide chargée");
+                    _globeSpriteFrames = null;
+                    return;
                 }
 
                 // Afficher la première frame par défaut (statique)
@@ -124,7 +112,7 @@ namespace PCDiagnosticPro
                     SpeedTestGlobeImage.Source = _globeSpriteFrames[0];
                 }
 
-                App.LogMessage($"[GlobeSprite] {frameDict.Count} frames chargées avec succès");
+                App.LogMessage($"[GlobeSprite] {loadedCount}/{GLOBE_SPRITE_FRAME_COUNT} frames chargées depuis {sourceDir}");
             }
             catch (Exception ex)
             {
@@ -133,19 +121,38 @@ namespace PCDiagnosticPro
         }
 
         /// <summary>
-        /// Initialise le timer d'animation sprite (12 FPS = ~83ms par frame).
+        /// Remonte l'arborescence (max 8 niveaux) depuis startDir pour trouver un sous-dossier nommé dirName.
+        /// Retourne le chemin complet du dossier trouvé, ou null.
+        /// </summary>
+        private static string? FindDirectoryUpward(string startDir, string dirName)
+        {
+            var current = startDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            for (int i = 0; i < 8; i++)
+            {
+                var candidate = Path.Combine(current, dirName);
+                if (Directory.Exists(candidate))
+                    return candidate;
+                var parent = Path.GetDirectoryName(current);
+                if (parent == null || parent == current) break;
+                current = parent;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Initialise le timer d'animation sprite (30 FPS = ~33.333ms par frame).
         /// </summary>
         private void InitializeGlobeSpriteTimer()
         {
             _globeSpriteTimer = new DispatcherTimer(DispatcherPriority.Render)
             {
-                Interval = TimeSpan.FromMilliseconds(1000.0 / GLOBE_SPRITE_FPS)
+                Interval = TimeSpan.FromMilliseconds(1000.0 / GLOBE_SPRITE_FPS) // ~33.333ms pour 30fps
             };
             _globeSpriteTimer.Tick += OnGlobeSpriteTimerTick;
         }
 
         /// <summary>
-        /// Tick du timer: avance à la frame suivante.
+        /// Tick du timer: avance à la frame suivante (boucle 0→29→0).
         /// </summary>
         private void OnGlobeSpriteTimerTick(object? sender, EventArgs e)
         {
@@ -160,18 +167,23 @@ namespace PCDiagnosticPro
         }
 
         /// <summary>
-        /// Démarre l'animation sprite du globe.
+        /// Démarre l'animation sprite du globe (30fps).
         /// </summary>
         private void StartGlobeSpriteAnimation()
         {
             if (_globeSpriteTimer == null || _globeSpriteFrames == null) return;
+
             _currentGlobeSpriteFrame = 0;
+            if (_globeSpriteFrames[0] != null)
+            {
+                SpeedTestGlobeImage.Source = _globeSpriteFrames[0];
+            }
             _globeSpriteTimer.Start();
-            App.LogMessage("[GlobeSprite] Animation démarrée");
+            App.LogMessage("[GlobeSprite] Animation démarrée (30fps)");
         }
 
         /// <summary>
-        /// Arrête l'animation sprite du globe et revient à la frame 1.
+        /// Arrête l'animation sprite du globe et revient à la frame 0.
         /// </summary>
         private void StopGlobeSpriteAnimation()
         {
@@ -186,7 +198,7 @@ namespace PCDiagnosticPro
         }
 
         /// <summary>
-        /// Réagit aux changements de IsSpeedTestRunning pour contrôler l'animation.
+        /// Réagit aux changements de IsSpeedTestRunning pour contrôler l'animation sprite.
         /// </summary>
         private void OnMainViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {

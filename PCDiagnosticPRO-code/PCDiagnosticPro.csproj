@@ -38,10 +38,10 @@
     <Content Remove="Assets\Animations\c__*.png" />
   </ItemGroup>
 
-  <!-- Sprites globe 1.png–12.png uniquement (évite MSB3030 sur noms de fichiers trop longs). -->
+  <!-- Sprites globe 00.png–29.png (30 frames, 30 FPS). -->
   <Target Name="CopyGlobeSpritesToOutput" AfterTargets="Build" Condition="Exists('Assets\Animations')">
     <ItemGroup>
-      <_GlobePng Include="Assets\Animations\1.png;Assets\Animations\2.png;Assets\Animations\3.png;Assets\Animations\4.png;Assets\Animations\5.png;Assets\Animations\6.png;Assets\Animations\7.png;Assets\Animations\8.png;Assets\Animations\9.png;Assets\Animations\10.png;Assets\Animations\11.png;Assets\Animations\12.png" />
+      <_GlobePng Include="Assets\Animations\00.png;Assets\Animations\01.png;Assets\Animations\02.png;Assets\Animations\03.png;Assets\Animations\04.png;Assets\Animations\05.png;Assets\Animations\06.png;Assets\Animations\07.png;Assets\Animations\08.png;Assets\Animations\09.png;Assets\Animations\10.png;Assets\Animations\11.png;Assets\Animations\12.png;Assets\Animations\13.png;Assets\Animations\14.png;Assets\Animations\15.png;Assets\Animations\16.png;Assets\Animations\17.png;Assets\Animations\18.png;Assets\Animations\19.png;Assets\Animations\20.png;Assets\Animations\21.png;Assets\Animations\22.png;Assets\Animations\23.png;Assets\Animations\24.png;Assets\Animations\25.png;Assets\Animations\26.png;Assets\Animations\27.png;Assets\Animations\28.png;Assets\Animations\29.png" />
     </ItemGroup>
     <MakeDir Directories="$(OutputPath)Assets\Animations" Condition="!Exists('$(OutputPath)Assets\Animations')" />
     <Copy SourceFiles="@(_GlobePng)" DestinationFolder="$(OutputPath)Assets\Animations" SkipUnchangedFiles="true" Condition="'@(_GlobePng)' != ''" ContinueOnError="true" />

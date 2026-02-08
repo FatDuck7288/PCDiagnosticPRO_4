@@ -1,6 +1,6 @@
-Speed Test - Icône planète
-==========================
-• earth-globe.png : image statique de la Terre (couleur, type globe 3D). Affichée à côté de "Speed Test Réseau" et animée en rotation pendant le scan ou le test. Nom exact requis : earth-globe.png
-• planet.gif : (optionnel) GIF animé. Si présent, peut être utilisé pour une animation avancée.
-
-Si aucun PNG n'est présent, l'application affiche l'emoji globe (fallback).
+Speed Test - Animation globe terrestre
+=======================================
+• 30 frames PNG (00.png à 29.png) : séquence d'images de la Terre en rotation.
+• Animation jouée à 30 FPS via DispatcherTimer pendant le Speed Test.
+• L'animation démarre uniquement au lancement du Speed Test et s'arrête à la fin.
+• Les images sont préchargées et gelées (Freeze) pour de meilleures performances.
