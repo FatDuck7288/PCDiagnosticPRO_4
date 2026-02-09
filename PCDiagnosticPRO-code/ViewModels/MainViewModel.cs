@@ -77,6 +77,9 @@ namespace PCDiagnosticPro.ViewModels
         // Service LibreSpeed pour tests de vitesse fiables
         private readonly LibreSpeedTestService _libreSpeedService = new();
 
+        // Profiling: timing par phase → %TEMP%\PCDiagnosticPro_timing.log
+        private ScanTimingTracker? _scanTimingTracker;
+
         // Combined JSON data for applications window (from scan_result_combined.json)
         private string? _lastCombinedJsonContent;
 
@@ -615,6 +618,7 @@ namespace PCDiagnosticPro.ViewModels
                     OnPropertyChanged(nameof(HasScanResult));
                     OnPropertyChanged(nameof(ScoreDisplay));
                     OnPropertyChanged(nameof(GradeDisplay));
+                    OnPropertyChanged(nameof(DisplayGrade));
                     OnPropertyChanged(nameof(StatusWithScore));
                     OnPropertyChanged(nameof(ResultsCompletionDisplay));
                     OnPropertyChanged(nameof(ResultsStatusDisplay));
@@ -637,9 +641,7 @@ namespace PCDiagnosticPro.ViewModels
         public string ReliabilitySubScoreDisplay => ReliabilitySubScore > 0 ? $"Fiabilité: {ReliabilitySubScore}/100" : "";
 
         public string StatusWithScore => HasScanResult 
-            ? (HealthReport?.ConfidenceModel != null
-                ? $"Score: {ScanResult!.Summary.Score}/100 | Grade: {ScanResult.Summary.Grade} | Fiabilité: {ReliabilitySubScore}/100"
-                : $"Score: {ScanResult!.Summary.Score}/100 | Grade: {ScanResult.Summary.Grade}")
+            ? $"Score: {ScanResult!.Summary.Score}/100 | Grade: {ScanResult.Summary.Grade}"
             : "Aucun scan effectué";
         public string ResultsCompletionDisplay => ScanResult?.Summary != null
             ? FormatStringSafely(GetString("ResultsCompletionFormat"), ScanResult.Summary.ScanDate)
@@ -691,6 +693,13 @@ namespace PCDiagnosticPro.ViewModels
                     OnPropertyChanged(nameof(CollectorErrorsLogicalDisplay));
                     OnPropertyChanged(nameof(MachineHealthScore));
                     OnPropertyChanged(nameof(DataReliabilityScore));
+                    OnPropertyChanged(nameof(UnifiedReliabilityScore));
+                    OnPropertyChanged(nameof(UnifiedReliabilityLabel));
+                    OnPropertyChanged(nameof(UnifiedReliabilityDisplay));
+                    OnPropertyChanged(nameof(HealthScore));
+                    OnPropertyChanged(nameof(ReliabilityScore));
+                    OnPropertyChanged(nameof(ShowPartialCollectionBadge));
+                    OnPropertyChanged(nameof(DisplayGrade));
                     OnPropertyChanged(nameof(DiagnosticClarityScore));
                     OnPropertyChanged(nameof(MachineHealthDisplay));
                     OnPropertyChanged(nameof(DataReliabilityDisplay));
@@ -712,6 +721,14 @@ namespace PCDiagnosticPro.ViewModels
                     OnPropertyChanged(nameof(NetworkDownloadColor));
                     OnPropertyChanged(nameof(NetworkUploadColor));
                     OnPropertyChanged(nameof(NetworkLatencyColor));
+                    ValidatedFindings.Clear();
+                    if (value?.UdisFindings != null)
+                    {
+                        foreach (var f in value.UdisFindings)
+                            ValidatedFindings.Add(f);
+                    }
+                    OnPropertyChanged(nameof(ValidatedFindings));
+                    OnPropertyChanged(nameof(HasValidatedFindings));
                     UpdateUdisSectionsSummary();
                     UpdateHealthSections();
                 }
@@ -766,7 +783,43 @@ namespace PCDiagnosticPro.ViewModels
         public int DiagnosticClarityScore => HealthReport?.DiagnosticClarityScore ?? 0;
         public string MachineHealthDisplay => $"{MachineHealthScore}/100";
         public string DataReliabilityDisplay => $"{DataReliabilityScore}/100";
+
+        /// <summary>Indicateur unique de fiabilité affiché une seule fois : XX/100 (OK/Partiel/Faible).</summary>
+        public int UnifiedReliabilityScore => HealthReport?.DataReliabilityScore ?? 0;
+        public string UnifiedReliabilityLabel => UnifiedReliabilityScore >= 80 ? "OK" : UnifiedReliabilityScore >= 60 ? "Partiel" : "Faible";
+        public string UnifiedReliabilityDisplay => $"Fiabilité : {UnifiedReliabilityScore}/100 ({UnifiedReliabilityLabel})";
+
         public bool AutoFixAllowed => HealthReport?.AutoFixAllowed ?? false;
+        /// <summary>Findings validés (après ItPolicyGate) pour affichage dans l'écran Résultats.</summary>
+        public ObservableCollection<DiagnosticFinding> ValidatedFindings { get; } = new ObservableCollection<DiagnosticFinding>();
+        public bool HasValidatedFindings => ValidatedFindings.Count > 0;
+
+        /// <summary>Constats de scan avec voyants (jaune/rouge/blanc) pour le panneau Constats.</summary>
+        public ObservableCollection<ScanInsight> ScanInsights { get; } = new ObservableCollection<ScanInsight>();
+        public bool HasScanInsights => ScanInsights.Count > 0;
+
+        /// <summary>HealthScore 0-100 (santé technique) — alias GlobalScore pour affichage.</summary>
+        public int HealthScore => HealthReport?.GlobalScore ?? 0;
+        /// <summary>ReliabilityScore 0-100 (fiabilité de la collecte) — alias DataReliabilityScore.</summary>
+        public int ReliabilityScore => HealthReport?.DataReliabilityScore ?? 0;
+        /// <summary>Seuil sous lequel on affiche le badge "Collecte partielle" et on plafonne le grade.</summary>
+        private const int ReliabilityBadgeThreshold = 70;
+        /// <summary>True si ReliabilityScore &lt; seuil → afficher badge "Collecte partielle".</summary>
+        public bool ShowPartialCollectionBadge => ReliabilityScore > 0 && ReliabilityScore < ReliabilityBadgeThreshold;
+        /// <summary>Grade affiché : plafonné à C max quand collecte partielle (ReliabilityScore &lt; 70).</summary>
+        public string DisplayGrade
+        {
+            get
+            {
+                var grade = ScanResult?.Summary?.Grade ?? HealthReport?.Grade ?? "N/A";
+                if (ShowPartialCollectionBadge && !string.IsNullOrEmpty(grade))
+                {
+                    if (grade.StartsWith("A", StringComparison.OrdinalIgnoreCase) || grade.StartsWith("B", StringComparison.OrdinalIgnoreCase))
+                        return "C";
+                }
+                return grade;
+            }
+        }
 
         // === UDIS — NOUVELLES SECTIONS ===
         public int ThermalScore => HealthReport?.UdisReport?.ThermalScore ?? 100;
@@ -1752,6 +1805,8 @@ namespace PCDiagnosticPro.ViewModels
         public ICommand CancelScanCommand { get; }
         public ICommand OpenReportCommand { get; }
         public ICommand OpenReportTxtCommand { get; }
+        /// <summary>Ouvre le rapport intégral et navigue vers une section spécifique (paramètre = SectionId).</summary>
+        public ICommand OpenReportToSectionCommand { get; }
         public ICommand RestartAsAdminCommand { get; }
         public ICommand ExportResultsCommand { get; }
         public ICommand NavigateToScannerCommand { get; }
@@ -1869,6 +1924,7 @@ namespace PCDiagnosticPro.ViewModels
             CancelScanCommand = new RelayCommand(CancelScan, () => IsScanning);
             OpenReportCommand = new RelayCommand(OpenReport, () => HasScanResult);
             OpenReportTxtCommand = new RelayCommand(OpenReportTxt, () => HasScanResult);
+            OpenReportToSectionCommand = new RelayCommand<string>(sectionId => OpenReportToSection(sectionId));
             RestartAsAdminCommand = new RelayCommand(RestartAsAdmin);
             ExportResultsCommand = new RelayCommand(ExportResults, () => HasScanResult);
             NavigateToScannerCommand = new RelayCommand(() => { CurrentView = "Home"; SelectedHistoryScan = null; IsViewingArchives = false; });
@@ -2031,6 +2087,8 @@ namespace PCDiagnosticPro.ViewModels
                 _cancelHandled = false;
 
                 _scanStopwatch.Restart();
+                _scanTimingTracker = new ScanTimingTracker();
+                _scanTimingTracker.StartPhase("PowerShell", "PS");
                 _liveFeedTimer.Start();
                 _scanStartTime = DateTimeOffset.Now;
                 _jsonPathFromOutput = null;
@@ -2156,6 +2214,7 @@ namespace PCDiagnosticPro.ViewModels
                 }
 
                 var exitCode = _scanProcess.ExitCode;
+                _scanTimingTracker?.EndPhase("PowerShell", exitCode == 0);
 
                 if (exitCode != 0 && errorBuilder.Length > 0)
                 {
@@ -2197,6 +2256,9 @@ namespace PCDiagnosticPro.ViewModels
                     App.LogMessage($"[Parallel Collection] Sensor mode: SAFE (WMI/NVML) — WinRing0 eliminated " +
                                    $"[enableHW={_enableHardwareMonitoring}, skip={_skipHardwareSensors}, admin={IsAdmin}]");
 
+                    _scanTimingTracker?.StartPhase("Sensors", "C#");
+                    _scanTimingTracker?.StartPhase("Counters", "C#");
+                    _scanTimingTracker?.StartPhase("Signals", "C#");
                     // Lancer les 3 collecteurs en parallèle
                     var sensorsTask = Task.Run(() => _hardwareSensorsCollector.CollectAsync(_scanCts.Token), _scanCts.Token);
                     var countersTask = Task.Run(() => PerfCounterCollector.CollectAsync(_scanCts.Token), _scanCts.Token);
@@ -2209,6 +2271,9 @@ namespace PCDiagnosticPro.ViewModels
                     sensorsResult = await sensorsTask;
                     perfResult = await countersTask;
                     signalsResult = await signalsTask;
+                    _scanTimingTracker?.EndPhase("Sensors", true);
+                    _scanTimingTracker?.EndPhase("Counters", perfResult != null);
+                    _scanTimingTracker?.EndPhase("Signals", signalsResult?.SuccessCount > 0);
                     
                     _lastSensorsResult = sensorsResult;
                     _lastPerfCounterResult = perfResult;
@@ -2296,6 +2361,7 @@ namespace PCDiagnosticPro.ViewModels
                 SetSectionPhase(4, "Running");
 
                 // === PHASE 2D: Process Telemetry C# Fallback (si PS a échoué) ===
+                _scanTimingTracker?.StartPhase("ProcessTelemetry", "C#");
                 try
                 {
                     UpdateProgress(GetProgressForPhaseInProgress(4, 0.5), GetString("PhaseLabel_Telemetrie"));
@@ -2311,6 +2377,7 @@ namespace PCDiagnosticPro.ViewModels
                     _lastProcessTelemetry = null;
                     App.LogMessage($"[ProcessTelemetry] Erreur: {ex.Message}");
                 }
+                _scanTimingTracker?.EndPhase("ProcessTelemetry", _lastProcessTelemetry?.Available ?? false);
 
                 // === PHASE 2E: Network Diagnostics Complets (internet autorisé) ===
                 try
@@ -2321,6 +2388,7 @@ namespace PCDiagnosticPro.ViewModels
                     UpdateScanProgressCeiling(GetProgressForCompletedPhase(5));
                     
                     // Phase 5: Réseau (Network)
+                    _scanTimingTracker?.StartPhase("Network", "C#");
                     AddLiveFeedItem(GetString("LiveFeed_PhaseStart_Reseau"));
                     SetSectionPhase(5, "Running");
                     UpdateProgress(GetProgressForPhaseInProgress(5, 0.5), GetString("PhaseLabel_Reseau"));
@@ -2339,6 +2407,7 @@ namespace PCDiagnosticPro.ViewModels
                     _lastNetworkDiagnostics = null;
                     App.LogMessage($"[NetworkDiagnostics] Erreur: {ex.Message}");
                 }
+                _scanTimingTracker?.EndPhase("Network", _lastNetworkDiagnostics != null);
                 AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Reseau"));
                 UpdateProgress(GetProgressForCompletedPhase(5), GetString("PhaseLabel_Reseau"));
                 SetSectionPhase(5, "Done");
@@ -2349,6 +2418,7 @@ namespace PCDiagnosticPro.ViewModels
                 SetSectionPhase(6, "Running");
 
                 // === PHASE 2F: Inventaire pilotes (C#) ===
+                _scanTimingTracker?.StartPhase("DriverInventory", "C#");
                 try
                 {
                     UpdateProgress(GetProgressForPhaseInProgress(6, 0.2), GetString("PhaseLabel_Rapport"));
@@ -2364,8 +2434,9 @@ namespace PCDiagnosticPro.ViewModels
                     _lastDriverInventory = null;
                     App.LogMessage($"[DriverInventory] Erreur: {ex.Message}");
                 }
+                _scanTimingTracker?.EndPhase("DriverInventory", _lastDriverInventory != null);
 
-                // === PHASE 2G: Windows Update (C#) ===
+                _scanTimingTracker?.StartPhase("WindowsUpdate", "C#");
                 try
                 {
                     UpdateProgress(97, "Collecting Windows Update status...");
@@ -2378,8 +2449,9 @@ namespace PCDiagnosticPro.ViewModels
                     _lastWindowsUpdateResult = null;
                     App.LogMessage($"[WindowsUpdate] Erreur: {ex.Message}");
                 }
+                _scanTimingTracker?.EndPhase("WindowsUpdate", _lastWindowsUpdateResult != null);
 
-                // === PHASE 2H: Security Info (C# - BitLocker/RDP/SMBv1) ===
+                _scanTimingTracker?.StartPhase("SecurityInfo", "C#");
                 try
                 {
                     UpdateProgress(98, "Collecting security info...");
@@ -2392,15 +2464,20 @@ namespace PCDiagnosticPro.ViewModels
                     _lastSecurityInfo = null;
                     App.LogMessage($"[SecurityInfo] Erreur: {ex.Message}");
                 }
+                _scanTimingTracker?.EndPhase("SecurityInfo", true);
 
                 _resultJsonPath = await ResolveResultJsonPathAsync(outputDir, _scanStartTime, _scanCts.Token);
+                _scanTimingTracker?.StartPhase("WriteCombined", "C#");
                 await WriteCombinedResultAsync(outputDir, sensorsResult);
+                _scanTimingTracker?.EndPhase("WriteCombined", true);
                 UpdateProgress(98, "JSON resolved");
 
                 // Lire le JSON
                 if (!string.IsNullOrWhiteSpace(_resultJsonPath) && File.Exists(_resultJsonPath))
                 {
+                    _scanTimingTracker?.StartPhase("LoadJson", "C#");
                     await LoadJsonResultAsync();
+                    _scanTimingTracker?.EndPhase("LoadJson", true);
                 }
                 else
                 {
@@ -2434,6 +2511,8 @@ namespace PCDiagnosticPro.ViewModels
             }
             finally
             {
+                _scanTimingTracker?.FlushToLog();
+                _scanTimingTracker = null;
                 lock (_scanLock)
                 {
                     _scanProcess?.Dispose();
@@ -2734,6 +2813,29 @@ namespace PCDiagnosticPro.ViewModels
                         App.LogMessage($"[ScoreUnifié] Divergence PS({healthReport.ScoreV2.Score}) vs App({unifiedScore}) = delta {healthReport.Divergence.Delta}");
                         result.Summary.Score = unifiedScore;
                         result.Summary.Grade = unifiedGrade;
+                    }
+                    
+                    // P0 Bloc C: Qualité de collecte — calcul, log, injection dans JSON combiné
+                    var quality = QualityScoreCalculator.Compute(healthReport, null);
+                    QualityScoreCalculator.WriteQualityLog(quality);
+                    if (!string.IsNullOrEmpty(_combinedJsonPath) && !string.IsNullOrEmpty(_lastCombinedJsonContent))
+                    {
+                        try
+                        {
+                            var combined = JsonSerializer.Deserialize<CombinedScanResult>(_lastCombinedJsonContent, HardwareSensorsResult.JsonOptions);
+                            if (combined != null)
+                            {
+                                combined.DiagnosticsQuality = quality;
+                                var updatedJson = JsonSerializer.Serialize(combined, HardwareSensorsResult.JsonOptions);
+                                await File.WriteAllTextAsync(_combinedJsonPath, updatedJson, Encoding.UTF8);
+                                _lastCombinedJsonContent = updatedJson;
+                                App.LogMessage($"[QualityScore] diagnostics_quality injecté dans {_combinedJsonPath}");
+                            }
+                        }
+                        catch (Exception qex)
+                        {
+                            App.LogMessage($"[QualityScore] Erreur injection JSON: {qex.Message}");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -3072,6 +3174,9 @@ namespace PCDiagnosticPro.ViewModels
                 
                 _combinedJsonPath = combinedPath;
                 _lastCombinedJsonContent = combinedJson; // Store for detail windows
+
+                // Générer les constats de scan (voyants) sur le thread UI
+                Application.Current?.Dispatcher?.Invoke(() => GenerateScanInsights());
             }
             catch (Exception ex)
             {
@@ -3592,46 +3697,187 @@ namespace PCDiagnosticPro.ViewModels
         }
 
         /// <summary>
-        /// Ouvre le rapport TXT dans Bloc-notes
+        /// Ouvre l'écran "Rapport intégrale" (HUD vitre) avec les données du rapport combiné.
+        /// Si aucun JSON disponible, affiche un message. Option de fallback: ouvrir le TXT dans Bloc-notes.
         /// </summary>
         private void OpenReportTxt()
         {
             try
             {
-                // Chercher le fichier Rapport.txt dans le dossier des rapports
-                var reportTxtPath = FindReportTxtPath();
-                
-                if (string.IsNullOrEmpty(reportTxtPath) || !File.Exists(reportTxtPath))
+                string? jsonContent = _lastCombinedJsonContent;
+                if (string.IsNullOrWhiteSpace(jsonContent) && !string.IsNullOrWhiteSpace(_combinedJsonPath) && File.Exists(_combinedJsonPath))
                 {
-                    System.Windows.MessageBox.Show(
-                        "Le fichier Rapport.txt n'a pas été trouvé.\n\n" +
-                        "Lancez d'abord un scan pour générer le rapport.",
-                        "Rapport introuvable",
-                        System.Windows.MessageBoxButton.OK,
-                        System.Windows.MessageBoxImage.Information);
+                    jsonContent = File.ReadAllText(_combinedJsonPath, Encoding.UTF8);
+                }
+
+                if (string.IsNullOrWhiteSpace(jsonContent))
+                {
+                    // Fallback: ouvrir le TXT brut si disponible
+                    var reportTxtPath = FindReportTxtPath();
+                    if (!string.IsNullOrEmpty(reportTxtPath) && File.Exists(reportTxtPath))
+                    {
+                        var startInfo = new ProcessStartInfo
+                        {
+                            FileName = "notepad.exe",
+                            Arguments = $"\"{reportTxtPath}\"",
+                            UseShellExecute = true
+                        };
+                        Process.Start(startInfo);
+                        App.LogMessage($"[Rapport] Ouverture TXT fallback: {reportTxtPath}");
+                    }
+                    else
+                    {
+                        App.LogMessage("[Rapport] Aucune donnée de rapport disponible.");
+                    }
                     return;
                 }
 
-                // Ouvrir dans Notepad
-                var startInfo = new ProcessStartInfo
+                var viewModel = Services.FullReportBuilder.BuildFromJson(jsonContent);
+                if (viewModel == null)
                 {
-                    FileName = "notepad.exe",
-                    Arguments = $"\"{reportTxtPath}\"",
-                    UseShellExecute = true
+                    App.LogMessage("[Rapport] Impossible de charger le rapport combiné (parse null).");
+                    return;
+                }
+
+                var window = new Views.FullReportWindow(viewModel)
+                {
+                    Owner = Application.Current?.MainWindow as Window
                 };
-                Process.Start(startInfo);
-                
-                App.LogMessage($"[Rapport] Ouverture: {reportTxtPath}");
+                window.Show();
+                App.LogMessage($"[Rapport] Fenêtre Rapport intégrale ouverte. {viewModel.UiCoverageDisplay}");
             }
             catch (Exception ex)
             {
                 App.LogMessage($"[Rapport] Erreur ouverture: {ex.Message}");
-                System.Windows.MessageBox.Show(
-                    $"Impossible d'ouvrir le rapport.\n\n{ex.Message}",
-                    "Erreur",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Error);
             }
+        }
+
+        /// <summary>
+        /// Ouvre le rapport intégral et sélectionne la section spécifiée.
+        /// Utilisé par les Constats pour naviguer directement vers une section.
+        /// </summary>
+        private void OpenReportToSection(string? sectionId)
+        {
+            try
+            {
+                string? jsonContent = _lastCombinedJsonContent;
+                if (string.IsNullOrWhiteSpace(jsonContent) && !string.IsNullOrWhiteSpace(_combinedJsonPath) && File.Exists(_combinedJsonPath))
+                    jsonContent = File.ReadAllText(_combinedJsonPath, Encoding.UTF8);
+                if (string.IsNullOrWhiteSpace(jsonContent)) return;
+
+                var viewModel = Services.FullReportBuilder.BuildFromJson(jsonContent);
+                if (viewModel == null) return;
+
+                // Select the target section if specified
+                if (!string.IsNullOrEmpty(sectionId))
+                {
+                    var target = viewModel.Sections.FirstOrDefault(s => s.Id == sectionId);
+                    if (target != null) viewModel.SelectedSection = target;
+                }
+
+                var window = new Views.FullReportWindow(viewModel) { Owner = Application.Current?.MainWindow as Window };
+                window.Show();
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[Rapport] Erreur navigation section: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Génère les constats de scan (voyants jaune/rouge/blanc) à partir du JSON combiné.
+        /// Appelé après la fin du scan quand le JSON est disponible.
+        /// </summary>
+        private void GenerateScanInsights()
+        {
+            ScanInsights.Clear();
+            try
+            {
+                string? jsonContent = _lastCombinedJsonContent;
+                if (string.IsNullOrWhiteSpace(jsonContent))
+                {
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.Red, Title = "Rapport introuvable", Detail = "JSON combiné non disponible.", TargetSectionId = "CollectorErrors" });
+                    OnPropertyChanged(nameof(ScanInsights));
+                    OnPropertyChanged(nameof(HasScanInsights));
+                    return;
+                }
+
+                CombinedScanResult? combined = null;
+                try { combined = JsonSerializer.Deserialize<CombinedScanResult>(jsonContent, HardwareSensorsResult.JsonOptions); }
+                catch { ScanInsights.Add(new ScanInsight { Level = InsightLevel.Red, Title = "JSON invalide", Detail = "Impossible de parser le JSON combiné.", TargetSectionId = "CollectorErrors" }); }
+
+                if (combined == null) { OnPropertyChanged(nameof(ScanInsights)); OnPropertyChanged(nameof(HasScanInsights)); return; }
+
+                var errors = combined.Errors ?? new List<ErrorExtract>();
+                var missingData = combined.MissingData ?? new List<string>();
+                var snapshot = combined.DiagnosticSnapshot;
+
+                // ROUGE : erreurs collecteur
+                if (errors.Count > 0)
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.Red, Title = $"{errors.Count} erreur(s) de collecte", Detail = errors.First().Message, TargetSectionId = "CollectorErrors" });
+                if (combined.Metadata?.PartialFailure == true)
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.Red, Title = "Collecte partielle", Detail = "La collecte n'a pas pu tout récupérer.", TargetSectionId = "CollectorErrors" });
+
+                // JAUNE : données manquantes / limitations
+                if (missingData.Count > 0)
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.Yellow, Title = $"{missingData.Count} donnée(s) manquante(s)", Detail = missingData.First(), TargetSectionId = "CollectorErrors" });
+                if (snapshot?.SensorStatus?.BlockedByDefender == true)
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.Yellow, Title = "Capteurs bloqués", Detail = snapshot.SensorStatus.UserMessage ?? "Defender bloque les capteurs.", TargetSectionId = "CollectorErrors" });
+
+                // Sentinelles température
+                var cpuMetrics = snapshot?.Metrics?.GetValueOrDefault("cpu");
+                bool cpuTempAvailable = cpuMetrics?.Any(kv => kv.Key.Contains("temp", StringComparison.OrdinalIgnoreCase) && kv.Value.Available) == true
+                                     || combined.SensorsCsharp?.Cpu?.CpuTempC?.Available == true;
+                if (!cpuTempAvailable)
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.Yellow, Title = "Température CPU indisponible", Detail = "Capteur non détecté — vérifier permissions.", TargetSectionId = "CPU" });
+
+                // Tests réseau
+                if (combined.NetworkDiagnostics?.Available != true && (snapshot?.Metrics?.GetValueOrDefault("network")?.Count ?? 0) == 0)
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.Yellow, Title = "Réseau non testé", Detail = "Tests réseau désactivés ou échoués.", TargetSectionId = "Network" });
+
+                // BLANC : informations pertinentes
+                if (combined.UpdatesCsharp?.PendingCount > 0)
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.White, Title = $"{combined.UpdatesCsharp.PendingCount} mise(s) à jour", Detail = "Mises à jour Windows en attente.", TargetSectionId = "Updates" });
+                if (combined.UpdatesCsharp != null && !combined.UpdatesCsharp.Available && !string.IsNullOrEmpty(combined.UpdatesCsharp.Error))
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.Red, Title = "Service updates en erreur", Detail = combined.UpdatesCsharp.Error, TargetSectionId = "Updates" });
+
+                // Température disque élevée
+                if (combined.SensorsCsharp?.Disks != null)
+                {
+                    foreach (var disk in combined.SensorsCsharp.Disks)
+                    {
+                        if (disk.TempC?.Available == true && disk.TempC.Value > 55)
+                        {
+                            ScanInsights.Add(new ScanInsight { Level = InsightLevel.White, Title = $"Disque chaud: {disk.TempC.Value:F0}°C", Detail = disk.Name?.Value ?? "Disque inconnu", TargetSectionId = "Storage" });
+                            break;
+                        }
+                    }
+                }
+
+                // Erreurs event logs élevées (stability)
+                var stabMetrics = snapshot?.Metrics?.GetValueOrDefault("stability");
+                if (stabMetrics != null)
+                {
+                    var errorCountMetric = stabMetrics.FirstOrDefault(kv => kv.Key.Contains("error", StringComparison.OrdinalIgnoreCase) && kv.Value.Available);
+                    if (errorCountMetric.Value?.Value is double errCount && errCount > 50)
+                        ScanInsights.Add(new ScanInsight { Level = InsightLevel.White, Title = $"Erreurs event logs: {errCount:F0}", Detail = "Nombre élevé d'erreurs dans les journaux.", TargetSectionId = "Stability" });
+                }
+
+                // Sécurité
+                if (combined.SecurityInfoCsharp?.SmbV1Enabled == true)
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.White, Title = "SMBv1 activé", Detail = "Vulnérabilité critique — désactiver SMBv1.", TargetSectionId = "Security" });
+
+                // Pilotes en erreur
+                if (combined.DriverInventory?.ProblemCount > 0)
+                    ScanInsights.Add(new ScanInsight { Level = InsightLevel.White, Title = $"{combined.DriverInventory.ProblemCount} pilote(s) en erreur", Detail = "Vérifier le gestionnaire de périphériques.", TargetSectionId = "Devices" });
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[ScanInsights] Erreur génération constats: {ex.Message}");
+                ScanInsights.Add(new ScanInsight { Level = InsightLevel.Red, Title = "Erreur analyse", Detail = ex.Message });
+            }
+            OnPropertyChanged(nameof(ScanInsights));
+            OnPropertyChanged(nameof(HasScanInsights));
         }
 
         /// <summary>

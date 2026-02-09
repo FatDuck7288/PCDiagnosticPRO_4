@@ -1,0 +1,195 @@
+<UserControl x:Class="PCDiagnosticPro.Views.FullReportView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:PCDiagnosticPro.ViewModels"
+             xmlns:conv="clr-namespace:PCDiagnosticPro.Converters"
+             mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="900"
+             Background="#0D1117">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <conv:IssueLevelToBrushConverter x:Key="IssueLevelToBrush"/>
+        <conv:IssueLevelToIconConverter x:Key="IssueLevelToIcon"/>
+        <conv:ScoreToBrushConverter x:Key="ScoreToBrush"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#E6EDF3"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#8B949E"/>
+        <SolidColorBrush x:Key="BorderGlass" Color="#40FFFFFF"/>
+        <SolidColorBrush x:Key="AccentRed" Color="#FF4757"/>
+        <SolidColorBrush x:Key="AccentAmber" Color="#FFA726"/>
+        <SolidColorBrush x:Key="BgCard" Color="#CC0D1117"/>
+        <Style x:Key="SidebarItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#66FF4757"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                    <Setter Property="BorderBrush" Value="#FF4757"/>
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect Color="#FF4757" BlurRadius="12" ShadowDepth="0" Opacity="0.7"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ===== DataTemplate for a SINGLE selected section (ContentControl) ===== -->
+        <DataTemplate x:Key="SectionDetailTemplate" DataType="{x:Type vm:ReportSectionViewModel}">
+            <Border Margin="0,0,0,20"
+                    Background="{StaticResource BgCard}" Opacity="0.95"
+                    BorderBrush="{Binding SectionScore, Converter={StaticResource ScoreToBrush}}" BorderThickness="2"
+                    CornerRadius="14" Padding="16">
+                <Border.Effect>
+                    <DropShadowEffect Color="#20FFFFFF" BlurRadius="20" ShadowDepth="0" Opacity="0.5"/>
+                </Border.Effect>
+                <StackPanel>
+                    <!-- Header: Title + badge + ! + score -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <Border Margin="8,0,0,0" Padding="6,2" CornerRadius="4" 
+                                    Background="{Binding Level, Converter={StaticResource IssueLevelToBrush}}">
+                                <TextBlock Text="{Binding Level}" FontSize="10" Foreground="White"/>
+                            </Border>
+                            <TextBlock Text="!" FontSize="14" FontWeight="Bold" Foreground="{StaticResource AccentRed}" Margin="6,0,0,0"
+                                       Visibility="{Binding HasCritical, Converter={StaticResource BoolToVisibility}}"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center" FontFamily="Consolas" FontSize="12"
+                                   Foreground="{StaticResource TextSecondary}">
+                            <Run Text="{Binding SectionScore, StringFormat={}{0:F0}}"/>
+                            <Run Text="/100"/>
+                        </TextBlock>
+                    </Grid>
+                    <!-- Summary -->
+                    <TextBlock Text="{Binding SummaryLine1}" FontSize="12" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                    <TextBlock Text="{Binding SummaryLine2}" FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                    <!-- KEY/VALUE TABLE (always visible when has data) -->
+                    <DataGrid ItemsSource="{Binding KeyValues}" AutoGenerateColumns="False" IsReadOnly="True"
+                              HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0"
+                              Background="Transparent" AlternatingRowBackground="#1A2129"
+                              Margin="0,0,0,12"
+                              Visibility="{Binding DataContext.IsSummaryMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Clé" Binding="{Binding Key}" Width="*" MinWidth="120">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Valeur" Binding="{Binding Value}" Width="*" MinWidth="140">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Unité" Binding="{Binding Unit}" Width="60">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- ISSUES (always visible if any) -->
+                    <StackPanel Visibility="{Binding DataContext.IsSummaryMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                        <TextBlock Text="Problèmes et limites" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentAmber}" Margin="0,4,0,4"/>
+                        <ItemsControl ItemsSource="{Binding Issues}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#21262D" CornerRadius="4" Padding="8,6" Margin="0,0,0,4">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="8" Height="8" CornerRadius="4" Margin="0,3,8,0" VerticalAlignment="Top"
+                                                    Background="{Binding Level, Converter={StaticResource IssueLevelToBrush}}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Message}" FontSize="11" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- TABLES (array data, hidden in summary mode) -->
+                    <ItemsControl ItemsSource="{Binding Tables}" Margin="0,8,0,0"
+                                  Visibility="{Binding DataContext.IsSummaryMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,4"/>
+                                    <DataGrid ItemsSource="{Binding Rows}" AutoGenerateColumns="True" IsReadOnly="True"
+                                              HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0"
+                                              Background="Transparent" AlternatingRowBackground="#1A2129"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- EVIDENCE + NOTES (hidden in summary mode) -->
+                    <StackPanel Visibility="{Binding DataContext.IsSummaryMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                        <TextBlock Text="{Binding EvidenceText}" FontSize="10" FontFamily="Consolas" Foreground="{StaticResource TextSecondary}" 
+                                   TextWrapping="Wrap" Margin="0,8,0,4"/>
+                        <TextBlock Text="{Binding NotesText}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- SIDEBAR -->
+        <Border Grid.Column="0" Background="#161B22" BorderBrush="{StaticResource BorderGlass}" BorderThickness="0,0,1,0" Padding="0,16,0,0">
+            <StackPanel>
+                <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" Margin="16,0,16,12"/>
+                <ToggleButton Content="Synthèse" IsChecked="{Binding IsSummaryMode}" Margin="12,0,12,8"
+                              Foreground="{StaticResource TextPrimary}" Background="#21262D" Padding="10,6"/>
+                <ListBox x:Name="SectionListBox"
+                         ItemsSource="{Binding Sections}"
+                         SelectedItem="{Binding SelectedSection, Mode=TwoWay}"
+                         ItemContainerStyle="{StaticResource SidebarItemStyle}"
+                         BorderThickness="0" Background="Transparent"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:ReportSectionViewModel">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding HasCritical, Converter={StaticResource IssueLevelToIcon}}" 
+                                           Foreground="{StaticResource AccentRed}" FontWeight="Bold" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+        </Border>
+
+        <!-- CONTENT: ContentControl bound to SelectedSection (FIX: replaces ItemsControl) -->
+        <ScrollViewer x:Name="ContentScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      Padding="24,16,24,24" Background="Transparent">
+            <ContentControl Content="{Binding SelectedSection}"
+                            ContentTemplate="{StaticResource SectionDetailTemplate}"/>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -120,6 +120,13 @@ namespace PCDiagnosticPro.Models
         /// </summary>
         [JsonPropertyName("paths")]
         public PathsExtract Paths { get; set; } = new();
+        
+        /// <summary>
+        /// P0 Bloc C: Métriques de qualité (Coverage, Reliability, Actionability). Rempli après construction du HealthReport.
+        /// </summary>
+        [JsonPropertyName("diagnostics_quality")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DiagnosticQualityResult? DiagnosticsQuality { get; set; }
     }
     
     /// <summary>

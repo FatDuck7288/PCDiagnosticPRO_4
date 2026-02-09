@@ -91,13 +91,17 @@ namespace PCDiagnosticPro.Services
 
         /// <summary>
         /// PHASE 3.1: Calcule CollectorErrorsLogical sans modifier le JSON source.
-        /// Si errors[] non vide => collectorErrorsLogical >= count(errors)
-        /// Si TXT indique "statut collecte échouée" => collectorErrorsLogical >= 1
+        /// FIX: Compter uniquement les vraies erreurs PS (errors[]), PAS les métriques invalidées par DataSanitizer.
+        /// Les métriques invalidées (0°C, -1, 917541) sont des problèmes de QUALITÉ de données,
+        /// pas des erreurs de COLLECTE. Les compter comme erreurs gonflait artificiellement
+        /// CollectorErrorsLogical → DRS plancher → fiabilité bloquée à 40%.
+        /// InvalidatedMetrics reste disponible séparément pour le diagnostic qualité.
         /// </summary>
         private static int CalculateCollectorErrorsLogical(CollectorDiagnosticsResult result)
         {
-            // P0.1: collectorErrorsLogical = (errors?.Count ?? 0) + métriques invalidées (sans double comptage)
-            int count = result.Errors.Count + result.InvalidatedMetrics.Count;
+            int count = result.Errors.Count;
+            if (count != result.Errors.Count + result.InvalidatedMetrics.Count)
+                App.LogMessage($"[CollectorDiagnostics] CollectorErrorsLogical={count} (errors={result.Errors.Count}, invalidatedMetrics={result.InvalidatedMetrics.Count} NON comptées)");
             return count;
         }
 
@@ -331,11 +335,14 @@ namespace PCDiagnosticPro.Services
                 App.LogMessage($"[ConfidenceGating] Capped to 75 due to {criticalMissing} critical missing data");
             }
             
-            // Gate 3: Métriques invalidées
-            if (diagnostics.InvalidatedMetrics.Count > 2)
+            // Gate 3: Métriques invalidées — impact LÉGER (ce sont des problèmes de qualité, pas de collecte)
+            // FIX: Seuil relevé (>5 au lieu de >2) et plafond plus haut (80 au lieu de 65)
+            // car les métriques invalidées (0°C, -1, 917541) sont des sentinelles détectées et gérées,
+            // pas des échecs de collecte.
+            if (diagnostics.InvalidatedMetrics.Count > 5)
             {
-                confidence = Math.Min(confidence, 65);
-                App.LogMessage($"[ConfidenceGating] Capped to 65 due to {diagnostics.InvalidatedMetrics.Count} invalidated metrics");
+                confidence = Math.Min(confidence, 80);
+                App.LogMessage($"[ConfidenceGating] Capped to 80 due to {diagnostics.InvalidatedMetrics.Count} invalidated metrics (>5)");
             }
             
             return confidence;

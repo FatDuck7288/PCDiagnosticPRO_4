@@ -7,9 +7,9 @@ L'analyse et l'interpretation sont effectuees par l'IA externe.
 
 METADATA
 --------------------------------------------------
-Run ID               : 0f74403d-0a5b-4db2-83e2-23d81a8f80a3
+Run ID               : d1e9044c-e598-4b7b-881b-abd8b69fe89d
 Version              : 7.0
-Date                 : 2026-02-09 13:27:37
+Date                 : 2026-02-09 17:39:02
 Machine              : PC-52391b
 Admin                : True
 Redaction            : Full
@@ -35,7 +35,7 @@ Build                    : 26200
 UPTIME
 --------------------------------------------------
 Dernier Boot             : 2026-02-07 19:01
-Uptime                   : 1j 18h
+Uptime                   : 1j 22h
 
 FABRICANT
 --------------------------------------------------
@@ -73,7 +73,7 @@ PROCESSEUR(S)
 CPU: AMD Ryzen 9 5900X 12-Core Processor            
   Cores/Threads          : 12 / 24
   Frequence Max          : 3701 MHz
-  Charge Actuelle        : 17%
+  Charge Actuelle        : 10%
 
 ====================================================================================================
 [4. MEMOIRE]
@@ -81,8 +81,8 @@ CPU: AMD Ryzen 9 5900X 12-Core Processor
 MEMOIRE PHYSIQUE (RAM)
 --------------------------------------------------
 Memoire Totale           : 95.93 GB
-Memoire Libre            : 70.28 GB
-Utilisation              : 26.7%
+Memoire Libre            : 69.93 GB
+Utilisation              : 27.1%
 
 MODULES
 --------------------------------------------------
@@ -109,8 +109,8 @@ Disque: TOSHIBA DT01ACA200
 
 VOLUMES
 --------------------------------------------------
-C: 952.65 GB | Libre: 368.07 GB (61.4% utilise)
-D: 1863.02 GB | Libre: 1092.21 GB (41.4% utilise)
+C: 952.65 GB | Libre: 367.67 GB (61.4% utilise)
+D: 1863.02 GB | Libre: 1092.17 GB (41.4% utilise)
 E: 1862.17 GB | Libre: 1460.41 GB (21.6% utilise)
 H: 1862.88 GB | Libre: 696.01 GB (62.6% utilise)
 
@@ -153,7 +153,7 @@ Interface: RZ616 Wi-Fi 6E 160MHz
 
 CONNEXIONS
 --------------------------------------------------
-Total connexions: 178 | Ports en ecoute: 39
+Total connexions: 193 | Ports en ecoute: 39
 
 ====================================================================================================
 [8. SECURITE]
@@ -189,7 +189,7 @@ SERVICES CRITIQUES
 [OK] Journal d’événements Windows
 [OK] Services de chiffrement
 
-Total: 310 | Running: 130
+Total: 310 | Running: 133
 
 ====================================================================================================
 [10. DEMARRAGE]
@@ -240,7 +240,7 @@ BSOD detectes: 0
 ====================================================================================================
 WINDOWS UPDATE
 --------------------------------------------------
-Mises a jour en attente  : 2
+Mises a jour en attente  : 3
 
 ====================================================================================================
 [14. AUDIO]
@@ -271,7 +271,7 @@ Total: 87 applications
 ====================================================================================================
 TACHES PLANIFIEES
 --------------------------------------------------
-Total: 293 | Actives: 235
+Total: 292 | Actives: 234
 
 ====================================================================================================
 [18. PROCESSUS]
@@ -325,9 +325,9 @@ Points disponibles: 3
 ====================================================================================================
 FICHIERS TEMPORAIRES
 --------------------------------------------------
-Temp User : 2,08 GB
-Temp Windows : 133,25 MB
-TOTAL: 2,22 GB
+Temp User : 1,92 GB
+Temp Windows : 129,89 MB
+TOTAL: 2,05 GB
 
 ====================================================================================================
 [25. VARIABLES ENVIRONNEMENT]
@@ -449,8 +449,8 @@ SMART DETAILLE
 Disque: 5&221baba8&0&020000_0
   Prediction defaillance : Non
   Reallocated Sectors    : 0
-  Power-On Hours         : 23110 h
-  Temperature            : 31 C
+  Power-On Hours         : 23114 h
+  Temperature            : 35 C
   Reallocation Events    : 0
   Pending Sectors        : 0
   Uncorrectable Sectors  : 0
@@ -464,12 +464,12 @@ SIGNES DYNAMIQUES (DONNEES BRUTES)
 
 [CONFIG] Duree: 3s | Echantillons: 3
 
-CPU: moyenne 11% | max 11% | min 11% [WMI-Fallback]
-Memoire: 27.62% utilisee | 71101.74 MB libres [WMI-Fallback]
+CPU: moyenne 6% | max 6% | min 6% [WMI-Fallback]
+Memoire: 27.6% utilisee | 71118.49 MB libres [WMI-Fallback]
 Disque: utilisation 0% | file 0 [WMI-Fallback]
 Top CPU: opera
-Top RAM: Cursor (1857.36 MB)
-Reseau: 31.89 Mbps | erreurs: 0
+Top RAM: Cursor (1997.53 MB)
+Reseau: 32.64 Mbps | erreurs: 0
 
 ====================================================================================================
 [37. ANALYSE AVANCEE]
@@ -522,8 +522,8 @@ RESUME DE COLLECTE
 METADATA
 --------------------------------------------------
 Version              : 7.0
-Run ID               : 0f74403d-0a5b-4db2-83e2-23d81a8f80a3
-Date                 : 2026-02-09 13:28:40
+Run ID               : d1e9044c-e598-4b7b-881b-abd8b69fe89d
+Date                 : 2026-02-09 17:39:57
 Admin                : True
 Redaction            : Full
 QuickScan            : False
@@ -575,7 +575,7 @@ ERREURS
 Erreurs de collecte: 1
 
 ####################################################################################################
-Duree collecte       : 62.3 secondes
-Genere le            : 2026-02-09 13:28:40
+Duree collecte       : 55.2 secondes
+Genere le            : 2026-02-09 17:39:57
 
-Hash (SHA256): DA9EF1CE30DF46F4CBDF7C28F786FB0C3FDF5BA1B171DEE2BA43CD7E88FF0C52
+Hash (SHA256): 8233E31AC67077E114A7285E56481F21AD5CF1AF7574192CDB7A94D49F53A12B

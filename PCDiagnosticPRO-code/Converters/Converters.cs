@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
 using PCDiagnosticPro.Models;
+using PCDiagnosticPro.ViewModels;
 
 namespace PCDiagnosticPro.Converters
 {
@@ -524,6 +525,102 @@ namespace PCDiagnosticPro.Converters
                 }
             }
             return new SolidColorBrush(Color.FromRgb(158, 158, 158));
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    /// <summary>
+    /// Convertit IssueLevel (Info, Warning, Critical) en couleur pour les badges et bordures.
+    /// </summary>
+    public class IssueLevelToBrushConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is IssueLevel level)
+            {
+                return level switch
+                {
+                    IssueLevel.Critical => new SolidColorBrush(Color.FromRgb(255, 71, 87)),
+                    IssueLevel.Warning => new SolidColorBrush(Color.FromRgb(255, 165, 2)),
+                    IssueLevel.Info => new SolidColorBrush(Color.FromRgb(76, 175, 80)),
+                    _ => new SolidColorBrush(Color.FromRgb(139, 148, 158))
+                };
+            }
+            return new SolidColorBrush(Color.FromRgb(139, 148, 158));
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    /// <summary>
+    /// Convertit IssueLevel en icône "!" pour Critical/Warning.
+    /// </summary>
+    public class IssueLevelToIconConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is IssueLevel level)
+                return level == IssueLevel.Critical || level == IssueLevel.Warning ? "!" : "";
+            if (value is bool hasCritical && hasCritical)
+                return "!";
+            return "";
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    /// <summary>
+    /// Convertit un score 0–100 en couleur : 100 = or, 70+ = vert, 60–70 = jaune, &lt;60 = rouge.
+    /// </summary>
+    public class ScoreToBrushConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            var score = 0.0;
+            if (value is int i) score = i;
+            else if (value is double d) score = d;
+            else if (value != null && double.TryParse(value.ToString(), out var p)) score = p;
+            score = Math.Max(0, Math.Min(100, score));
+            if (score >= 100) return new SolidColorBrush(Color.FromRgb(255, 215, 0));   // gold
+            if (score >= 70) return new SolidColorBrush(Color.FromRgb(76, 175, 80));   // green
+            if (score >= 60) return new SolidColorBrush(Color.FromRgb(255, 193, 7));   // yellow
+            return new SolidColorBrush(Color.FromRgb(244, 67, 54));                    // red
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    /// <summary>
+    /// Convertit InsightLevel (White, Yellow, Red) en couleur de voyant pour les Constats.
+    /// </summary>
+    public class InsightLevelToBrushConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is InsightLevel level)
+            {
+                return level switch
+                {
+                    InsightLevel.Red => new SolidColorBrush(Color.FromRgb(255, 71, 87)),    // rouge
+                    InsightLevel.Yellow => new SolidColorBrush(Color.FromRgb(255, 193, 7)), // jaune
+                    InsightLevel.White => new SolidColorBrush(Color.FromRgb(230, 237, 243)),// blanc
+                    _ => new SolidColorBrush(Color.FromRgb(139, 148, 158))
+                };
+            }
+            return new SolidColorBrush(Color.FromRgb(139, 148, 158));
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

@@ -116,6 +116,9 @@ namespace PCDiagnosticPro.Models
         /// <summary>Rapport UDIS complet (optionnel)</summary>
         public UdisReport? UdisReport { get; set; }
 
+        /// <summary>True when score is invalidated: critical data missing (Processes, Disks, etc.) — Fail-Close.</summary>
+        public bool InsufficientDataForDiagnostic { get; set; }
+
         /// <summary>Calcule la sévérité depuis un score</summary>
         public static HealthSeverity ScoreToSeverity(int score)
         {

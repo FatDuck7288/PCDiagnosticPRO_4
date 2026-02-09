@@ -307,15 +307,23 @@ namespace PCDiagnosticPro.Services
             // Score et statut
             if (healthReport != null)
             {
-                var emoji = healthReport.GlobalScore >= 90 ? "✅" :
-                            healthReport.GlobalScore >= 70 ? "⚠️" :
-                            healthReport.GlobalScore >= 50 ? "🔶" : "❌";
-                var status = healthReport.GlobalScore >= 90 ? "OK" :
-                             healthReport.GlobalScore >= 70 ? "Avertissement" :
-                             healthReport.GlobalScore >= 50 ? "Dégradé" : "Critique";
+                if (healthReport.InsufficientDataForDiagnostic)
+                {
+                    rows.Add(("Score santé global", "N/A"));
+                    rows.Add(("Statut", "❌ ERREUR COLLECTE - DONNÉES INSUFFISANTES POUR DIAGNOSTIC"));
+                }
+                else
+                {
+                    var emoji = healthReport.GlobalScore >= 90 ? "✅" :
+                                healthReport.GlobalScore >= 70 ? "⚠️" :
+                                healthReport.GlobalScore >= 50 ? "🔶" : "❌";
+                    var status = healthReport.GlobalScore >= 90 ? "OK" :
+                                 healthReport.GlobalScore >= 70 ? "Avertissement" :
+                                 healthReport.GlobalScore >= 50 ? "Dégradé" : "Critique";
 
-                rows.Add(("Score santé global", $"{healthReport.GlobalScore}/100 (Grade {healthReport.Grade})"));
-                rows.Add(("Statut", $"{emoji} {status}"));
+                    rows.Add(("Score santé global", $"{healthReport.GlobalScore}/100 (Grade {healthReport.Grade})"));
+                    rows.Add(("Statut", $"{emoji} {status}"));
+                }
 
                 // Points clés (3-5 premiers findings)
                 if (healthReport.Recommendations.Count > 0)

@@ -37,6 +37,72 @@ namespace PCDiagnosticPro.Services
         };
 
         /// <summary>
+        /// Fail-Close: critical section keys in missingData that invalidate the score if missing.
+        /// </summary>
+        private static readonly string[] CriticalMissingDataKeywords = new[]
+        {
+            "ProcessList", "Processes", "Disks", "Storage"
+        };
+
+        /// <summary>
+        /// Returns true when critical data is STRUCTURALLY absent — score must be invalidated (Fail-Close).
+        /// FIX: Ne plus utiliser les keywords missingData pour le Fail-Close (faux positifs:
+        /// "ProcessList: disabled" ou "Storage: partial" déclenchait un fail-close total).
+        /// Seul le check structurel JSON compte (section réellement vide ou absente).
+        /// </summary>
+        private static bool HasInsufficientCriticalData(HealthReport report, JsonElement? psRoot)
+        {
+            if (!psRoot.HasValue) return false;
+            var root = psRoot.Value;
+            if (root.ValueKind != JsonValueKind.Object) return false;
+            var ps = root;
+            if (root.TryGetProperty("scan_powershell", out var scanPs) || root.TryGetProperty("scanPowershell", out scanPs))
+                ps = scanPs;
+            if (ps.ValueKind != JsonValueKind.Object) return false;
+
+            // Check structurel: sections ou données réellement vides (pas juste mentionnées dans missingData)
+            // Chercher d'abord dans ps.sections (cas PS JSON brut) puis dans ps directement
+            JsonElement sectionsEl = ps;
+            if (ps.TryGetProperty("sections", out var sec) && sec.ValueKind == JsonValueKind.Object)
+                sectionsEl = sec;
+
+            // ProcessList vide = fail-close uniquement si la section existe ET est explicitement vide
+            if (sectionsEl.TryGetProperty("Processes", out var proc) && proc.ValueKind == JsonValueKind.Object)
+            {
+                JsonElement procData = proc;
+                if (proc.TryGetProperty("data", out var pd) && pd.ValueKind == JsonValueKind.Object)
+                    procData = pd;
+                if (procData.TryGetProperty("ProcessList", out var list) && list.ValueKind == JsonValueKind.Array && list.GetArrayLength() == 0)
+                {
+                    App.LogMessage("[UDIS] Fail-Close: ProcessList présent mais vide (0 processus)");
+                    return true;
+                }
+            }
+
+            // Storage: 0 disques physiques = fail-close
+            if (sectionsEl.TryGetProperty("Storage", out var storage) && storage.ValueKind == JsonValueKind.Object)
+            {
+                JsonElement storageData = storage;
+                if (storage.TryGetProperty("data", out var sd) && sd.ValueKind == JsonValueKind.Object)
+                    storageData = sd;
+                int diskCount = 0;
+                if (storageData.TryGetProperty("physicalDiskCount", out var c) && c.ValueKind == JsonValueKind.Number)
+                    diskCount = c.GetInt32();
+                else if (storageData.TryGetProperty("physicalDisks", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                    diskCount = arr.GetArrayLength();
+                if (diskCount == 0)
+                {
+                    App.LogMessage("[UDIS] Fail-Close: Storage présent mais 0 disques physiques");
+                    return true;
+                }
+            }
+
+            // Si les sections critiques ne sont même pas présentes dans le JSON,
+            // NE PAS fail-close (elles peuvent être collectées par d'autres moyens C#)
+            return false;
+        }
+
+        /// <summary>
         /// Calcule le rapport UDIS complet depuis les données observées (report + JSON + sensors).
         /// </summary>
         public static UdisReport Compute(
@@ -48,6 +114,19 @@ namespace PCDiagnosticPro.Services
             var udis = new UdisReport();
             try
             {
+                if (HasInsufficientCriticalData(report, psRoot))
+                {
+                    udis.UdisScore = 0;
+                    udis.Grade = "N/A";
+                    udis.Message = "ERREUR COLLECTE - DONNÉES INSUFFISANTES POUR DIAGNOSTIC";
+                    udis.MachineHealthScore = 0;
+                    udis.DataReliabilityScore = 0;
+                    udis.DiagnosticClarityScore = 0;
+                    udis.InsufficientDataForDiagnostic = true;
+                    App.LogMessage("[UDIS] Fail-Close: données critiques manquantes (ProcessList/Processes/Disks/Storage) — score invalidé.");
+                    return udis;
+                }
+
                 diagnostics ??= psRoot.HasValue ? CollectorDiagnosticsService.Analyze(psRoot.Value, sensors) : null;
                 int collectorErrors = report.CollectorErrorsLogical;
                 var missingData = report.MissingData ?? new List<string>();

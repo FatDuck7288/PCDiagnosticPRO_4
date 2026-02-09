@@ -142,12 +142,18 @@ namespace PCDiagnosticPro.Services
             {
                 using var doc = JsonDocument.Parse(jsonContent);
                 var root = doc.RootElement;
+                // P0: Résoudre le blob PS pour JSON combiné (scoreV2 et sections sont dans scan_powershell, pas à la racine)
+                JsonElement psRoot = root;
+                if (root.ValueKind == JsonValueKind.Object &&
+                    (root.TryGetProperty("scan_powershell", out var sp) || root.TryGetProperty("scanPowershell", out sp)) &&
+                    sp.ValueKind == JsonValueKind.Object)
+                    psRoot = sp;
                 
                 // 1. Extraire metadata
                 report.Metadata = ExtractMetadata(root);
                 
-                // 2. Extraire scoreV2 (base initiale, écrasé par UDIS à l'étape 7)
-                report.ScoreV2 = ExtractScoreV2(root);
+                // 2. Extraire scoreV2 (base initiale, écrasé par UDIS à l'étape 7) — depuis psRoot pour avoir breakdown/collectorErrors
+                report.ScoreV2 = ExtractScoreV2(psRoot);
                 report.GlobalScore = report.ScoreV2.Score;
                 report.Grade = report.ScoreV2.Grade;
                 report.GlobalSeverity = HealthReport.ScoreToSeverity(report.GlobalScore);
@@ -179,8 +185,8 @@ namespace PCDiagnosticPro.Services
                 
                 App.LogMessage($"COLLECTOR_ERRORS_LOGICAL={report.CollectorErrorsLogical} (from errors[]={report.Errors.Count})");
                 
-                // 4. Sections par domaine
-                report.Sections = BuildHealthSections(root, report.ScoreV2, sensors);
+                // 4. Sections par domaine (BuildHealthSections résout déjà scan_powershell en interne si besoin)
+                report.Sections = BuildHealthSections(psRoot, report.ScoreV2, sensors);
                 
                 // 4b. Neutralisation des valeurs sentinelles / impossibles
                 NeutralizeSentinelValues(report, sensors);
@@ -199,8 +205,8 @@ namespace PCDiagnosticPro.Services
                 report.ConfidenceModel = BuildConfidenceModel(report, sensors);
                 report.ConfidenceModel.ConfidenceScore = CollectorDiagnosticsService.ApplyConfidenceGating(report.ConfidenceModel.ConfidenceScore, diagnostics);
                 
-                // 7. UDIS — Unified Diagnostic Intelligence Scoring (source de vérité unique)
-                var udis = UnifiedDiagnosticScoreEngine.Compute(report, root, sensors, diagnostics);
+                // 7. UDIS — Unified Diagnostic Intelligence Scoring (source de vérité unique) — psRoot pour findings (sections objet)
+                var udis = UnifiedDiagnosticScoreEngine.Compute(report, psRoot, sensors, diagnostics);
                 report.GlobalScore = udis.UdisScore;
                 report.Grade = udis.Grade;
                 report.GlobalMessage = udis.Message;
@@ -211,6 +217,9 @@ namespace PCDiagnosticPro.Services
                 report.UdisFindings = udis.Findings;
                 report.AutoFixAllowed = udis.AutoFixAllowed;
                 report.UdisReport = udis;
+                report.InsufficientDataForDiagnostic = udis.InsufficientDataForDiagnostic;
+                if (report.InsufficientDataForDiagnostic)
+                    report.CollectionStatus = "FAILED";
                 report.Divergence.PowerShellScore = report.ScoreV2.Score;
                 report.Divergence.PowerShellGrade = report.ScoreV2.Grade;
                 report.Divergence.GradeEngineScore = udis.UdisScore;  // Rempli par UDIS (legacy field name)
@@ -239,7 +248,13 @@ namespace PCDiagnosticPro.Services
                 }
                 
                 // 8b. Verdict collecte
-                if (report.CollectionStatus == "FAILED" || report.CollectionStatus == "PARTIAL")
+                if (report.InsufficientDataForDiagnostic)
+                {
+                    report.GlobalSeverity = HealthSeverity.Unknown;
+                    report.GlobalMessage = "ERREUR COLLECTE - DONNÉES INSUFFISANTES POUR DIAGNOSTIC";
+                    report.Grade = "N/A";
+                }
+                else if (report.CollectionStatus == "FAILED" || report.CollectionStatus == "PARTIAL")
                 {
                     report.GlobalMessage = report.CollectionStatus == "FAILED"
                         ? "Collecte échouée : interprétation prudente"

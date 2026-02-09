@@ -25,8 +25,9 @@ namespace PCDiagnosticPro.Services
             var runPowerShell = args.Any(arg => string.Equals(arg, "--selftest-ps", StringComparison.OrdinalIgnoreCase));
             var runUnifiedReport = args.Any(arg => string.Equals(arg, "--selftest-unified-report", StringComparison.OrdinalIgnoreCase));
             var runElevation = args.Any(arg => string.Equals(arg, "--diag-elevation", StringComparison.OrdinalIgnoreCase));
+            var runDiagQuality = args.Any(arg => string.Equals(arg, "--diag-quality", StringComparison.OrdinalIgnoreCase));
 
-            if (!runSensors && !runPowerShell && !runUnifiedReport && !runElevation)
+            if (!runSensors && !runPowerShell && !runUnifiedReport && !runElevation && !runDiagQuality)
             {
                 return false;
             }
@@ -51,7 +52,76 @@ namespace PCDiagnosticPro.Services
                 exitCode = Math.Max(exitCode, AdminService.DiagnoseElevation());
             }
 
+            if (runDiagQuality)
+            {
+                exitCode = Math.Max(exitCode, RunDiagQualityMode());
+            }
+
             return true;
+        }
+
+        /// <summary>
+        /// Phase 3: Mode CLI --diag-quality — charge derniers rapports, calcule DiagnosticQuality, écrit log + Diagnostics_Quality_Audit_Run.txt.
+        /// </summary>
+        private static int RunDiagQualityMode()
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "PCDiagnosticPro_quality.log");
+            var auditRunPath = Path.Combine(Path.GetTempPath(), "Diagnostics_Quality_Audit_Run.txt");
+            try
+            {
+                var reportsDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "PCDiagnosticPro", "Rapports");
+                var combinedPath = Path.Combine(reportsDir, "scan_result_combined.json");
+                if (!File.Exists(combinedPath))
+                {
+                    var msg = $"Fichier non trouvé: {combinedPath}. Lancez un scan complet puis réessayez.";
+                    File.WriteAllText(auditRunPath, $"[{DateTime.UtcNow:O}] {msg}\r\n");
+                    Console.WriteLine(msg);
+                    return 1;
+                }
+                var jsonContent = File.ReadAllText(combinedPath);
+                var combined = JsonSerializer.Deserialize<CombinedScanResult>(jsonContent, HardwareSensorsResult.JsonOptions);
+                if (combined == null)
+                {
+                    var msg = "Désérialisation du rapport combiné impossible.";
+                    File.WriteAllText(auditRunPath, $"[{DateTime.UtcNow:O}] {msg}\r\n");
+                    Console.WriteLine(msg);
+                    return 1;
+                }
+                var sensors = combined.SensorsCsharp;
+                var report = HealthReportBuilder.Build(jsonContent, sensors, null, null);
+                var quality = QualityScoreCalculator.Compute(report, null);
+                QualityScoreCalculator.WriteQualityLog(quality, logPath);
+                var auditLines = new List<string>
+                {
+                    $"[{quality.TimestampUtc:yyyy-MM-dd HH:mm:ss}Z] Diagnostics Quality Audit Run",
+                    $"Coverage={quality.CoverageScore}% ({quality.CoverageDetails})",
+                    $"Reliability={quality.ReliabilityScore}% ({quality.ReliabilityDetails})",
+                    $"Actionability={quality.ActionabilityScore}% ({quality.ActionabilityDetails})",
+                    $"Overall={quality.OverallScore}%",
+                    $"Message: {quality.Message}",
+                    "",
+                    "Critères 90%: Coverage>=90, Reliability>=90, Actionability>=80",
+                    quality.CoverageScore >= 90 && quality.ReliabilityScore >= 90 && quality.ActionabilityScore >= 80
+                        ? "RÉSULTAT: Objectif 90% atteint."
+                        : $"RÉSULTAT: Non atteint. Manques: Coverage={quality.CoverageScore} (cible 90), Reliability={quality.ReliabilityScore} (cible 90), Actionability={quality.ActionabilityScore} (cible 80)."
+                };
+                File.WriteAllLines(auditRunPath, auditLines);
+                Console.WriteLine(string.Join(Environment.NewLine, auditLines));
+                return (quality.CoverageScore >= 90 && quality.ReliabilityScore >= 90 && quality.ActionabilityScore >= 80) ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                var msg = $"Erreur --diag-quality: {ex.Message}";
+                try
+                {
+                    File.WriteAllText(auditRunPath, $"[{DateTime.UtcNow:O}]\r\n{msg}\r\n{ex}\r\n");
+                }
+                catch { }
+                Console.WriteLine(msg);
+                return 2;
+            }
         }
 
         private static int RunSensorsSelfTest()

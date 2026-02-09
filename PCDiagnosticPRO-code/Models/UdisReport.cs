@@ -27,6 +27,9 @@ namespace PCDiagnosticPro.Models
         /// <summary>Message utilisateur</summary>
         public string Message { get; set; } = string.Empty;
 
+        /// <summary>True when score is invalidated due to insufficient critical data (Fail-Close).</summary>
+        public bool InsufficientDataForDiagnostic { get; set; }
+
         /// <summary>Détails par priorité (critique/haute/moyenne/faible) pour MHS</summary>
         public Dictionary<string, int> MachineHealthBreakdown { get; set; } = new();
 

@@ -354,8 +354,8 @@ namespace PCDiagnosticPro.Services
                     }
                 }
 
-                // 4. File d'attente disque élevée (> 2)
-                if (TryGetDouble(root, out var queueLength, "sections", "DynamicSignals", "data", "disk", "queueLength"))
+                // 4. File d'attente disque élevée (> 2) — ne pas pénaliser si sentinelle -1 (non disponible)
+                if (TryGetDouble(root, out var queueLength, "sections", "DynamicSignals", "data", "disk", "queueLength") && queueLength >= 0)
                 {
                     if (queueLength > 2)
                     {
@@ -389,9 +389,11 @@ namespace PCDiagnosticPro.Services
                             var name = nameEl.GetString();
                             var status = statusEl.GetString();
 
+                            // Evidence: Status=Stopped + optional StartType/State pour éviter faux positifs
                             if (criticalServices.Contains(name, StringComparer.OrdinalIgnoreCase) &&
                                 status?.Equals("Stopped", StringComparison.OrdinalIgnoreCase) == true)
                             {
+                                var startType = service.TryGetProperty("StartType", out var st) ? st.GetString() : null;
                                 findings.Add(new DiagnosticFinding
                                 {
                                     IssueType = "CriticalServiceStopped",
@@ -399,9 +401,10 @@ namespace PCDiagnosticPro.Services
                                     Confidence = 100,
                                     AutoFixPossible = true,
                                     RiskLevel = "Low",
-                                    Description = $"Service critique arrêté: {name}",
+                                    Description = $"Service critique arrêté: {name}" + (string.IsNullOrEmpty(startType) ? "" : $" (StartType: {startType})"),
                                     SuggestedAction = $"Start-Service {name} -ErrorAction SilentlyContinue; Set-Service {name} -StartupType Automatic",
-                                    Source = "Services"
+                                    Source = "Services",
+                                    EvidencePaths = new List<string> { $"sections.Services.data.services[{name}]" }
                                 });
                             }
                         }
@@ -813,13 +816,16 @@ namespace PCDiagnosticPro.Services
                                 }
                             }
                             
-                            // 20. Température disque élevée
+                            // 20. Température disque élevée (sanitize SMART: rejeter 917541, -1, 0)
                             if (disk.TryGetProperty("temperature", out var tempEl) &&
                                 tempEl.ValueKind == JsonValueKind.Number)
                             {
-                                var temp = tempEl.GetInt32();
-                                if (temp > 50)
+                                var tempRaw = tempEl.GetDouble();
+                                var sanitized = DataSanitizer.SanitizeSmartTemp(tempRaw, model);
+                                var tempVal = sanitized.IsValid ? (double?)sanitized.Value : null;
+                                if (tempVal.HasValue && tempVal.Value > 50)
                                 {
+                                    var temp = (int)tempVal.Value;
                                     findings.Add(new DiagnosticFinding
                                     {
                                         IssueType = "HighDiskTemperature",
@@ -829,7 +835,8 @@ namespace PCDiagnosticPro.Services
                                         RiskLevel = "N/A",
                                         Description = $"Disque {model}: Température élevée {temp}°C (recommandé < 45°C)",
                                         SuggestedAction = "Améliorer ventilation boîtier, vérifier circulation d'air, nettoyer ventilateurs",
-                                        Source = "SmartDetails"
+                                        Source = "SmartDetails",
+                                        EvidencePaths = new List<string> { "sections.SmartDetails.data.disks.temperature" }
                                     });
                                 }
                             }
@@ -873,7 +880,7 @@ namespace PCDiagnosticPro.Services
                 
                 if (!hasMetrics) return;
 
-                // 21. CPU chaud (> 80°C)
+                // 21. CPU chaud (> 80°C) — ignorer sentinelles 0°C / hors plage
                 if (metrics.TryGetProperty("cpu", out var cpuMetrics) &&
                     cpuMetrics.TryGetProperty("cpuTempC", out var cpuTempMetric))
                 {
@@ -882,24 +889,27 @@ namespace PCDiagnosticPro.Services
                         cpuTempMetric.TryGetProperty("value", out var valueEl))
                     {
                         var cpuTemp = valueEl.GetDouble();
-                        if (cpuTemp > 80)
+                        var cpuSanitized = DataSanitizer.SanitizeCpuTemp(new MetricValue<double> { Available = true, Value = cpuTemp });
+                        var cpuVal = cpuSanitized.IsValid ? (double?)cpuSanitized.Value : null;
+                        if (cpuVal.HasValue && cpuVal.Value > 80)
                         {
                             findings.Add(new DiagnosticFinding
                             {
                                 IssueType = "HighCpuTemperature",
-                                Severity = cpuTemp > 90 ? "Critical" : "High",
+                                Severity = cpuVal.Value > 90 ? "Critical" : "High",
                                 Confidence = 95,
                                 AutoFixPossible = false,
                                 RiskLevel = "N/A",
-                                Description = $"Température CPU: {cpuTemp:F1}°C (danger > 85°C, critique > 90°C)",
+                                Description = $"Température CPU: {cpuVal.Value:F1}°C (danger > 85°C, critique > 90°C)",
                                 SuggestedAction = "Nettoyer ventilateurs CPU, remplacer pâte thermique, vérifier fonctionnement refroidissement, réduire overclock si applicable",
-                                Source = "Sensors"
+                                Source = "Sensors",
+                                EvidencePaths = new List<string> { "sensors_csharp.cpu.cpuTempC" }
                             });
                         }
                     }
                 }
 
-                // 22. GPU chaud (> 85°C)
+                // 22. GPU chaud (> 85°C) — ignorer sentinelles 0°C / hors plage
                 if (metrics.TryGetProperty("gpu", out var gpuMetrics) &&
                     gpuMetrics.TryGetProperty("gpuTempC", out var gpuTempMetric))
                 {
@@ -908,18 +918,21 @@ namespace PCDiagnosticPro.Services
                         gpuTempMetric.TryGetProperty("value", out var valueEl2))
                     {
                         var gpuTemp = valueEl2.GetDouble();
-                        if (gpuTemp > 85)
+                        var gpuSanitized = DataSanitizer.SanitizeGpuTemp(new MetricValue<double> { Available = true, Value = gpuTemp });
+                        var gpuVal = gpuSanitized.IsValid ? (double?)gpuSanitized.Value : null;
+                        if (gpuVal.HasValue && gpuVal.Value > 85)
                         {
                             findings.Add(new DiagnosticFinding
                             {
                                 IssueType = "HighGpuTemperature",
-                                Severity = gpuTemp > 95 ? "Critical" : "High",
+                                Severity = gpuVal.Value > 95 ? "Critical" : "High",
                                 Confidence = 95,
                                 AutoFixPossible = false,
                                 RiskLevel = "N/A",
-                                Description = $"Température GPU: {gpuTemp:F1}°C (danger > 90°C, critique > 95°C)",
+                                Description = $"Température GPU: {gpuVal.Value:F1}°C (danger > 90°C, critique > 95°C)",
                                 SuggestedAction = "Améliorer ventilation boîtier, nettoyer GPU et ventilateurs, limiter overclock, réduire limites puissance si applicable",
-                                Source = "Sensors"
+                                Source = "Sensors",
+                                EvidencePaths = new List<string> { "sensors_csharp.gpu.gpuTempC" }
                             });
                         }
                     }
