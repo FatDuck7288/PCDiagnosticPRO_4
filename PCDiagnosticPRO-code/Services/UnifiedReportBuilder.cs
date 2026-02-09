@@ -129,6 +129,9 @@ namespace PCDiagnosticPro.Services
                 // Section 16: Virtualisation (NEW)
                 BuildSection16_Virtualisation(sb, psData, diagnosticSnapshot);
 
+                // Section 17: Limitations et données manquantes
+                BuildSection17_Limitations(sb, healthReport);
+
                 // Bloc PS brut (extrait lisible)
                 BuildPowerShellRawBlock(sb, psData, diagnosticSnapshot);
 
@@ -338,6 +341,101 @@ namespace PCDiagnosticPro.Services
 
             WriteTable(sb, rows);
             sb.AppendLine();
+        }
+
+        #endregion
+
+        #region Section 17: Limitations et données manquantes
+
+        /// <summary>
+        /// Section 17: Limitations — liste consolidée des erreurs, données manquantes et fiabilité.
+        /// </summary>
+        private static void BuildSection17_Limitations(StringBuilder sb, Models.HealthReport? healthReport)
+        {
+            sb.AppendLine("  ▶ SECTION 17 : LIMITATIONS ET DONNÉES MANQUANTES");
+            sb.AppendLine(SUBSEPARATOR);
+            sb.AppendLine();
+
+            if (healthReport == null)
+            {
+                sb.AppendLine("  Rapport de santé non disponible.");
+                sb.AppendLine();
+                return;
+            }
+
+            // Collection status
+            sb.AppendLine($"  Statut de collecte : {healthReport.CollectionStatus}");
+            sb.AppendLine($"  Score de confiance : {healthReport.ConfidenceModel?.ConfidenceScore ?? 0}/100 ({healthReport.ConfidenceModel?.ConfidenceLevel ?? "N/A"})");
+            sb.AppendLine($"  Score de fiabilité données : {healthReport.DataReliabilityScore}/100");
+            sb.AppendLine($"  Erreurs collecteur : {healthReport.CollectorErrorsLogical}");
+            sb.AppendLine();
+
+            // Errors with French explanations
+            if (healthReport.Errors.Count > 0)
+            {
+                sb.AppendLine("  ERREURS DÉTECTÉES :");
+                sb.AppendLine();
+                int num = 1;
+                foreach (var error in healthReport.Errors)
+                {
+                    var code = string.IsNullOrWhiteSpace(error.Code) ? "UNKNOWN" : error.Code.ToUpperInvariant();
+                    var explanation = GetLimitationExplanation(error);
+                    sb.AppendLine($"  {num}) {code}");
+                    sb.AppendLine($"     {explanation}");
+                    if (!string.IsNullOrWhiteSpace(error.Section))
+                        sb.AppendLine($"     Section : {error.Section}");
+                    sb.AppendLine();
+                    num++;
+                }
+            }
+            else
+            {
+                sb.AppendLine("  Aucune erreur de collecte détectée.");
+                sb.AppendLine();
+            }
+
+            // Missing data
+            if (healthReport.MissingData.Count > 0)
+            {
+                sb.AppendLine("  DONNÉES MANQUANTES :");
+                sb.AppendLine();
+                foreach (var item in healthReport.MissingData)
+                {
+                    var parts = item.Split(';');
+                    var name = parts.Length > 0 ? parts[0].Trim() : item;
+                    sb.AppendLine($"  - {name}");
+                    for (int i = 1; i < parts.Length; i++)
+                    {
+                        var detail = parts[i].Trim();
+                        if (!string.IsNullOrWhiteSpace(detail))
+                            sb.AppendLine($"    Détails : {detail}");
+                    }
+                }
+                sb.AppendLine();
+            }
+            else
+            {
+                sb.AppendLine("  Aucune donnée manquante.");
+                sb.AppendLine();
+            }
+
+            sb.AppendLine(SUBSEPARATOR);
+            sb.AppendLine();
+        }
+
+        private static string GetLimitationExplanation(Models.ScanErrorInfo error)
+        {
+            var code = (error.Code ?? "").ToUpperInvariant();
+            var msg = (error.Message ?? "").Trim();
+            if (code.Contains("WMI") || msg.Contains("WMI", StringComparison.OrdinalIgnoreCase))
+                return "Échec WMI (Windows Management Instrumentation). Service indisponible ou droits insuffisants.";
+            if (code.Contains("TIMEOUT") || msg.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+                return "Délai d'attente dépassé. L'opération a pris trop de temps.";
+            if (code.Contains("ACCESS") || code.Contains("PERMISSION"))
+                return "Accès refusé. Droits administrateur requis.";
+            if (string.IsNullOrWhiteSpace(msg) || msg.Equals("Unknown error", StringComparison.OrdinalIgnoreCase))
+                return "Erreur inattendue. La cause n'a pas pu être identifiée.";
+            return msg;
         }
 
         #endregion
@@ -1410,6 +1508,26 @@ namespace PCDiagnosticPro.Services
                         rows.Add(("Antivirus", avName));
                 }
             }
+
+            // RDP et SMBv1 depuis security_info_csharp (collecté par SecurityInfoCollector)
+            try
+            {
+                if (psData.HasValue)
+                {
+                    var secCsharp = GetNestedElement(psData.Value, "security_info_csharp");
+                    if (secCsharp.HasValue && secCsharp.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        var rdp = TryGetBool(secCsharp.Value, "RdpEnabled");
+                        if (rdp.HasValue)
+                            rows.Add(("Bureau à distance (RDP)", rdp.Value ? "⚠ Activé (vérifier si nécessaire)" : "✅ Désactivé"));
+                        var smb1 = TryGetBool(secCsharp.Value, "Smb1Enabled");
+                        if (smb1.HasValue)
+                            rows.Add(("SMBv1", smb1.Value ? "⚠ Activé (risque de sécurité)" : "✅ Désactivé (recommandé)"));
+                        foundData = true;
+                    }
+                }
+            }
+            catch { /* fallback: RDP/SMBv1 non disponibles */ }
 
             if (!foundData || rows.Count == 0)
                 rows.Add(("Sécurité", "Données non disponibles"));

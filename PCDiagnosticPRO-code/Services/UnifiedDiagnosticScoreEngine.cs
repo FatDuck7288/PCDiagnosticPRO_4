@@ -149,6 +149,18 @@ namespace PCDiagnosticPro.Services
                     score -= 10;
             }
 
+            // Cap MHS when data quality is poor — can't claim excellent health with bad data
+            if (report.CollectorErrorsLogical >= 3 && score > 85)
+            {
+                App.LogMessage($"[UDIS] MHS capped {score}→85 (collectorErrors={report.CollectorErrorsLogical})");
+                score = 85;
+            }
+            if (report.MissingData.Count >= 3 && score > 90)
+            {
+                App.LogMessage($"[UDIS] MHS capped {score}→90 (missingData={report.MissingData.Count})");
+                score = 90;
+            }
+
             return Math.Max(0, Math.Min(100, score));
         }
 

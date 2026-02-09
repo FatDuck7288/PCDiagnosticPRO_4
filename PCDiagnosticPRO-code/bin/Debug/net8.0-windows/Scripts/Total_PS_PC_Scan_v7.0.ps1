@@ -1506,12 +1506,13 @@ function Calculate-ScoreV2 {
     # Score minimum 10 (sauf si 0 sections collectées)
     $finalScore = [math]::Max(10, [math]::Min(100, $baseScore - $totalPenalty))
     
-    # Determiner le grade
+    # Determiner le grade (aligne sur les seuils C# / UDIS)
     $grade = 'F'
-    if ($finalScore -ge 90) { $grade = 'A' }
-    elseif ($finalScore -ge 75) { $grade = 'B' }
-    elseif ($finalScore -ge 50) { $grade = 'C' }
-    elseif ($finalScore -ge 25) { $grade = 'D' }
+    if ($finalScore -ge 95) { $grade = 'A+' }
+    elseif ($finalScore -ge 90) { $grade = 'A' }
+    elseif ($finalScore -ge 80) { $grade = 'B' }
+    elseif ($finalScore -ge 70) { $grade = 'C' }
+    elseif ($finalScore -ge 60) { $grade = 'D' }
     
     # Top 5 penalites
     $sortedPenalties = $topPenalties | Sort-Object { $_.penalty } -Descending | Select-Object -First 5
@@ -2223,7 +2224,8 @@ function Collect-EventLogs {
         }
         catch { $data['bsodCount'] = 0; $content += "[INFO] Non disponible" }
     }
-    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Collect-EventLogs' -Message $_.Exception.Message }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Collect-EventLogs' -Message $_.Exception.Message; $data['available'] = $false; $data['reason'] = $_.Exception.Message }
+    if (-not $data.Contains('available')) { $data['available'] = $true }
     $Script:SectionData['EventLogs'] = $data
     return $content
 }
@@ -2454,15 +2456,40 @@ function Collect-Processes {
                     }
                 }
                 catch {
-                    $content += "[INFO] Collecte processus non disponible"
-                    Add-MissingData -Section 'Processes' -Item 'ProcessList' -Reason 'Get-Process, CIM et tasklist ont echoue'
+                    # Fallback 4: WMI (different provider than CIM)
+                    try {
+                        $wmiProcs = Get-WmiObject -Class Win32_Process -ErrorAction Stop | 
+                            Sort-Object WorkingSetSize -Descending | Select-Object -First 15
+                        foreach ($p in @($wmiProcs)) {
+                            if ($null -eq $p) { continue }
+                            $procName = Get-SafePropValue $p 'Name' 'Unknown'
+                            $pid = Get-SafePropValue $p 'ProcessId' 0
+                            $ws = Get-SafePropValue $p 'WorkingSetSize' 0
+                            $memMB = [math]::Round((Convert-SafeLong $ws) / 1MB, 1)
+                            $content += "$procName (PID $pid) - $memMB MB"
+                            $memList += [ordered]@{ name = $procName; pid = $pid; memoryMB = $memMB }
+                        }
+                        $source = 'WMI'
+                    }
+                    catch {
+                        $content += "[INFO] Collecte processus non disponible"
+                        Add-MissingData -Section 'Processes' -Item 'ProcessList' -Reason 'Get-Process, CIM, tasklist et WMI ont echoue'
+                        Emit-Status -Type 'WARN' -Section 'Processus' -Message 'Toutes les methodes de collecte ont echoue'
+                        $data['available'] = $false
+                        $data['reason'] = 'Get-Process, CIM, tasklist et WMI ont echoue'
+                    }
                 }
             }
         }
+        if (-not $data.Contains('available')) { $data['available'] = ($memList.Count -gt 0) }
         $data['topMemory'] = $memList
         $data['source'] = $source
     }
-    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Collect-Processes' -Message $_.Exception.Message }
+    catch {
+        Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Collect-Processes' -Message $_.Exception.Message
+        $data['available'] = $false
+        $data['reason'] = $_.Exception.Message
+    }
     $Script:SectionData['Processes'] = $data
     return $content
 }
@@ -2726,7 +2753,8 @@ function Collect-Temperatures-Legacy {
         } else { $content += "[INFO] Admin requis pour temperatures"; $data['available'] = $false }
         $data['temperatures'] = $tempList
     }
-    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Collect-Temperatures' -Message $_.Exception.Message }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Collect-Temperatures' -Message $_.Exception.Message; $data['available'] = $false; $data['reason'] = $_.Exception.Message }
+    if (-not $data.Contains('available')) { $data['available'] = $true }
     $Script:SectionData['Temperatures'] = $data
     return $content
 }
@@ -2922,7 +2950,8 @@ function Collect-PerformanceCounters {
             }
         } catch { }
     }
-    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Collect-PerformanceCounters' -Message $_.Exception.Message }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Collect-PerformanceCounters' -Message $_.Exception.Message; $data['available'] = $false; $data['reason'] = $_.Exception.Message }
+    if (-not $data.Contains('available')) { $data['available'] = $true }
     $Script:SectionData['PerformanceCounters'] = $data
     return $content
 }

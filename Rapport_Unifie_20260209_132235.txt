@@ -5,7 +5,7 @@
   ▶ SECTION 1 : RÉSUMÉ GLOBAL
 ────────────────────────────────────────────────────────────────────────────────
 
-  Score santé global        : 98/100 (Grade A+)
+  Score santé global        : 91/100 (Grade A)
   Statut                    : ✅ OK
 
   ▶ SECTION 2 : INFOS GÉNÉRALES
@@ -13,8 +13,8 @@
 
   Nom PC                    : DESKTOP-LAKVT49
   Utilisateur               : rams_
-  Date/heure scan           : 2026-02-09 12:48:23
-  Uptime                    : 1j 17h 46m
+  Date/heure scan           : 2026-02-09 13:22:35
+  Uptime                    : 1j 18h 21m
   Version OS                : Microsoft Windows NT 10.0.26200.0
   Architecture              : 64-bit
   Mode Admin                : OUI
@@ -28,30 +28,30 @@
   ▶ SECTION 4 : PERFORMANCE ACTIVITÉ
 ────────────────────────────────────────────────────────────────────────────────
 
-  Charge CPU                : 5%
-  Utilisation RAM           : 26%
-  Débit réseau (test HTTP)  : 46,9 Mbps
+  Charge CPU                : 2%
+  Utilisation RAM           : 27%
+  Débit réseau (test HTTP)  : 112,0 Mbps
 
   Top 5 Processus (CPU):
   ┌────────────────────────────┬──────────┬────────────┐
   │ Processus                  │ CPU %    │ RAM (MB)   │
   ├────────────────────────────┼──────────┼────────────┤
-  │ PCDiagnosticPro            │     1,7% │     254,3 │
-  │ dwm                        │     0,6% │     308,1 │
-  │ System                     │     0,5% │      23,3 │
-  │ Taskmgr                    │     0,3% │     200,5 │
-  │ PowerToys.AlwaysOnTop      │     0,3% │      15,2 │
+  │ PCDiagnosticPro            │     2,1% │     352,8 │
+  │ chrome                     │     0,7% │     587,8 │
+  │ RazerAppEngine             │     0,6% │     203,6 │
+  │ RazerAppEngine             │     0,5% │     125,8 │
+  │ Taskmgr                    │     0,4% │     212,7 │
   └────────────────────────────┴──────────┴────────────┘
 
   Top 5 Processus (RAM):
   ┌────────────────────────────┬────────────┬──────────┐
   │ Processus                  │ RAM (MB)   │ CPU %    │
   ├────────────────────────────┼────────────┼──────────┤
-  │ Cursor                     │    1717,2 │     0,1% │
-  │ opera                      │     872,6 │     0,0% │
-  │ explorer                   │     598,8 │     0,1% │
-  │ chrome                     │     583,9 │     0,0% │
-  │ Microsoft.CodeAnalysis.... │     575,3 │     0,0% │
+  │ Cursor                     │    1912,3 │     0,0% │
+  │ opera                      │     761,0 │     0,1% │
+  │ Microsoft.CodeAnalysis.... │     629,3 │     0,1% │
+  │ explorer                   │     600,9 │     0,0% │
+  │ chrome                     │     594,2 │     0,0% │
   └────────────────────────────┴────────────┴──────────┘
 
   ▶ SECTION 5 : MÉMOIRE RAM
@@ -61,12 +61,12 @@
   ┌─────────────────────────────┬────────────┬────────────┬──────────┐
   │ Catégorie                   │ Valeur     │ Total      │ %        │
   ├─────────────────────────────┼────────────┼────────────┼──────────┤
-  │ Physique : Utilisée          │    25,09 GB │    95,93 GB │     26% │
-  │ Physique : Disponible        │    70,84 GB │    95,93 GB │     74% │
-  │ Virtuelle : Utilisée         │  2311,30 GB │ 131072,00 GB │      2% │
-  │ Virtuelle : Disponible       │ 128760,70 GB │ 131072,00 GB │     98% │
-  │ Fichier pagination : Utilisé │    30,87 GB │   143,93 GB │     21% │
-  │ Fichier pagination : Libre   │   113,06 GB │   143,93 GB │     79% │
+  │ Physique : Utilisée          │    25,89 GB │    95,93 GB │     27% │
+  │ Physique : Disponible        │    70,04 GB │    95,93 GB │     73% │
+  │ Virtuelle : Utilisée         │  2311,29 GB │ 131072,00 GB │      2% │
+  │ Virtuelle : Disponible       │ 128760,71 GB │ 131072,00 GB │     98% │
+  │ Fichier pagination : Utilisé │    31,67 GB │   143,93 GB │     22% │
+  │ Fichier pagination : Libre   │   112,26 GB │   143,93 GB │     78% │
   └─────────────────────────────┴────────────┴────────────┴──────────┘
 
   Source : C# (GlobalMemoryStatusEx)
@@ -79,7 +79,7 @@
   ┌───────┬────────────┬────────────┬────────────┬───────────┬──────────┐
   │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Utilisé % │ Alerte   │
   ├───────┼────────────┼────────────┼────────────┼───────────┼──────────┤
-  │ C:    │    952,6 GB │    368,1 GB │    584,5 GB │    61,4 %  │ OK       │
+  │ C:    │    952,6 GB │    368,1 GB │    584,6 GB │    61,4 %  │ OK       │
   │ D:    │   1863,0 GB │   1092,2 GB │    770,8 GB │    41,4 %  │ OK       │
   │ E:    │   1862,2 GB │   1460,4 GB │    401,8 GB │    21,6 %  │ OK       │
   │ H:    │   1862,9 GB │    696,0 GB │   1166,9 GB │    62,6 %  │ OK       │
@@ -96,7 +96,7 @@
 ────────────────────────────────────────────────────────────────────────────────
 
   Temp CPU                  : Non disponible sur ce matériel (capteur non exposé par firmware)
-  Temp GPU                  : 36,0°C
+  Temp GPU                  : 39,0°C
   Temp max disques          : 31°C
   Statut thermique          : ✅ Normal
 
@@ -114,9 +114,9 @@
     Latence P50    : 2,3 ms
     Latence P95    : 5,0 ms
     Perte paquets  : 0,0%
-    Jitter P95     : 0,82 ms
+    Jitter P95     : 0,81 ms
     Gateway        : 192.168.2.1
-    DNS P95        : 24 ms
+    DNS P95        : 10 ms
 
   ═ Réseau local / configuration ═
   Adaptateur actif          : VMware Virtual Ethernet Adapter for VMnet8
@@ -251,6 +251,31 @@
 
   Machine virtuelle         : ❌ Non (machine physique)
 
+  ▶ SECTION 17 : LIMITATIONS ET DONNÉES MANQUANTES
+────────────────────────────────────────────────────────────────────────────────
+
+  Statut de collecte : PARTIAL
+  Score de confiance : 80/100 (Moyen)
+  Score de fiabilité données : 91/100
+  Erreurs collecteur : 2
+
+  ERREURS DÉTECTÉES :
+
+  1) MESSAGE
+     Erreur inattendue. La cause n'a pas pu être identifiée.
+
+  2) CODE
+     Échec WMI (Windows Management Instrumentation). Service indisponible ou droits insuffisants.
+
+  DONNÉES MANQUANTES :
+
+  - Processes
+  - 2026-02-09T13:16:02.7802198-05:00
+  - ProcessList
+  - Get-Process, CIM, tasklist et WMI ont echoue
+
+────────────────────────────────────────────────────────────────────────────────
+
   ▶ DONNÉES POWERSHELL (BRUT)
 ────────────────────────────────────────────────────────────────────────────────
 
@@ -289,6 +314,6 @@
     ✓ Tests réseau locaux (sans speedtest externe)
     ✓ Processus temps réel (CPU % mesuré sur 750ms)
 
-  Généré le 2026-02-09 à 12:48:25
+  Généré le 2026-02-09 à 13:22:36
   PC Diagnostic PRO — Rapport Unifié v2.0
 ════════════════════════════════════════════════════════════════════════════════

@@ -630,9 +630,15 @@ namespace PCDiagnosticPro.ViewModels
         public bool HasScanResult => ScanResult != null && ScanResult.IsValid;
         public string ScoreDisplay => ScanResult?.Summary?.Score.ToString() ?? "0";
         public string GradeDisplay => ScanResult?.Summary?.Grade ?? "N/A";
+        /// <summary>Sous-score fiabilité = moyenne DRS + ConfidenceScore.</summary>
+        public int ReliabilitySubScore => HasScanResult
+            ? (int)Math.Round(((HealthReport?.DataReliabilityScore ?? 0) + (HealthReport?.ConfidenceModel?.ConfidenceScore ?? 0)) / 2.0)
+            : 0;
+        public string ReliabilitySubScoreDisplay => ReliabilitySubScore > 0 ? $"Fiabilité: {ReliabilitySubScore}/100" : "";
+
         public string StatusWithScore => HasScanResult 
             ? (HealthReport?.ConfidenceModel != null
-                ? $"Score: {ScanResult!.Summary.Score}/100 | Grade: {ScanResult.Summary.Grade} | Collecte: {HealthReport.ConfidenceModel.ConfidenceScore}/100 ({HealthReport.ConfidenceModel.ConfidenceLevel})"
+                ? $"Score: {ScanResult!.Summary.Score}/100 | Grade: {ScanResult.Summary.Grade} | Fiabilité: {ReliabilitySubScore}/100"
                 : $"Score: {ScanResult!.Summary.Score}/100 | Grade: {ScanResult.Summary.Grade}")
             : "Aucun scan effectué";
         public string ResultsCompletionDisplay => ScanResult?.Summary != null
@@ -863,10 +869,12 @@ namespace PCDiagnosticPro.ViewModels
                 RamUsedDisplay = p.WorkingSetMB >= 1024 
                     ? $"{p.WorkingSetMB / 1024:F1} GB" 
                     : $"{p.WorkingSetMB:F0} MB",
-                // RAM % not calculated here (would need total RAM from HealthReport)
                 RamPercent = 0
             }) ?? Enumerable.Empty<ProcessDisplayItem>();
-        
+
+        /// <summary>True when RAM process data is available (non-empty).</summary>
+        public bool HasTop5RamProcesses => _lastProcessTelemetry?.TopByMemory?.Any() == true;
+
         /// <summary>
         /// TÂCHE 6: Top 5 processus CPU comme collection
         /// </summary>
@@ -878,6 +886,9 @@ namespace PCDiagnosticPro.ViewModels
                 CpuPercent = p.CpuPercent,
                 CpuDisplay = $"{p.CpuPercent:F1}%"
             }) ?? Enumerable.Empty<ProcessDisplayItem>();
+
+        /// <summary>True when CPU process data is available (non-empty).</summary>
+        public bool HasTop5CpuProcesses => _lastProcessTelemetry?.TopByCpu?.Any() == true;
         
         // === SENSOR BLOCKING STATUS — UI DISPLAY ===
         public bool IsSensorBlocked => _lastSensorsResult?.BlockedBySecurity ?? false;

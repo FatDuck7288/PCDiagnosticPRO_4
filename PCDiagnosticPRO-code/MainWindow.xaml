@@ -1209,14 +1209,15 @@
                                         </Border.Background>
                                     </Border>
 
-                                    <!-- Minimal score card: gauge + grade + score line -->
-                                    <Grid Margin="30,24,30,24" HorizontalAlignment="Center">
+                                    <!-- Layout 3 colonnes: Gauge | Grade+Info | Légende (sans emblème) -->
+                                    <Grid Margin="20,16,20,16">
                                         <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="200"/>
                                             <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
 
-                                        <!-- GAUGE CIRCULAIRE avec glow -->
+                                        <!-- COL 0: GAUGE CIRCULAIRE avec glow -->
                                         <Grid Grid.Column="0" Width="170" Height="170" HorizontalAlignment="Center"
                                               Opacity="{Binding ScoreCircleOpacity}">
                                             <Grid.Effect>
@@ -1238,8 +1239,8 @@
                                             </StackPanel>
                                         </Grid>
 
-                                        <!-- GRADE + SCORE LINE -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="30,0,0,0">
+                                        <!-- COL 1: GRADE + SCORE INFO -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,20,0" MinWidth="180">
                                             <TextBlock Text="{Binding ScanResult.Summary.Grade}" FontSize="52" FontWeight="Bold"
                                                        Foreground="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}">
                                                 <TextBlock.Effect>
@@ -1247,8 +1248,75 @@
                                                                       BlurRadius="15" ShadowDepth="0" Opacity="0.45"/>
                                                 </TextBlock.Effect>
                                             </TextBlock>
-                                            <TextBlock Text="{Binding StatusWithScore}" FontSize="13" TextWrapping="Wrap"
-                                                       Foreground="#6B7685" Margin="0,4,0,0" FontFamily="Consolas"/>
+                                            <TextBlock Text="{Binding StatusWithScore}" FontSize="12" TextWrapping="Wrap"
+                                                       Foreground="#6B7685" Margin="0,2,0,0" FontFamily="Consolas"/>
+                                        </StackPanel>
+
+                                        <!-- COL 2: LÉGENDE (Échelle d'évaluation) -->
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Top" Margin="10,0,0,0">
+                                            <TextBlock Text="Indice global de santé du système (0 à 100)" FontSize="12" FontWeight="Bold"
+                                                       Foreground="#8B949E" Margin="0,0,0,2" FontFamily="Consolas"/>
+                                            <TextBlock Text="Ce score combine le niveau de risque et la performance globale.&#x0a;Plus le score est élevé, plus le système est stable, performant et sécurisé."
+                                                       FontSize="10" Foreground="#4D5566" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                            <TextBlock Text="Échelle d'évaluation" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="#6B7685" Margin="0,0,0,6"/>
+
+                                            <!-- A+ -->
+                                            <Grid Margin="0,0,0,2" Opacity="{Binding ScanResult.Summary.Grade, ConverterParameter=A+, Converter={StaticResource GradeMatchOpacity}}">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="56"/><ColumnDefinition Width="4"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <Border Width="22" Height="22" CornerRadius="11" Background="#4CAF50" HorizontalAlignment="Center"><TextBlock Text="A+" FontSize="8" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                                <TextBlock Grid.Column="1" Text="95 à 100" FontSize="10" Foreground="#6B7685" VerticalAlignment="Center" Margin="3,0,0,0" FontFamily="Consolas"/>
+                                                <Border Grid.Column="2" Width="2" CornerRadius="1" Background="#4CAF50" VerticalAlignment="Stretch" Margin="0,2"/>
+                                                <TextBlock Grid.Column="3" FontSize="10" VerticalAlignment="Center" Margin="5,0,0,0"><Run Text="Exceptionnel" FontWeight="Bold" Foreground="#4CAF50"/><Run Text="  Système optimal, aucun risque significatif" Foreground="#4D5566" FontSize="9"/></TextBlock>
+                                            </Grid>
+                                            <!-- A -->
+                                            <Grid Margin="0,0,0,2" Opacity="{Binding ScanResult.Summary.Grade, ConverterParameter=A, Converter={StaticResource GradeMatchOpacity}}">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="56"/><ColumnDefinition Width="4"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <Border Width="22" Height="22" CornerRadius="11" Background="#66BB6A" HorizontalAlignment="Center"><TextBlock Text="A" FontSize="9" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                                <TextBlock Grid.Column="1" Text="90 à 94" FontSize="10" Foreground="#6B7685" VerticalAlignment="Center" Margin="3,0,0,0" FontFamily="Consolas"/>
+                                                <Border Grid.Column="2" Width="2" CornerRadius="1" Background="#66BB6A" VerticalAlignment="Stretch" Margin="0,2"/>
+                                                <TextBlock Grid.Column="3" FontSize="10" VerticalAlignment="Center" Margin="5,0,0,0"><Run Text="Excellent" FontWeight="Bold" Foreground="#66BB6A"/><Run Text="  Performance très élevée, risques minimes" Foreground="#4D5566" FontSize="9"/></TextBlock>
+                                            </Grid>
+                                            <!-- B -->
+                                            <Grid Margin="0,0,0,2" Opacity="{Binding ScanResult.Summary.Grade, ConverterParameter=B, Converter={StaticResource GradeMatchOpacity}}">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="56"/><ColumnDefinition Width="4"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <Border Width="22" Height="22" CornerRadius="11" Background="#AED581" HorizontalAlignment="Center"><TextBlock Text="B" FontSize="9" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                                <TextBlock Grid.Column="1" Text="80 à 89" FontSize="10" Foreground="#6B7685" VerticalAlignment="Center" Margin="3,0,0,0" FontFamily="Consolas"/>
+                                                <Border Grid.Column="2" Width="2" CornerRadius="1" Background="#AED581" VerticalAlignment="Stretch" Margin="0,2"/>
+                                                <TextBlock Grid.Column="3" FontSize="10" VerticalAlignment="Center" Margin="5,0,0,0"><Run Text="Très bon" FontWeight="Bold" Foreground="#AED581"/><Run Text="  Système sain, quelques optimisations possibles" Foreground="#4D5566" FontSize="9"/></TextBlock>
+                                            </Grid>
+                                            <!-- C -->
+                                            <Grid Margin="0,0,0,2" Opacity="{Binding ScanResult.Summary.Grade, ConverterParameter=C, Converter={StaticResource GradeMatchOpacity}}">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="56"/><ColumnDefinition Width="4"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <Border Width="22" Height="22" CornerRadius="11" Background="#FFD54F" HorizontalAlignment="Center"><TextBlock Text="C" FontSize="9" FontWeight="Bold" Foreground="#1C1C1C" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                                <TextBlock Grid.Column="1" Text="70 à 79" FontSize="10" Foreground="#6B7685" VerticalAlignment="Center" Margin="3,0,0,0" FontFamily="Consolas"/>
+                                                <Border Grid.Column="2" Width="2" CornerRadius="1" Background="#FFD54F" VerticalAlignment="Stretch" Margin="0,2"/>
+                                                <TextBlock Grid.Column="3" FontSize="10" VerticalAlignment="Center" Margin="5,0,0,0"><Run Text="Acceptable" FontWeight="Bold" Foreground="#FFD54F"/><Run Text="  Faiblesses modérées détectées" Foreground="#4D5566" FontSize="9"/></TextBlock>
+                                            </Grid>
+                                            <!-- D -->
+                                            <Grid Margin="0,0,0,2" Opacity="{Binding ScanResult.Summary.Grade, ConverterParameter=D, Converter={StaticResource GradeMatchOpacity}}">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="56"/><ColumnDefinition Width="4"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <Border Width="22" Height="22" CornerRadius="11" Background="#FFA726" HorizontalAlignment="Center"><TextBlock Text="D" FontSize="9" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                                <TextBlock Grid.Column="1" Text="60 à 69" FontSize="10" Foreground="#6B7685" VerticalAlignment="Center" Margin="3,0,0,0" FontFamily="Consolas"/>
+                                                <Border Grid.Column="2" Width="2" CornerRadius="1" Background="#FFA726" VerticalAlignment="Stretch" Margin="0,2"/>
+                                                <TextBlock Grid.Column="3" FontSize="10" VerticalAlignment="Center" Margin="5,0,0,0"><Run Text="Fragile" FontWeight="Bold" Foreground="#FFA726"/><Run Text="  Risques identifiés, corrections recommandées" Foreground="#4D5566" FontSize="9"/></TextBlock>
+                                            </Grid>
+                                            <!-- E -->
+                                            <Grid Margin="0,0,0,2" Opacity="{Binding ScanResult.Summary.Grade, ConverterParameter=E, Converter={StaticResource GradeMatchOpacity}}">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="56"/><ColumnDefinition Width="4"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <Border Width="22" Height="22" CornerRadius="11" Background="#EF5350" HorizontalAlignment="Center"><TextBlock Text="E" FontSize="9" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                                <TextBlock Grid.Column="1" Text="50 à 59" FontSize="10" Foreground="#6B7685" VerticalAlignment="Center" Margin="3,0,0,0" FontFamily="Consolas"/>
+                                                <Border Grid.Column="2" Width="2" CornerRadius="1" Background="#EF5350" VerticalAlignment="Stretch" Margin="0,2"/>
+                                                <TextBlock Grid.Column="3" FontSize="10" VerticalAlignment="Center" Margin="5,0,0,0"><Run Text="Critique" FontWeight="Bold" Foreground="#EF5350"/><Run Text="  Instabilités ou vulnérabilités importantes" Foreground="#4D5566" FontSize="9"/></TextBlock>
+                                            </Grid>
+                                            <!-- F -->
+                                            <Grid Margin="0,0,0,0" Opacity="{Binding ScanResult.Summary.Grade, ConverterParameter=F, Converter={StaticResource GradeMatchOpacity}}">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="56"/><ColumnDefinition Width="4"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <Border Width="22" Height="22" CornerRadius="11" Background="#C62828" HorizontalAlignment="Center"><TextBlock Text="F" FontSize="9" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                                <TextBlock Grid.Column="1" Text="0 à 49" FontSize="10" Foreground="#6B7685" VerticalAlignment="Center" Margin="3,0,0,0" FontFamily="Consolas"/>
+                                                <Border Grid.Column="2" Width="2" CornerRadius="1" Background="#C62828" VerticalAlignment="Stretch" Margin="0,2"/>
+                                                <TextBlock Grid.Column="3" FontSize="10" VerticalAlignment="Center" Margin="5,0,0,0"><Run Text="Défaillant" FontWeight="Bold" Foreground="#C62828"/><Run Text="  Intervention urgente requise" Foreground="#4D5566" FontSize="9"/></TextBlock>
+                                            </Grid>
                                         </StackPanel>
                                     </Grid>
                                 </Grid>
@@ -1283,10 +1351,10 @@
                                         <!-- HEALTH SCORE (état machine) - Écusson supprimé -->
                                     </Grid>
                                     
-                                    <!-- Zone dédiée "Qualité Collecte" - Séparée de l'écusson État -->
+                                    <!-- Zone dédiée "Qualité Collecte" - Toujours visible (indicateur de fiabilité) -->
                                     <Border Background="{StaticResource BackgroundLightBrush}" CornerRadius="4" 
                                             Padding="10,8" Margin="0,0,0,12"
-                                            Visibility="{Binding IsCollectionPartialOrFailed, Converter={StaticResource BoolToVisibility}}">
+                                            Visibility="{Binding HasScanResult, Converter={StaticResource BoolToVisibility}}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>

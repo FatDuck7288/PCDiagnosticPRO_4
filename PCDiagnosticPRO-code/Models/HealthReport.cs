@@ -439,7 +439,13 @@ namespace PCDiagnosticPro.Models
                     return "";
 
                 if (string.IsNullOrEmpty(Value)) return "";
-                var v = Value.ToLower();
+                // If value indicates data unavailability, show question mark instead of checkmark
+                var vLower = Value.ToLower();
+                if (vLower.Contains("non disponible") || vLower.Contains("unavailable") || 
+                    vLower.Contains("données manquantes") || vLower.Contains("échec") ||
+                    vLower.Contains("echoue") || vLower.Contains("failed"))
+                    return "❓";
+                var v = vLower;
                 
                 // Cas spécial: Redémarrage requis - icône neutre (pas un X qui suggère erreur)
                 if (Key.Equals("Redémarrage requis", StringComparison.OrdinalIgnoreCase))

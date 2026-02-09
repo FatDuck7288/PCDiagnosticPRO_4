@@ -7,9 +7,9 @@ L'analyse et l'interpretation sont effectuees par l'IA externe.
 
 METADATA
 --------------------------------------------------
-Run ID               : 5c60e16d-2397-4f36-afa1-2a41463bbc0c
+Run ID               : 0811d472-c2be-4da2-8029-07356ddb5772
 Version              : 7.0
-Date                 : 2026-02-09 12:41:04
+Date                 : 2026-02-09 13:15:37
 Machine              : PC-52391b
 Admin                : True
 Redaction            : Full
@@ -35,7 +35,7 @@ Build                    : 26200
 UPTIME
 --------------------------------------------------
 Dernier Boot             : 2026-02-07 19:01
-Uptime                   : 1j 17h
+Uptime                   : 1j 18h
 
 FABRICANT
 --------------------------------------------------
@@ -73,7 +73,7 @@ PROCESSEUR(S)
 CPU: AMD Ryzen 9 5900X 12-Core Processor            
   Cores/Threads          : 12 / 24
   Frequence Max          : 3701 MHz
-  Charge Actuelle        : 16%
+  Charge Actuelle        : 27%
 
 ====================================================================================================
 [4. MEMOIRE]
@@ -81,8 +81,8 @@ CPU: AMD Ryzen 9 5900X 12-Core Processor
 MEMOIRE PHYSIQUE (RAM)
 --------------------------------------------------
 Memoire Totale           : 95.93 GB
-Memoire Libre            : 70.84 GB
-Utilisation              : 26.2%
+Memoire Libre            : 70.04 GB
+Utilisation              : 27%
 
 MODULES
 --------------------------------------------------
@@ -109,7 +109,7 @@ Disque: TOSHIBA DT01ACA200
 
 VOLUMES
 --------------------------------------------------
-C: 952.65 GB | Libre: 368.11 GB (61.4% utilise)
+C: 952.65 GB | Libre: 368.07 GB (61.4% utilise)
 D: 1863.02 GB | Libre: 1092.21 GB (41.4% utilise)
 E: 1862.17 GB | Libre: 1460.41 GB (21.6% utilise)
 H: 1862.88 GB | Libre: 696.01 GB (62.6% utilise)
@@ -153,7 +153,7 @@ Interface: RZ616 Wi-Fi 6E 160MHz
 
 CONNEXIONS
 --------------------------------------------------
-Total connexions: 205 | Ports en ecoute: 39
+Total connexions: 182 | Ports en ecoute: 39
 
 ====================================================================================================
 [8. SECURITE]
@@ -183,7 +183,7 @@ UAC: Active
 ====================================================================================================
 SERVICES CRITIQUES
 --------------------------------------------------
-[OK] Windows Update
+[STOP] Windows Update
 [OK] Service antivirus Microsoft Defender
 [OK] Pare-feu Windows Defender
 [OK] Journal d’événements Windows
@@ -326,7 +326,7 @@ Points disponibles: 3
 FICHIERS TEMPORAIRES
 --------------------------------------------------
 Temp User : 2,08 GB
-Temp Windows : 132,75 MB
+Temp Windows : 133,13 MB
 TOTAL: 2,21 GB
 
 ====================================================================================================
@@ -464,12 +464,12 @@ SIGNES DYNAMIQUES (DONNEES BRUTES)
 
 [CONFIG] Duree: 3s | Echantillons: 3
 
-CPU: moyenne 5% | max 5% | min 5% [WMI-Fallback]
-Memoire: 26.77% utilisee | 71932.36 MB libres [WMI-Fallback]
-Disque: utilisation 0% | file 0 [WMI-Fallback]
+CPU: moyenne 2% | max 2% | min 2% [WMI-Fallback]
+Memoire: 27.53% utilisee | 71181.83 MB libres [WMI-Fallback]
+Disque: utilisation 1% | file 0 [WMI-Fallback]
 Top CPU: opera
-Top RAM: Cursor (1734.88 MB)
-Reseau: 8.02 Mbps | erreurs: 0
+Top RAM: Cursor (1945.84 MB)
+Reseau: 36.38 Mbps | erreurs: 0
 
 ====================================================================================================
 [37. ANALYSE AVANCEE]
@@ -522,8 +522,8 @@ RESUME DE COLLECTE
 METADATA
 --------------------------------------------------
 Version              : 7.0
-Run ID               : 5c60e16d-2397-4f36-afa1-2a41463bbc0c
-Date                 : 2026-02-09 12:42:09
+Run ID               : 0811d472-c2be-4da2-8029-07356ddb5772
+Date                 : 2026-02-09 13:16:40
 Admin                : True
 Redaction            : Full
 QuickScan            : False
@@ -575,7 +575,7 @@ ERREURS
 Erreurs de collecte: 1
 
 ####################################################################################################
-Duree collecte       : 65.5 secondes
-Genere le            : 2026-02-09 12:42:09
+Duree collecte       : 62.6 secondes
+Genere le            : 2026-02-09 13:16:40
 
-Hash (SHA256): 330AB5AEE9D504BA4DE6535F56499DB5BED9A1A54C102F7CDBE0A6AA53517DA6
+Hash (SHA256): A1DA04538C9BE8EB276DB0BF6F5431ABE1437BFA0DEB7A0292F53511F0E503F5

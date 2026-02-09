@@ -162,12 +162,30 @@ namespace PCDiagnosticPro.Services
                     report.CollectorErrorsLogical = Math.Max(report.CollectorErrorsLogical, 1);
                 report.CollectionStatus = diagnostics.CollectionStatus;
                 
+                // Harmonize: force PARTIAL when errors/missingData contradict OK status
+                if (report.CollectionStatus == "OK")
+                {
+                    if (report.CollectorErrorsLogical > 0 || report.Errors.Count > 0)
+                    {
+                        report.CollectionStatus = "PARTIAL";
+                        App.LogMessage($"[HealthReportBuilder] Status harmonized OK→PARTIAL (errors={report.Errors.Count}, collectorErrors={report.CollectorErrorsLogical})");
+                    }
+                    else if (report.MissingData.Count > 2)
+                    {
+                        report.CollectionStatus = "PARTIAL";
+                        App.LogMessage($"[HealthReportBuilder] Status harmonized OK→PARTIAL (missingData={report.MissingData.Count})");
+                    }
+                }
+                
                 App.LogMessage($"COLLECTOR_ERRORS_LOGICAL={report.CollectorErrorsLogical} (from errors[]={report.Errors.Count})");
                 
                 // 4. Sections par domaine
                 report.Sections = BuildHealthSections(root, report.ScoreV2, sensors);
                 
-                // 4b. Enrichissement C# (Drivers / Updates)
+                // 4b. Neutralisation des valeurs sentinelles / impossibles
+                NeutralizeSentinelValues(report, sensors);
+
+                // 4c. Enrichissement C# (Drivers / Updates)
                 if (driverInventory != null)
                     InjectDriverInventory(report, driverInventory);
                 if (updatesCsharp != null)
@@ -417,6 +435,34 @@ namespace PCDiagnosticPro.Services
         /// <summary>Score → Grade (A+ … F), identique à UnifiedDiagnosticScoreEngine.</summary>
         private static string ScoreToGrade(int score) =>
             score switch { >= 95 => "A+", >= 90 => "A", >= 80 => "B+", >= 70 => "B", >= 60 => "C", >= 50 => "D", _ => "F" };
+
+        /// <summary>
+        /// Neutralize sentinel/impossible values from sensor data to prevent misleading scores.
+        /// Marks values as unreliable when detected (0°C temps, >150°C temps, 0% RAM usage, >100% usage).
+        /// </summary>
+        private static void NeutralizeSentinelValues(HealthReport report, HardwareSensorsResult? sensors)
+        {
+            if (sensors == null) return;
+            try
+            {
+                // CPU temp: 0°C or >150°C are sentinel values from failed WMI
+                if (sensors.Cpu.CpuTempC.Available && (sensors.Cpu.CpuTempC.Value <= 0 || sensors.Cpu.CpuTempC.Value > 150))
+                {
+                    App.LogMessage($"[SentinelCheck] CPU temp {sensors.Cpu.CpuTempC.Value}°C neutralized (sentinel)");
+                    sensors.Cpu.CpuTempC = new MetricValue<double> { Available = false, Value = 0, Reason = "Valeur non fiable (sentinelle)" };
+                }
+                // GPU temp: same checks
+                if (sensors.Gpu.GpuTempC.Available && (sensors.Gpu.GpuTempC.Value <= 0 || sensors.Gpu.GpuTempC.Value > 150))
+                {
+                    App.LogMessage($"[SentinelCheck] GPU temp {sensors.Gpu.GpuTempC.Value}°C neutralized (sentinel)");
+                    sensors.Gpu.GpuTempC = new MetricValue<double> { Available = false, Value = 0, Reason = "Valeur non fiable (sentinelle)" };
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[SentinelCheck] Error: {ex.Message}");
+            }
+        }
 
         /// <summary>
         /// Injecte le statut Windows Update C# dans la section OS (UI).
