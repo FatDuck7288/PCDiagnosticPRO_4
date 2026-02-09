@@ -4330,8 +4330,14 @@ namespace PCDiagnosticPro.ViewModels
             });
         }
 
+        private static readonly Regex _progressBarPattern = new Regex(@"\[#+\s+\d+%\]", RegexOptions.Compiled);
+
         private void AddLiveFeedItem(string item)
         {
+            // Filtrer les lignes de progression type [#### 16%]
+            if (_progressBarPattern.IsMatch(item))
+                return;
+
             Application.Current?.Dispatcher.Invoke(() =>
             {
                 var timestamp = $"[{DateTime.Now:HH:mm:ss}]";
