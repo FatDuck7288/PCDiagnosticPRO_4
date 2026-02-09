@@ -82,3 +82,5 @@ D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-detail
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Styles\Themes\EmpireStarWars.baml
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\AdminPermissionsDialog.baml
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\AdminPermissionsDialog.g.cs
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\ScanConsentDialog.baml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\Views\ScanConsentDialog.g.cs

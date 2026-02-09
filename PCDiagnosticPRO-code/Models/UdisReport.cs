@@ -115,5 +115,17 @@ namespace PCDiagnosticPro.Models
         public string Description { get; set; } = string.Empty;
         public string? SuggestedAction { get; set; }
         public string Source { get; set; } = string.Empty;
+        /// <summary>Evidence paths linking finding to source data. Required for AutoFix.</summary>
+        public List<string> EvidencePaths { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Result of IT policy validation on a finding.
+    /// </summary>
+    public class PolicyResult
+    {
+        public bool IsValid { get; set; }
+        public bool IsDowngraded { get; set; }
+        public string? Reason { get; set; }
     }
 }

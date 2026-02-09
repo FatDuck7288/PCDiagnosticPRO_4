@@ -100,6 +100,8 @@ namespace PCDiagnosticPro.Services
             try
             {
                 // Créer le répertoire d'installation
+                App.LogMessage($"[LibreSpeed] Install path: {_installPath}");
+                App.LogMessage($"[LibreSpeed] Exe path: {_exePath}");
                 Directory.CreateDirectory(_installPath);
                 
                 var zipPath = Path.Combine(_installPath, "librespeed-cli.zip");
@@ -113,14 +115,16 @@ namespace PCDiagnosticPro.Services
                 response.EnsureSuccessStatusCode();
                 
                 var zipData = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                App.LogMessage($"[LibreSpeed] Writing ZIP ({zipData.Length} bytes) to: {zipPath}");
                 await File.WriteAllBytesAsync(zipPath, zipData, cancellationToken);
                 
                 // Extraire le ZIP
-                App.LogMessage("[LibreSpeed] Extraction...");
+                App.LogMessage($"[LibreSpeed] Extracting to: {_installPath}");
                 ZipFile.ExtractToDirectory(zipPath, _installPath, overwriteFiles: true);
                 
                 // Nettoyer le ZIP
                 File.Delete(zipPath);
+                App.LogMessage($"[LibreSpeed] Installation complete. Exe exists: {File.Exists(_exePath)}");
                 
                 // Vérifier que l'exe existe maintenant
                 if (!File.Exists(_exePath))

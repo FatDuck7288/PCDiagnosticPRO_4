@@ -64,6 +64,9 @@ namespace PCDiagnosticPro.ViewModels
 
         // Résultat inventaire pilotes (C#)
         private DriverInventoryResult? _lastDriverInventory;
+        
+        // Last DiagnosticSnapshot for coverage tracking
+        private DiagnosticSnapshot? _lastDiagnosticSnapshot;
 
         // Résultat Windows Update (C#)
         private WindowsUpdateResult? _lastWindowsUpdateResult;
@@ -548,6 +551,24 @@ namespace PCDiagnosticPro.ViewModels
             }
         }
 
+        private double _smoothProgressPercent;
+        /// <summary>
+        /// Progression lissée (double) pour les bindings XAML.
+        /// S'interpole de façon fluide vers ProgressPercent / le plafond du timer.
+        /// </summary>
+        public double SmoothProgressPercent
+        {
+            get => _smoothProgressPercent;
+            private set
+            {
+                if (Math.Abs(_smoothProgressPercent - value) > 0.001)
+                {
+                    _smoothProgressPercent = value;
+                    OnPropertyChanged(nameof(SmoothProgressPercent));
+                }
+            }
+        }
+
         private int _progressCount;
         public int ProgressCount
         {
@@ -653,6 +674,12 @@ namespace PCDiagnosticPro.ViewModels
                     OnPropertyChanged(nameof(IsLowConfidence));
                     OnPropertyChanged(nameof(ScoreCircleOpacity));
                     OnPropertyChanged(nameof(LowConfidenceWarning));
+                    // Coverage Score
+                    OnPropertyChanged(nameof(CoveragePercent));
+                    OnPropertyChanged(nameof(CoverageQualityLabel));
+                    OnPropertyChanged(nameof(CoverageDisplay));
+                    OnPropertyChanged(nameof(IsCoverageLow));
+                    OnPropertyChanged(nameof(CoverageLowWarning));
                     OnPropertyChanged(nameof(CollectionStatusBadgeText));
                     OnPropertyChanged(nameof(IsCollectionPartialOrFailed));
                     OnPropertyChanged(nameof(CollectorErrorsLogicalDisplay));
@@ -714,6 +741,17 @@ namespace PCDiagnosticPro.ViewModels
         /// <summary>Message d'avertissement affiché sous le score quand confiance faible.</summary>
         public string LowConfidenceWarning => IsLowConfidence 
             ? $"⚠ Collecte insuffisante ({ConfidenceScore}/100) — score non fiable"
+            : "";
+
+        // === COVERAGE SCORE (couverture de collecte) ===
+        public double CoveragePercent => _lastDiagnosticSnapshot?.CollectionQuality?.CoveragePercent ?? 0;
+        public string CoverageQualityLabel => CoveragePercent >= 90 ? "FULL" : CoveragePercent >= 50 ? "PARTIAL" : "LOW";
+        public string CoverageDisplay => _lastDiagnosticSnapshot != null
+            ? $"Collecte: {CoveragePercent:F0}% / qualité: {CoverageQualityLabel}"
+            : "";
+        public bool IsCoverageLow => _lastDiagnosticSnapshot != null && CoveragePercent < 70;
+        public string CoverageLowWarning => IsCoverageLow
+            ? $"⚠ Couverture collecte faible ({CoveragePercent:F0}%) — données incomplètes"
             : "";
 
         // === UDIS — AFFICHAGE MODE INDUSTRIE (séparé) ===
@@ -898,6 +936,8 @@ namespace PCDiagnosticPro.ViewModels
         /// Quand true, le collecteur full est utilisé ; sinon safe (WMI only). Défaut: false.
         /// </summary>
         private bool _enableHardwareMonitoring = false;
+        /// <summary>When true, skip full hardware sensors (user chose "limited mode" without admin).</summary>
+        private bool _skipHardwareSensors = false;
         public bool EnableHardwareMonitoring
         {
             get => _enableHardwareMonitoring;
@@ -1655,11 +1695,15 @@ namespace PCDiagnosticPro.ViewModels
         private bool MatchesLiveFeedFilter(LiveFeedEntry e)
         {
             var f = LiveFeedFilterSelected ?? "Tout";
-            if (f == "Tout") return true;
-            if (f == "Erreurs" && e.IsError) return true;
-            if (f == "Avertissements" && e.IsWarning) return true;
-            if (f == "Important" && (e.IsError || e.IsWarning)) return true;
-            return false;
+            return f switch
+            {
+                "Tout" => true,
+                "Erreurs" => e.IsError,
+                "Avertissements" => e.IsWarning,
+                "Important" => e.IsError || e.IsWarning,
+                "Progression" => e.IsProgress || e.IsStatus || e.IsDone,
+                _ => true
+            };
         }
         
         public IEnumerable<string> LiveFeedFilterOptions { get; } = new[] { "Tout", "Erreurs", "Avertissements", "Important" };
@@ -1747,7 +1791,7 @@ namespace PCDiagnosticPro.ViewModels
 
             _scanProgressTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(500)
+                Interval = TimeSpan.FromMilliseconds(50)
             };
             _scanProgressTimer.Tick += (s, e) => TickScanProgress();
 
@@ -1875,32 +1919,32 @@ namespace PCDiagnosticPro.ViewModels
             }
 
             // VÉRIFICATION MODE ADMIN - Proposer relance si non-admin
+            _skipHardwareSensors = false; // Reset at each scan start
             if (!Services.AdminHelper.IsRunningAsAdmin())
             {
                 App.LogMessage("[Admin] Application non en mode administrateur");
-                var adminMessage = "Pour un diagnostic complet, le mode administrateur est recommandé.\n\n" +
-                    Services.AdminHelper.GetAdminExplanation() + "\n\n" +
-                    "Sans droits admin, certaines données peuvent être incomplètes.";
-                
-                var result = System.Windows.MessageBox.Show(
-                    adminMessage,
-                    "Mode administrateur recommandé",
-                    System.Windows.MessageBoxButton.YesNoCancel,
-                    System.Windows.MessageBoxImage.Question);
 
-                if (result == System.Windows.MessageBoxResult.Yes)
+                // Show the consent dialog with 3 choices
+                var consentDialog = new Views.ScanConsentDialog();
+                try { consentDialog.Owner = Application.Current.MainWindow; } catch { }
+                var dialogResult = consentDialog.ShowDialog();
+
+                if (dialogResult != true || consentDialog.UserChoice == null)
                 {
-                    // Relancer en admin
+                    App.LogMessage("[Admin] Utilisateur a annulé le scan");
+                    return;
+                }
+
+                if (consentDialog.UserChoice == "UAC")
+                {
+                    App.LogMessage("[Admin] Utilisateur demande relance en admin (UAC)");
                     Services.AdminHelper.RestartAsAdmin();
                     return;
                 }
-                else if (result == System.Windows.MessageBoxResult.Cancel)
-                {
-                    // Annuler le scan
-                    return;
-                }
-                // No = continuer sans admin
-                App.LogMessage("[Admin] Utilisateur continue sans droits admin");
+
+                // "Limited" mode - continue without full hardware sensors
+                _skipHardwareSensors = true;
+                App.LogMessage("[Admin] Utilisateur continue en mode limité (sans capteurs matériels complets)");
             }
 
             try
@@ -2004,6 +2048,13 @@ namespace PCDiagnosticPro.ViewModels
                     App.LogMessage("PowerShell introuvable (powershell.exe/pwsh.exe).");
                     return;
                 }
+
+                // Detailed logging for Defender/CFA diagnostics
+                App.LogMessage($"[Scan] PowerShell exe: {powerShellExe}");
+                App.LogMessage($"[Scan] Script path: {_scriptPath}");
+                App.LogMessage($"[Scan] Output dir: {outputDir}");
+                App.LogMessage($"[Scan] IsAdmin: {IsAdmin}");
+                App.LogMessage($"[Scan] SkipHardwareSensors: {_skipHardwareSensors}");
 
                 var startInfo = new ProcessStartInfo
                 {
@@ -2125,8 +2176,15 @@ namespace PCDiagnosticPro.ViewModels
                     var signalsOrchestrator = new DiagnosticsSignals.SignalsOrchestrator();
                     signalsOrchestrator.SetAllowExternalNetworkTests(_allowExternalNetworkTests);
 
-                    // LibreHardwareMonitor (full sensors) uniquement si l'utilisateur a activé la surveillance matérielle
-                    _hardwareSensorsCollector.ForceUnsafeMode = _enableHardwareMonitoring;
+                    // SECURITY FIX (v2): NEVER use WinRing0. Always SAFE mode (WMI/NVML).
+                    // WinRing0 is a vulnerable kernel driver (VulnerableDriver:WinNT/Winring0)
+                    // that triggers Defender alerts and writes to C:\Windows\SystemTemp.
+                    // SafeHardwareSensorsCollector provides CPU/GPU/disk temps via WMI + NVML
+                    // without any kernel driver, no admin required, no Defender alerts.
+                    _hardwareSensorsCollector.ForceUnsafeMode = false;
+
+                    App.LogMessage($"[Parallel Collection] Sensor mode: SAFE (WMI/NVML) — WinRing0 eliminated " +
+                                   $"[enableHW={_enableHardwareMonitoring}, skip={_skipHardwareSensors}, admin={IsAdmin}]");
 
                     // Lancer les 3 collecteurs en parallèle
                     var sensorsTask = Task.Run(() => _hardwareSensorsCollector.CollectAsync(_scanCts.Token), _scanCts.Token);
@@ -2968,6 +3026,7 @@ namespace PCDiagnosticPro.ViewModels
                     .AddDiagnosticSignals(_lastDiagnosticSignals?.Signals);
                 
                 var diagnosticSnapshot = snapshotBuilder.Build();
+                _lastDiagnosticSnapshot = diagnosticSnapshot;
 
                 // P0.2: Collect WMI errors for detailed diagnostics
                 var wmiErrors = WmiQueryRunner.GetErrors();
@@ -3951,15 +4010,51 @@ namespace PCDiagnosticPro.ViewModels
         {
             if (item == null) return;
 
-            // Select the item to show detail view, then trigger inline rename
-            SelectedHistoryScan = item;
-            IsViewingArchives = ScanHistory.Contains(item) ? false : true;
-            
-            // Signal that rename mode should be activated
-            // The UI will handle showing the TextBox for inline editing
-            OnPropertyChanged(nameof(IsRenamingReport));
-            _isRenamingReport = true;
-            OnPropertyChanged(nameof(IsRenamingReport));
+            // Désactiver le mode renommage sur tous les autres items
+            foreach (var h in ScanHistory.Concat(ArchivedScanHistory))
+            {
+                if (h != item) h.IsRenaming = false;
+            }
+
+            // Toggle le mode renommage inline sur cet item
+            item.IsRenaming = true;
+        }
+
+        /// <summary>
+        /// Validates and sanitizes a display name. Returns null if empty/whitespace.
+        /// Trims, caps at 80 chars, strips invalid filename characters.
+        /// </summary>
+        private static string? ValidateDisplayName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            var trimmed = name.Trim();
+            // Strip invalid filename chars: < > : " / \ | ? *
+            foreach (var c in System.IO.Path.GetInvalidFileNameChars())
+                trimmed = trimmed.Replace(c, ' ');
+            trimmed = trimmed.Trim();
+            if (trimmed.Length > 80) trimmed = trimmed.Substring(0, 80).TrimEnd();
+            return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+        }
+
+        /// <summary>Termine le renommage inline d'un item, valide le nom, et persiste.</summary>
+        public void CommitRename(ScanHistoryItem? item)
+        {
+            if (item == null) return;
+            var oldName = item.DisplayName;
+            var validated = ValidateDisplayName(item.CustomDisplayName);
+            item.CustomDisplayName = validated;
+            item.IsRenaming = false;
+            App.LogMessage($"[Rename] '{oldName}' -> '{item.DisplayName}'");
+            PersistReportDisplayNames();
+        }
+
+        /// <summary>Annule le renommage inline et restaure l'état précédent.</summary>
+        public void CancelRename(ScanHistoryItem? item)
+        {
+            if (item == null) return;
+            item.IsRenaming = false;
+            // No change to CustomDisplayName — keeps whatever was there before editing started
+            App.LogMessage($"[Rename] Cancelled for '{item.DisplayName}'");
         }
 
         private bool _isRenamingReport;
@@ -4022,6 +4117,33 @@ namespace PCDiagnosticPro.ViewModels
             }
         }
 
+        /// <summary>Known protected folder paths that may trigger Controlled Folder Access.</summary>
+        private static readonly string[] ProtectedFolderRoots = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
+            Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
+            Environment.GetFolderPath(Environment.SpecialFolder.Favorites),
+        };
+
+        private static bool IsProtectedFolder(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            var full = Path.GetFullPath(path);
+            // Also check OneDrive
+            var oneDrive = Environment.GetEnvironmentVariable("OneDrive") ?? "";
+            if (!string.IsNullOrEmpty(oneDrive) && full.StartsWith(oneDrive, StringComparison.OrdinalIgnoreCase))
+                return true;
+            foreach (var root in ProtectedFolderRoots)
+            {
+                if (!string.IsNullOrEmpty(root) && full.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
         private void ExportResults()
         {
             try
@@ -4032,14 +4154,48 @@ namespace PCDiagnosticPro.ViewModels
                 {
                     FileName = $"Diagnostic_{DateTime.Now:yyyyMMdd_HHmmss}",
                     DefaultExt = ".txt",
-                    Filter = "Fichiers texte (*.txt)|*.txt|Tous les fichiers (*.*)|*.*"
+                    Filter = "Fichiers texte (*.txt)|*.txt|Tous les fichiers (*.*)|*.*",
+                    InitialDirectory = _reportsDir
                 };
 
                 if (dialog.ShowDialog() == true)
                 {
-                    File.WriteAllText(dialog.FileName, ScanResult.RawReport, Encoding.UTF8);
+                    var targetPath = dialog.FileName;
+
+                    // Warn if exporting to a protected folder (CFA may block)
+                    if (IsProtectedFolder(targetPath))
+                    {
+                        App.LogMessage($"[Export] Target is a protected folder: {targetPath}");
+                        var warnResult = System.Windows.MessageBox.Show(
+                            "Le dossier sélectionné est protégé par Windows (Accès contrôlé aux dossiers).\n\n" +
+                            "L'écriture peut être bloquée par Windows Defender.\n" +
+                            "Il est recommandé d'exporter vers un dossier non protégé.\n\n" +
+                            "Continuer quand même ?",
+                            "Dossier protégé",
+                            System.Windows.MessageBoxButton.YesNo,
+                            System.Windows.MessageBoxImage.Warning);
+                        if (warnResult != System.Windows.MessageBoxResult.Yes)
+                            return;
+                    }
+
+                    File.WriteAllText(targetPath, ScanResult.RawReport, Encoding.UTF8);
+                    App.LogMessage($"[Export] Success: {targetPath}");
                     StatusMessage = GetString("StatusExportSuccess");
                 }
+            }
+            catch (UnauthorizedAccessException uaEx)
+            {
+                App.LogMessage($"[Export] UnauthorizedAccessException: {uaEx.Message}");
+                StatusMessage = "Export bloqué : accès refusé (Accès contrôlé aux dossiers Windows Defender ?)";
+                System.Windows.MessageBox.Show(
+                    "L'écriture a été bloquée.\n\n" +
+                    "Cause probable : l'Accès contrôlé aux dossiers de Windows Defender empêche l'application d'écrire dans ce dossier.\n\n" +
+                    "Solutions :\n" +
+                    "- Exporter vers un dossier non protégé\n" +
+                    "- Ajouter PCDiagnosticPro.exe aux applications autorisées dans Windows Security",
+                    "Accès bloqué par Windows Defender",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
             }
             catch (Exception ex)
             {
@@ -4332,34 +4488,116 @@ namespace PCDiagnosticPro.ViewModels
 
         private static readonly Regex _progressBarPattern = new Regex(@"\[#+\s+\d+%\]", RegexOptions.Compiled);
 
+        /// <summary>
+        /// Regex pour parser les messages structurés : [TYPE] Section | Detail
+        /// Exemples :
+        ///   [PROGRESS] Registre | 14/35 | 40%
+        ///   [STATUS] Registre | Collecte en cours...
+        ///   [DONE] Registre | OK
+        ///   [ERROR] Registre | Accès refusé
+        /// </summary>
+        private static readonly Regex _structuredPattern = new Regex(
+            @"^\[(?<type>PROGRESS|STATUS|DONE|ERROR|WARN|INFO|SECTION)\]\s*(?<section>[^|]+?)(?:\s*\|\s*(?<rest>.+))?$",
+            RegexOptions.Compiled);
+
+        private LiveFeedEntry ParseLiveFeedLine(string item)
+        {
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            var match = _structuredPattern.Match(item);
+
+            if (match.Success)
+            {
+                var type = match.Groups["type"].Value;
+                var section = match.Groups["section"].Value.Trim();
+                var rest = match.Groups["rest"].Success ? match.Groups["rest"].Value.Trim() : "";
+
+                var entry = new LiveFeedEntry
+                {
+                    EntryType = type,
+                    Section = section,
+                    Detail = rest,
+                    Timestamp = timestamp,
+                    RawMessage = item,
+                    DisplayText = $"[{timestamp}] {section} — {rest}"
+                };
+
+                // Parse PROGRESS specifics : "14/35 | 40%"
+                if (type == "PROGRESS" && !string.IsNullOrEmpty(rest))
+                {
+                    var parts = rest.Split('|');
+                    if (parts.Length >= 2)
+                    {
+                        var countPart = parts[0].Trim().Split('/');
+                        if (countPart.Length == 2
+                            && int.TryParse(countPart[0].Trim(), out int cur)
+                            && int.TryParse(countPart[1].Trim(), out int tot))
+                        {
+                            entry.Current = cur;
+                            entry.Total = tot;
+                        }
+                        var pctStr = parts[1].Trim().TrimEnd('%');
+                        if (int.TryParse(pctStr.Trim(), out int pct))
+                            entry.Percent = pct;
+                    }
+                    // Reformulate display for progress
+                    entry.Detail = entry.Total > 0 ? $"{entry.Current}/{entry.Total}" : rest;
+                }
+
+                return entry;
+            }
+
+            // Fallback : message non-structuré (phases C#, speed test, etc.)
+            var level = InferLiveFeedLevel(item);
+            var fallbackType = level == "Error" ? "ERROR" : level == "Warning" ? "WARN" : "INFO";
+            // Tenter d'extraire une icône/section des emojis existants
+            var cleanItem = item;
+            var fallbackSection = "";
+            if (item.Length > 2 && (item[0] > 0xFF || item.StartsWith("📍") || item.StartsWith("🌐") || item.StartsWith("✅") || item.StartsWith("❌") || item.StartsWith("⚠") || item.StartsWith("↑") || item.StartsWith("⏹")))
+            {
+                // L'icône sert de section visuelle
+                var spaceIdx = item.IndexOf(' ');
+                if (spaceIdx > 0 && spaceIdx < 5)
+                {
+                    fallbackSection = item.Substring(0, spaceIdx).Trim();
+                    cleanItem = item.Substring(spaceIdx + 1).Trim();
+                }
+            }
+
+            return new LiveFeedEntry
+            {
+                EntryType = fallbackType,
+                Section = fallbackSection,
+                Detail = cleanItem,
+                Timestamp = timestamp,
+                DisplayText = $"[{timestamp}] {item}",
+                RawMessage = item
+            };
+        }
+
         private void AddLiveFeedItem(string item)
         {
-            // Filtrer les lignes de progression type [#### 16%]
+            // Filtrer les lignes de progression ASCII type [#### 16%]
             if (_progressBarPattern.IsMatch(item))
+                return;
+
+            // Filtrer les lignes vides ou juste des espaces
+            if (string.IsNullOrWhiteSpace(item))
                 return;
 
             Application.Current?.Dispatcher.Invoke(() =>
             {
-                var timestamp = $"[{DateTime.Now:HH:mm:ss}]";
-                var displayText = $"{timestamp} {item}";
-                LiveFeedItems.Insert(0, displayText);
+                var entry = ParseLiveFeedLine(item);
+
+                // Legacy collection (string)
+                LiveFeedItems.Insert(0, entry.DisplayText);
                 while (LiveFeedItems.Count > 100)
-                {
                     LiveFeedItems.RemoveAt(LiveFeedItems.Count - 1);
-                }
-                
-                var level = InferLiveFeedLevel(item);
-                var entry = new LiveFeedEntry
-                {
-                    DisplayText = displayText,
-                    IsError = level == "Error",
-                    IsWarning = level == "Warning"
-                };
+
+                // Enriched collection
                 LiveFeedEntries.Insert(0, entry);
                 while (LiveFeedEntries.Count > 200)
-                {
                     LiveFeedEntries.RemoveAt(LiveFeedEntries.Count - 1);
-                }
+
                 _filteredLiveFeedView?.Refresh();
             });
         }
@@ -4442,6 +4680,11 @@ namespace PCDiagnosticPro.ViewModels
 
             Progress = normalized;
             ProgressPercent = normalized;
+            // Synchroniser la valeur lissée
+            if (allowDecrease || normalized > _smoothProgressPercent)
+            {
+                SmoothProgressPercent = normalized;
+            }
             // Ne pas écraser la section courante par le timer : garder la vraie section (PowerShell ou C#).
             if (reason != "Progression timer")
             {
@@ -4459,6 +4702,11 @@ namespace PCDiagnosticPro.ViewModels
             if (normalized < ProgressPercent) return;
             Progress = normalized;
             ProgressPercent = normalized;
+            // Synchroniser la valeur lissée
+            if (normalized > _smoothProgressPercent)
+            {
+                SmoothProgressPercent = normalized;
+            }
             OnPropertyChanged(nameof(Progress));
             OnPropertyChanged(nameof(ProgressPercent));
         }
@@ -4482,6 +4730,14 @@ namespace PCDiagnosticPro.ViewModels
             _scanProgressTimer.Stop();
         }
 
+        /// <summary>
+        /// Facteur d'approche exponentielle pour le lissage.
+        /// À chaque tick (50ms), on parcourt ~6% de la distance restante.
+        /// ~20 FPS visuels → progression fluide et décélérante.
+        /// </summary>
+        private const double SmoothEasingFactor = 0.06;
+        private const double SmoothMinIncrement = 0.02;
+
         private void TickScanProgress()
         {
             if (!IsScanning)
@@ -4489,14 +4745,26 @@ namespace PCDiagnosticPro.ViewModels
                 return;
             }
 
-            if (ProgressPercent >= _scanProgressCeiling)
+            var ceiling = (double)_scanProgressCeiling;
+            var remaining = ceiling - _smoothProgressPercent;
+
+            // Si on est déjà au plafond (ou très proche), rien à faire
+            if (remaining <= 0.01)
             {
                 return;
             }
 
-            // Incrémenter uniquement le pourcentage, sans écraser la section courante (PowerShell ou C#).
-            var increment = 1;
-            SetProgressPercentOnly(Math.Min(_scanProgressCeiling, ProgressPercent + increment));
+            // Easing exponentiel : on avance d'un pourcentage de la distance restante
+            var increment = Math.Max(SmoothMinIncrement, remaining * SmoothEasingFactor);
+            var newSmooth = Math.Min(ceiling, _smoothProgressPercent + increment);
+            SmoothProgressPercent = newSmooth;
+
+            // Mettre à jour ProgressPercent (int) quand on franchit un entier
+            var newInt = (int)Math.Floor(newSmooth);
+            if (newInt > ProgressPercent && newInt <= _scanProgressCeiling)
+            {
+                SetProgressPercentOnly(newInt);
+            }
         }
 
         private void UpdateScanButtonText()
@@ -4567,6 +4835,8 @@ namespace PCDiagnosticPro.ViewModels
                     _customDisplayName = value;
                     PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(CustomDisplayName)));
                     PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(DisplayName)));
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(HasCustomName)));
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(SubtitleDisplay)));
                 }
             }
         }
@@ -4576,7 +4846,32 @@ namespace PCDiagnosticPro.ViewModels
             ? DateDisplay 
             : CustomDisplayName;
         
-        public string DateDisplay => ScanDate.ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture);
+        // Sous-titre : si renommé, afficher la date originale + score ; sinon juste le score
+        public bool HasCustomName => !string.IsNullOrWhiteSpace(CustomDisplayName);
+        public string SubtitleDisplay => HasCustomName
+            ? $"{DateDisplay} — {ScoreDisplay}"
+            : ScoreDisplay;
+        
+        // Mode édition inline (toggle entre TextBlock et TextBox)
+        private bool _isRenaming;
+        public bool IsRenaming
+        {
+            get => _isRenaming;
+            set
+            {
+                if (_isRenaming != value)
+                {
+                    _isRenaming = value;
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsRenaming)));
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(RenameBoxVisibility)));
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(DisplayNameVisibility)));
+                }
+            }
+        }
+        public Visibility RenameBoxVisibility => _isRenaming ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility DisplayNameVisibility => _isRenaming ? Visibility.Collapsed : Visibility.Visible;
+
+        public string DateDisplay => ScanDate.ToString("dd-MM-yyyy HH:mm", CultureInfo.CurrentCulture);
         public string DayDisplay => ScanDate.ToString("dd", CultureInfo.CurrentCulture);
         public string MonthYearDisplay => ScanDate.ToString("MMMM yyyy", CultureInfo.CurrentCulture);
         public string ScoreDisplay => $"{Score}/100 ({Grade})";
@@ -4602,13 +4897,78 @@ namespace PCDiagnosticPro.ViewModels
     }
     
     /// <summary>
-    /// Entrée du live feed avec niveau (Info/Warning/Error) pour filtrage et couleur
+    /// Entrée du live feed avec niveau structuré, badge coloré, section, et détail.
+    /// Parsée depuis les messages [TYPE] Section | Detail émis par PowerShell et les phases C#.
     /// </summary>
     public class LiveFeedEntry
     {
         public string DisplayText { get; set; } = "";
-        public bool IsError { get; set; }
-        public bool IsWarning { get; set; }
+        public string RawMessage { get; set; } = "";
+
+        // Type structuré (parsé depuis [PROGRESS], [STATUS], [DONE], etc.)
+        public string EntryType { get; set; } = "INFO";
+        public string Section { get; set; } = "";
+        public string Detail { get; set; } = "";
+
+        // Pour les entrées PROGRESS
+        public int Current { get; set; }
+        public int Total { get; set; }
+        public int Percent { get; set; }
+
+        // Propriétés calculées pour le XAML
+        public bool IsError => EntryType == "ERROR";
+        public bool IsWarning => EntryType == "WARN";
+        public bool IsProgress => EntryType == "PROGRESS";
+        public bool IsDone => EntryType == "DONE";
+        public bool IsStatus => EntryType == "STATUS";
+
+        // Timestamp séparé pour affichage en colonne
+        public string Timestamp { get; set; } = "";
+
+        // Badge texte pour affichage
+        public string Badge => EntryType switch
+        {
+            "PROGRESS" => "RUN",
+            "STATUS" => "RUN",
+            "DONE" => "OK",
+            "ERROR" => "ERR",
+            "WARN" => "WARN",
+            "SECTION" => "SEC",
+            _ => "INFO"
+        };
+
+        // Couleur du badge (bindable)
+        public Brush BadgeForeground => EntryType switch
+        {
+            "DONE" => new SolidColorBrush(Color.FromRgb(0x0D, 0x11, 0x17)),
+            "ERROR" => new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)),
+            "WARN" => new SolidColorBrush(Color.FromRgb(0x0D, 0x11, 0x17)),
+            _ => new SolidColorBrush(Color.FromRgb(0x0D, 0x11, 0x17))
+        };
+
+        public Brush BadgeBackground => EntryType switch
+        {
+            "DONE" => new SolidColorBrush(Color.FromRgb(0x2E, 0xD5, 0x73)),
+            "ERROR" => new SolidColorBrush(Color.FromRgb(0xF8, 0x51, 0x49)),
+            "WARN" => new SolidColorBrush(Color.FromRgb(0xFF, 0xA5, 0x02)),
+            "PROGRESS" => new SolidColorBrush(Color.FromRgb(0xFF, 0x47, 0x57)),
+            "STATUS" => new SolidColorBrush(Color.FromRgb(0x58, 0xA6, 0xFF)),
+            "SECTION" => new SolidColorBrush(Color.FromRgb(0xBC, 0x8C, 0xFF)),
+            _ => new SolidColorBrush(Color.FromRgb(0x48, 0x4F, 0x58))
+        };
+
+        // Couleur du texte Detail selon type
+        public Brush DetailForeground => EntryType switch
+        {
+            "DONE" => new SolidColorBrush(Color.FromRgb(0x2E, 0xD5, 0x73)),
+            "ERROR" => new SolidColorBrush(Color.FromRgb(0xF8, 0x51, 0x49)),
+            "WARN" => new SolidColorBrush(Color.FromRgb(0xD2, 0x99, 0x22)),
+            _ => new SolidColorBrush(Color.FromRgb(0x8B, 0x94, 0x9E))
+        };
+
+        // Visibilité du pourcentage
+        public Visibility PercentVisibility => IsProgress ? Visibility.Visible : Visibility.Collapsed;
+        public string PercentDisplay => $"{Percent}%";
     }
     
     /// <summary>

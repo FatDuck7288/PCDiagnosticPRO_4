@@ -22,6 +22,7 @@
         <conv:StatusToColorConverter x:Key="StatusToColor"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:GradeToColorConverter x:Key="GradeToColor"/>
+        <conv:GradeMatchOpacityConverter x:Key="GradeMatchOpacity"/>
         <conv:InverseBoolConverter x:Key="InverseBool"/>
         <conv:ProgressToBlurConverter x:Key="ProgressToBlur"/>
         <conv:ProgressToOpacityConverter x:Key="ProgressToOpacity"/>
@@ -310,7 +311,7 @@
                             <!-- Ligne 1: Barre de progression linéaire (4px, slim, moderne, coins arrondis) -->
                             <ProgressBar Grid.Row="1" Height="4" Margin="0,0,0,6"
                                          Minimum="0" Maximum="100"
-                                         Value="{Binding ProgressPercent, Mode=OneWay}"
+                                         Value="{Binding SmoothProgressPercent, Mode=OneWay}"
                                          Foreground="{StaticResource AccentRedBrush}"
                                          Background="#30363D" BorderThickness="0"
                                          Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
@@ -328,7 +329,7 @@
                                 </ProgressBar.Template>
                             </ProgressBar>
                             
-                            <!-- Ligne 2: Log défilant rapide avec virtualization -->
+                            <!-- Ligne 2: Live feed structuré avec colonnes alignées (style cyber / diagnostic tool) -->
                             <Grid Grid.Row="2" ClipToBounds="True">
                                 <ListBox ItemsSource="{Binding FilteredLiveFeedItems}"
                                          Background="Transparent" BorderThickness="0"
@@ -336,23 +337,33 @@
                                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                                          ScrollViewer.CanContentScroll="False"
                                          IsSynchronizedWithCurrentItem="True"
-                                         FontFamily="Consolas" FontSize="10"
                                          Padding="0,2"
                                          VirtualizingPanel.IsVirtualizing="True"
                                          VirtualizingPanel.VirtualizationMode="Recycling">
                                     <ListBox.ItemContainerStyle>
                                         <Style TargetType="ListBoxItem">
                                             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                            <Setter Property="Padding" Value="0,1"/>
+                                            <Setter Property="Padding" Value="0"/>
                                             <Setter Property="Background" Value="Transparent"/>
                                             <Setter Property="Margin" Value="0"/>
-                                            <!-- Highlight flash on load (newest item highlight) -->
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <!-- Slide-in + fade animation on new items -->
                                             <Style.Triggers>
                                                 <EventTrigger RoutedEvent="Loaded">
                                                     <BeginStoryboard>
                                                         <Storyboard>
                                                             <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             From="1" To="0.7" Duration="0:0:0.6"/>
+                                                                             From="0" To="1" Duration="0:0:0.35">
+                                                                <DoubleAnimation.EasingFunction>
+                                                                    <CubicEase EasingMode="EaseOut"/>
+                                                                </DoubleAnimation.EasingFunction>
+                                                            </DoubleAnimation>
+                                                            <ThicknessAnimation Storyboard.TargetProperty="Padding"
+                                                                                From="0,-4,0,0" To="0,0,0,0" Duration="0:0:0.3">
+                                                                <ThicknessAnimation.EasingFunction>
+                                                                    <CubicEase EasingMode="EaseOut"/>
+                                                                </ThicknessAnimation.EasingFunction>
+                                                            </ThicknessAnimation>
                                                         </Storyboard>
                                                     </BeginStoryboard>
                                                 </EventTrigger>
@@ -361,21 +372,68 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding DisplayText}" TextWrapping="NoWrap"
-                                                       FontFamily="Consolas" FontSize="10">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsError}" Value="True">
-                                                                <Setter Property="Foreground" Value="#F85149"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsWarning}" Value="True">
-                                                                <Setter Property="Foreground" Value="#D29922"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
+                                            <Border Padding="2,2" BorderThickness="0,0,0,1" BorderBrush="#08FFFFFF">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <!-- Col 0: Timestamp -->
+                                                        <ColumnDefinition Width="54"/>
+                                                        <!-- Col 1: Badge [OK] [RUN] [ERR] -->
+                                                        <ColumnDefinition Width="42"/>
+                                                        <!-- Col 2: Section name -->
+                                                        <ColumnDefinition Width="150"/>
+                                                        <!-- Col 3: Separator -->
+                                                        <ColumnDefinition Width="10"/>
+                                                        <!-- Col 4: Detail message -->
+                                                        <ColumnDefinition Width="*"/>
+                                                        <!-- Col 5: Percent -->
+                                                        <ColumnDefinition Width="36"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Timestamp gris discret -->
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding Timestamp}"
+                                                               FontFamily="Consolas" FontSize="9"
+                                                               Foreground="#3D4450" VerticalAlignment="Center"/>
+
+                                                    <!-- Badge coloré -->
+                                                    <Border Grid.Column="1" CornerRadius="3" Padding="4,1" Margin="1,1"
+                                                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                            Background="{Binding BadgeBackground}">
+                                                        <TextBlock Text="{Binding Badge}"
+                                                                   FontFamily="Consolas" FontSize="8" FontWeight="Bold"
+                                                                   Foreground="{Binding BadgeForeground}"
+                                                                   HorizontalAlignment="Center"/>
+                                                    </Border>
+
+                                                    <!-- Section name -->
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{Binding Section}"
+                                                               FontFamily="Consolas" FontSize="10" FontWeight="SemiBold"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center"/>
+
+                                                    <!-- Séparateur vertical fin -->
+                                                    <Border Grid.Column="3" Width="1" Background="#1A1F27"
+                                                            VerticalAlignment="Stretch" Margin="3,3"/>
+
+                                                    <!-- Detail message (couleur selon type) -->
+                                                    <TextBlock Grid.Column="4"
+                                                               Text="{Binding Detail}"
+                                                               FontFamily="Consolas" FontSize="10"
+                                                               Foreground="{Binding DetailForeground}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center"/>
+
+                                                    <!-- Pourcentage (visible seulement pour PROGRESS) -->
+                                                    <TextBlock Grid.Column="5"
+                                                               Text="{Binding PercentDisplay}"
+                                                               FontFamily="Consolas" FontSize="10" FontWeight="Bold"
+                                                               Foreground="#FF4757" HorizontalAlignment="Right"
+                                                               VerticalAlignment="Center"
+                                                               Visibility="{Binding PercentVisibility}"/>
+                                                </Grid>
+                                            </Border>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
@@ -432,7 +490,7 @@
                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                       ClipToBounds="False"
                                       Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"
-                                      Opacity="{Binding ProgressPercent, Converter={StaticResource ProgressToOpacity}}">
+                                      Opacity="{Binding SmoothProgressPercent, Converter={StaticResource ProgressToOpacity}}">
                                     <Grid.Effect>
                                         <DropShadowEffect Color="{StaticResource AccentRed}"
                                                           BlurRadius="20" ShadowDepth="0" Opacity="0.8"/>
@@ -441,7 +499,7 @@
                                           StrokeThickness="10"
                                           StrokeStartLineCap="Round"
                                           StrokeEndLineCap="Round"
-                                          Data="{Binding ProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=140}">
+                                          Data="{Binding SmoothProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=140}">
                                         <Path.Stroke>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                 <GradientStop Color="{StaticResource AccentRed}" Offset="0"/>
@@ -460,7 +518,7 @@
                                   StrokeThickness="8"
                                   StrokeStartLineCap="Round"
                                   StrokeEndLineCap="Round"
-                                  Data="{Binding ProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=140}"
+                                  Data="{Binding SmoothProgressPercent, Converter={StaticResource ProgressToArc}, ConverterParameter=140}"
                                   Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}"/>
                             
                             <!-- COUCHE 4: Cercle décoratif gradient - 280x280 -->
@@ -981,9 +1039,26 @@
                                             </Border>
 
                                             <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding DateDisplay}" FontSize="16" FontWeight="SemiBold"
-                                                           Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                <TextBlock Text="{Binding ScoreDisplay}" FontSize="12"
+                                                <!-- Titre : DisplayName (affiché) ou TextBox (mode édition inline) -->
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="16" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           Visibility="{Binding DisplayNameVisibility}"
+                                                           MouseLeftButtonDown="HistoryTitle_DoubleClick"
+                                                           Cursor="Hand"
+                                                           ToolTip="Double-cliquer pour renommer"/>
+                                                <TextBox Text="{Binding CustomDisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         FontSize="16" FontWeight="SemiBold" Padding="2,0"
+                                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                                         Background="#21262D" BorderBrush="{StaticResource AccentRedBrush}"
+                                                         BorderThickness="1" CaretBrush="{StaticResource TextPrimaryBrush}"
+                                                         Visibility="{Binding RenameBoxVisibility}"
+                                                         MaxWidth="280" MaxLength="80" HorizontalAlignment="Left"
+                                                         Tag="{Binding}"
+                                                         Loaded="InlineRenameBox_Loaded"
+                                                         LostFocus="InlineRenameBox_LostFocus"
+                                                         KeyDown="InlineRenameBox_KeyDown"/>
+                                                <!-- Sous-titre : date + score (ou juste score si pas renommé) -->
+                                                <TextBlock Text="{Binding SubtitleDisplay}" FontSize="12"
                                                            Foreground="{StaticResource TextSecondaryBrush}"/>
                                             </StackPanel>
 
@@ -1031,32 +1106,43 @@
                                     </MultiBinding>
                                 </TextBlock.Text>
                             </TextBlock>
-                            <!-- Nom du rapport avec option de renommage -->
+                            <!-- Nom du rapport avec option de renommage (même pattern data-bound que Page A) -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBox x:Name="ReportNameTextBox"
-                                         Text="{Binding SelectedHistoryScan.CustomDisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                                         FontSize="14" Padding="4,2" MaxWidth="300" HorizontalAlignment="Left"
-                                         Visibility="Collapsed"/>
-                                <StackPanel Orientation="Horizontal" x:Name="ReportNameDisplay">
+                                <!-- Display mode -->
+                                <StackPanel Orientation="Horizontal"
+                                            Visibility="{Binding SelectedHistoryScan.DisplayNameVisibility}">
                                     <TextBlock Text="{Binding SelectedHistoryScan.DisplayName}" 
                                                FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" 
                                                VerticalAlignment="Center"/>
                                     <TextBlock Text=" — " FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" 
                                                VerticalAlignment="Center"
-                                               Visibility="{Binding SelectedHistoryScan.CustomDisplayName, Converter={StaticResource BoolToVisibility}}"/>
+                                               Visibility="{Binding SelectedHistoryScan.HasCustomName, Converter={StaticResource BoolToVisibility}}"/>
                                     <TextBlock Text="{Binding SelectedScanDateDisplay}" 
                                                FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" 
                                                VerticalAlignment="Center"
-                                               Visibility="{Binding SelectedHistoryScan.CustomDisplayName, Converter={StaticResource BoolToVisibility}}"/>
+                                               Visibility="{Binding SelectedHistoryScan.HasCustomName, Converter={StaticResource BoolToVisibility}}"/>
                                 </StackPanel>
+                                <!-- Edit mode (same inline TextBox pattern as Page A) -->
+                                <TextBox Text="{Binding SelectedHistoryScan.CustomDisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         FontSize="14" Padding="4,2" MaxWidth="300" MaxLength="80"
+                                         HorizontalAlignment="Left"
+                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                         Background="#21262D" BorderBrush="{StaticResource AccentRedBrush}"
+                                         BorderThickness="1" CaretBrush="{StaticResource TextPrimaryBrush}"
+                                         Visibility="{Binding SelectedHistoryScan.RenameBoxVisibility}"
+                                         Tag="{Binding SelectedHistoryScan}"
+                                         Loaded="InlineRenameBox_Loaded"
+                                         LostFocus="InlineRenameBox_LostFocus"
+                                         KeyDown="InlineRenameBox_KeyDown"/>
+                                <!-- Pencil button triggers RenameScanCommand -->
                                 <Button Grid.Column="1" Content="✏️" FontSize="12" Padding="6,2" Margin="8,0,0,0"
                                         Background="Transparent" BorderThickness="0" Cursor="Hand"
                                         ToolTip="Renommer ce rapport"
-                                        Click="ToggleReportRename">
+                                        Click="ReportPencil_Click">
                                     <Button.Style>
                                         <Style TargetType="Button">
                                             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
@@ -1080,235 +1166,96 @@
                                            Foreground="{StaticResource AccentRedBrush}"/>
                             </Border>
 
-                            <!-- Bloc Grade unifié (Scan Terminé + Score + Légende compacte) -->
-                            <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20">
-                                <StackPanel>
-                                    <!-- En-tête "Scan Terminé" intégré -->
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                        <TextBlock Text="✓" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentGreenBrush}" 
-                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                        <TextBlock Text="{Binding ResultsCompletedTitle}" FontWeight="Bold" FontSize="16"
-                                                   Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Text=" — " FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" 
-                                                   VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding ResultsCompletionDisplay}" FontSize="12"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                    
-                                    <Grid>
+                            <!-- ══════════════════════════════════════════════════════════════════ -->
+                            <!-- BLOC INDICE GLOBAL DE SANTÉ — Thème Imperial Command Console        -->
+                            <!-- Layout 3 colonnes: Gauge | Grade+Info | Légende                      -->
+                            <!-- ══════════════════════════════════════════════════════════════════ -->
+                            <Border Margin="0,0,0,20" CornerRadius="6" ClipToBounds="True">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#0A0C10" Offset="0"/>
+                                        <GradientStop Color="#0F1218" Offset="0.5"/>
+                                        <GradientStop Color="#0A0C10" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Border.BorderBrush>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#1A1F28" Offset="0"/>
+                                        <GradientStop Color="#2A1015" Offset="0.5"/>
+                                        <GradientStop Color="#1A1F28" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.BorderBrush>
+                                <Border.BorderThickness>1</Border.BorderThickness>
+                                <Grid>
+                                    <!-- Scanline overlay très subtile -->
+                                    <Border Opacity="0.03">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1" SpreadMethod="Repeat"
+                                                                 MappingMode="Absolute">
+                                                <GradientStop Color="#FFFFFF" Offset="0"/>
+                                                <GradientStop Color="Transparent" Offset="0.5"/>
+                                                <GradientStop Color="Transparent" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+
+                                    <!-- Vignette sombre (coins) -->
+                                    <Border Opacity="0.5">
+                                        <Border.Background>
+                                            <RadialGradientBrush Center="0.5,0.5" RadiusX="0.8" RadiusY="0.8">
+                                                <GradientStop Color="Transparent" Offset="0.3"/>
+                                                <GradientStop Color="#80000000" Offset="1"/>
+                                            </RadialGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+
+                                    <!-- Minimal score card: gauge + grade + score line -->
+                                    <Grid Margin="30,24,30,24" HorizontalAlignment="Center">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
 
-                                        <Grid Width="180" Height="180" Opacity="{Binding ScoreCircleOpacity}">
-                                            <Ellipse Stroke="{StaticResource BorderBrush}" StrokeThickness="10" Opacity="0.3"/>
+                                        <!-- GAUGE CIRCULAIRE avec glow -->
+                                        <Grid Grid.Column="0" Width="170" Height="170" HorizontalAlignment="Center"
+                                              Opacity="{Binding ScoreCircleOpacity}">
+                                            <Grid.Effect>
+                                                <DropShadowEffect Color="{StaticResource AccentGreen}"
+                                                                  BlurRadius="25" ShadowDepth="0" Opacity="0.35"/>
+                                            </Grid.Effect>
+                                            <Ellipse Stroke="#1A1F28" StrokeThickness="8" Opacity="0.6"/>
+                                            <Ellipse Stroke="#1A1F28" StrokeThickness="1" StrokeDashArray="1,3" Width="150" Height="150"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.4"/>
                                             <Path Stroke="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}"
-                                                  StrokeThickness="10" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                                  Data="{Binding ScanResult.Summary.Score, Converter={StaticResource ProgressToArc}, ConverterParameter=80}"/>
+                                                  StrokeThickness="8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                  Data="{Binding ScanResult.Summary.Score, Converter={StaticResource ProgressToArc}, ConverterParameter=76}"/>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding ScanResult.Summary.Score}" FontSize="36" FontWeight="Bold"
-                                                           Foreground="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}"/>
-                                                <TextBlock Text="/100" FontSize="12"
-                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                <TextBlock Text="{Binding ScanResult.Summary.Score}" FontSize="42" FontWeight="Bold"
+                                                           Foreground="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}"
                                                            HorizontalAlignment="Center"/>
+                                                <TextBlock Text="/100" FontSize="11" Foreground="#4D5566"
+                                                           HorizontalAlignment="Center" FontFamily="Consolas"/>
                                             </StackPanel>
                                         </Grid>
 
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
-                                            <TextBlock Text="{Binding ScanResult.Summary.Grade}" FontSize="40" FontWeight="Bold"
-                                                       Foreground="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}"/>
+                                        <!-- GRADE + SCORE LINE -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="30,0,0,0">
+                                            <TextBlock Text="{Binding ScanResult.Summary.Grade}" FontSize="52" FontWeight="Bold"
+                                                       Foreground="{Binding ScanResult.Summary.Grade, Converter={StaticResource GradeToColor}}">
+                                                <TextBlock.Effect>
+                                                    <DropShadowEffect Color="{StaticResource AccentGreen}"
+                                                                      BlurRadius="15" ShadowDepth="0" Opacity="0.45"/>
+                                                </TextBlock.Effect>
+                                            </TextBlock>
                                             <TextBlock Text="{Binding StatusWithScore}" FontSize="13" TextWrapping="Wrap"
-                                                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
-                                            
-                                            <!-- Score de collecte (confiance des données) -->
-                                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                                <Border Width="32" Height="32" CornerRadius="16"
-                                                        Background="{Binding ConfidenceColor, Converter={StaticResource HexToColorBrush}}"
-                                                        Cursor="Hand" VerticalAlignment="Center">
-                                                    <Border.InputBindings>
-                                                        <MouseBinding MouseAction="LeftClick" Command="{Binding ShowCollectorErrorsCommand}"/>
-                                                    </Border.InputBindings>
-                                                    <TextBlock Text="{Binding ConfidenceScore}" FontSize="11" FontWeight="Bold"
-                                                               Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <TextBlock Text="{Binding ConfidenceLevel}" FontSize="11"
-                                                           Foreground="{StaticResource TextSecondaryBrush}" 
-                                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
-                                            </StackPanel>
-                                            <!-- Alerte collecte faible (garde-fou UX anti-gadget) -->
-                                            <TextBlock Text="{Binding LowConfidenceWarning}" FontSize="12" FontWeight="SemiBold"
-                                                       Foreground="#F44336" TextWrapping="Wrap" Margin="0,8,0,0"
-                                                       MaxWidth="280"
-                                                       Visibility="{Binding IsLowConfidence, Converter={StaticResource BoolToVisibility}}"/>
+                                                       Foreground="#6B7685" Margin="0,4,0,0" FontFamily="Consolas"/>
                                         </StackPanel>
                                     </Grid>
-
-                                    <!-- ══════ Légende visuelle du score (style arrondi) ══════ -->
-                                    <Border Background="{StaticResource BackgroundLightBrush}" CornerRadius="8" Padding="16,14" Margin="0,16,0,0">
-                                        <StackPanel>
-                                            <TextBlock Text="Indice global de santé du système (0 à 100)" FontSize="14" FontWeight="Bold"
-                                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
-                                            <TextBlock Text="Ce score combine le niveau de risque et la performance globale.&#x0a;Plus le score est élevé, plus le système est stable, performant et sécurisé."
-                                                       FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                                            <TextBlock Text="Échelle d'évaluation" FontSize="12" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,10"/>
-
-                                            <!-- A+ -->
-                                            <Grid Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="36"/>
-                                                    <ColumnDefinition Width="60"/>
-                                                    <ColumnDefinition Width="4"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Width="30" Height="30" CornerRadius="15" Background="#4CAF50" HorizontalAlignment="Center">
-                                                    <TextBlock Text="A+" FontSize="11" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <TextBlock Grid.Column="1" Text="95 à 100" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Border Grid.Column="2" Width="3" CornerRadius="1.5" Background="#4CAF50" VerticalAlignment="Stretch" Margin="0,2"/>
-                                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,0,0">
-                                                    <TextBlock FontSize="12" VerticalAlignment="Center">
-                                                        <Run Text="Exceptionnel" FontWeight="Bold" Foreground="#4CAF50"/>
-                                                        <Run Text="  Système optimal, aucun risque significatif" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                    </TextBlock>
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <!-- A -->
-                                            <Grid Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="36"/>
-                                                    <ColumnDefinition Width="60"/>
-                                                    <ColumnDefinition Width="4"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Width="30" Height="30" CornerRadius="15" Background="#66BB6A" HorizontalAlignment="Center">
-                                                    <TextBlock Text="A" FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <TextBlock Grid.Column="1" Text="90 à 94" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Border Grid.Column="2" Width="3" CornerRadius="1.5" Background="#66BB6A" VerticalAlignment="Stretch" Margin="0,2"/>
-                                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,0,0">
-                                                    <TextBlock FontSize="12" VerticalAlignment="Center">
-                                                        <Run Text="Excellent" FontWeight="Bold" Foreground="#66BB6A"/>
-                                                        <Run Text="  Performance très élevée, risques minimes" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                    </TextBlock>
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <!-- B -->
-                                            <Grid Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="36"/>
-                                                    <ColumnDefinition Width="60"/>
-                                                    <ColumnDefinition Width="4"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Width="30" Height="30" CornerRadius="15" Background="#AED581" HorizontalAlignment="Center">
-                                                    <TextBlock Text="B" FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <TextBlock Grid.Column="1" Text="80 à 89" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Border Grid.Column="2" Width="3" CornerRadius="1.5" Background="#AED581" VerticalAlignment="Stretch" Margin="0,2"/>
-                                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,0,0">
-                                                    <TextBlock FontSize="12" VerticalAlignment="Center">
-                                                        <Run Text="Très bon" FontWeight="Bold" Foreground="#AED581"/>
-                                                        <Run Text="  Système sain, quelques optimisations possibles" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                    </TextBlock>
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <!-- C -->
-                                            <Grid Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="36"/>
-                                                    <ColumnDefinition Width="60"/>
-                                                    <ColumnDefinition Width="4"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Width="30" Height="30" CornerRadius="15" Background="#FFD54F" HorizontalAlignment="Center">
-                                                    <TextBlock Text="C" FontSize="12" FontWeight="Bold" Foreground="#333" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <TextBlock Grid.Column="1" Text="70 à 79" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Border Grid.Column="2" Width="3" CornerRadius="1.5" Background="#FFD54F" VerticalAlignment="Stretch" Margin="0,2"/>
-                                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,0,0">
-                                                    <TextBlock FontSize="12" VerticalAlignment="Center">
-                                                        <Run Text="Acceptable" FontWeight="Bold" Foreground="#FFD54F"/>
-                                                        <Run Text="  Fonctionnel, mais présence de faiblesses modérées" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                    </TextBlock>
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <!-- D -->
-                                            <Grid Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="36"/>
-                                                    <ColumnDefinition Width="60"/>
-                                                    <ColumnDefinition Width="4"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Width="30" Height="30" CornerRadius="15" Background="#FFA726" HorizontalAlignment="Center">
-                                                    <TextBlock Text="D" FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <TextBlock Grid.Column="1" Text="60 à 69" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Border Grid.Column="2" Width="3" CornerRadius="1.5" Background="#FFA726" VerticalAlignment="Stretch" Margin="0,2"/>
-                                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,0,0">
-                                                    <TextBlock FontSize="12" VerticalAlignment="Center">
-                                                        <Run Text="Fragile" FontWeight="Bold" Foreground="#FFA726"/>
-                                                        <Run Text="  Risques identifiés, corrections recommandées" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                    </TextBlock>
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <!-- E -->
-                                            <Grid Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="36"/>
-                                                    <ColumnDefinition Width="60"/>
-                                                    <ColumnDefinition Width="4"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Width="30" Height="30" CornerRadius="15" Background="#EF5350" HorizontalAlignment="Center">
-                                                    <TextBlock Text="E" FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <TextBlock Grid.Column="1" Text="50 à 59" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Border Grid.Column="2" Width="3" CornerRadius="1.5" Background="#EF5350" VerticalAlignment="Stretch" Margin="0,2"/>
-                                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,0,0">
-                                                    <TextBlock FontSize="12" VerticalAlignment="Center">
-                                                        <Run Text="Critique" FontWeight="Bold" Foreground="#EF5350"/>
-                                                        <Run Text="  Instabilités ou vulnérabilités importantes" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                    </TextBlock>
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <!-- F -->
-                                            <Grid Margin="0,0,0,0">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="36"/>
-                                                    <ColumnDefinition Width="60"/>
-                                                    <ColumnDefinition Width="4"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Border Width="30" Height="30" CornerRadius="15" Background="#C62828" HorizontalAlignment="Center">
-                                                    <TextBlock Text="F" FontSize="12" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <TextBlock Grid.Column="1" Text="0 à 49" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                                <Border Grid.Column="2" Width="3" CornerRadius="1.5" Background="#C62828" VerticalAlignment="Stretch" Margin="0,2"/>
-                                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,0,0">
-                                                    <TextBlock FontSize="12" VerticalAlignment="Center">
-                                                        <Run Text="Défaillant" FontWeight="Bold" Foreground="#C62828"/>
-                                                        <Run Text="  Système à risque élevé, intervention urgente requise" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                    </TextBlock>
-                                                </StackPanel>
-                                            </Grid>
-
-                                        </StackPanel>
-                                    </Border>
-
-                                </StackPanel>
+                                </Grid>
                             </Border>
 
-                            <!-- ========== TABLEAU DE SANTÉ PC (8 DOMAINES) ========== -->
-                            <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,20"
+                            <!-- ========== TABLEAU DE SANTÉ PC (8 DOMAINES) — HUD Panel ========== -->
+                            <Border Style="{StaticResource HudPanel}" Margin="0,0,0,20"
                                     Visibility="{Binding HasHealthReport, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
                                     <!-- En-tête avec titre et score État uniquement -->
@@ -1389,37 +1336,73 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <!-- Expandable box with inset styling (no arrows) -->
-                                                <Border CornerRadius="12" Margin="0,0,0,6">
+                                                <Border CornerRadius="12" Margin="0,0,0,6" ClipToBounds="False">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
                                                             <Setter Property="Background" Value="{StaticResource BackgroundMediumBrush}"/>
                                                             <Setter Property="BorderBrush" Value="{StaticResource ExpandableBoxBorderBrush}"/>
                                                             <Setter Property="BorderThickness" Value="1"/>
                                                             <Style.Triggers>
-                                                                <!-- Active state (expanded): red background + red border -->
+                                                                <!-- Active state (expanded): dark bg + red border + red glow -->
                                                                 <DataTrigger Binding="{Binding IsExpanded, ElementName=SectionExpander}" Value="True">
                                                                     <Setter Property="Background" Value="{StaticResource ExpandableBoxActiveBrush}"/>
                                                                     <Setter Property="BorderBrush" Value="{StaticResource ExpandableBoxActiveBorderBrush}"/>
+                                                                    <Setter Property="BorderThickness" Value="1.5"/>
+                                                                    <Setter Property="Effect">
+                                                                        <Setter.Value>
+                                                                            <DropShadowEffect Color="{StaticResource AccentRed}" 
+                                                                                              BlurRadius="30" ShadowDepth="0" Opacity="0.6"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
                                                     <Expander x:Name="SectionExpander" IsExpanded="False" Style="{StaticResource ExpanderNoArrowStyle}">
                                                         <Expander.Header>
-                                                            <!-- Clickable box with inset shadow effect -->
-                                                            <Border x:Name="HeaderBorder" CornerRadius="12" Padding="8,12" Cursor="Hand">
+                                                            <!-- Clickable box with glow effects (hover + expanded pulsation) -->
+                                                            <Border x:Name="HeaderBorder" CornerRadius="12" Padding="8,12" Cursor="Hand"
+                                                                    ClipToBounds="False">
                                                                 <Border.Style>
                                                                     <Style TargetType="Border">
                                                                         <Setter Property="Background" Value="Transparent"/>
                                                                         <Setter Property="Effect" Value="{StaticResource InsetShadowBase}"/>
+                                                                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                                                                         <Style.Triggers>
-                                                                            <!-- Hover: lumière rouge luminescente autour, rien sur le bouton -->
+                                                                            <!-- Hover: lumière rouge luminescente diffuse (~200ms transition) -->
                                                                             <Trigger Property="IsMouseOver" Value="True">
                                                                                 <Setter Property="Effect" Value="{StaticResource RedGlow}"/>
                                                                             </Trigger>
-                                                                            <!-- Expanded: inherit from parent border styling -->
+                                                                            <!-- Expanded: glow rouge luminescent pulsant (pas de fond blanc, pas d'outline) -->
                                                                             <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
                                                                                 <Setter Property="Background" Value="Transparent"/>
+                                                                                <Setter Property="Effect">
+                                                                                    <Setter.Value>
+                                                                                        <DropShadowEffect x:Name="ExpandedGlow" Color="{StaticResource AccentRed}" 
+                                                                                                          BlurRadius="35" ShadowDepth="0" Opacity="0.7"/>
+                                                                                    </Setter.Value>
+                                                                                </Setter>
+                                                                                <DataTrigger.EnterActions>
+                                                                                    <BeginStoryboard x:Name="PulseGlow">
+                                                                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.Effect).(DropShadowEffect.Opacity)"
+                                                                                                             From="0.5" To="0.9" Duration="0:0:0.8">
+                                                                                                <DoubleAnimation.EasingFunction>
+                                                                                                    <SineEase EasingMode="EaseInOut"/>
+                                                                                                </DoubleAnimation.EasingFunction>
+                                                                                            </DoubleAnimation>
+                                                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.Effect).(DropShadowEffect.BlurRadius)"
+                                                                                                             From="25" To="45" Duration="0:0:0.8">
+                                                                                                <DoubleAnimation.EasingFunction>
+                                                                                                    <SineEase EasingMode="EaseInOut"/>
+                                                                                                </DoubleAnimation.EasingFunction>
+                                                                                            </DoubleAnimation>
+                                                                                        </Storyboard>
+                                                                                    </BeginStoryboard>
+                                                                                </DataTrigger.EnterActions>
+                                                                                <DataTrigger.ExitActions>
+                                                                                    <StopStoryboard BeginStoryboardName="PulseGlow"/>
+                                                                                </DataTrigger.ExitActions>
                                                                             </DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>

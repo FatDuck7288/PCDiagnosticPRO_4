@@ -39,6 +39,8 @@ namespace PCDiagnosticPro.Services
             public string? SafetyNote { get; set; }
             public bool IsSafe { get; set; }
             public int ConfidenceRequired { get; set; } = 60;
+            /// <summary>Evidence paths from the source finding. Required for AutoFix (Fixable).</summary>
+            public List<string> EvidencePaths { get; set; } = new();
         }
 
         public class RemediationReadiness
@@ -107,6 +109,24 @@ namespace PCDiagnosticPro.Services
             
             // Classifier les problèmes
             ClassifyIssues(result, report, diagnostics, confidenceScore);
+            
+            // Evidence gate: sweep all Fixable items — downgrade to SuggestOnly if no evidence paths
+            var downgraded = new List<RemediationItem>();
+            foreach (var item in result.Fixable.ToList())
+            {
+                if (item.EvidencePaths == null || item.EvidencePaths.Count == 0)
+                {
+                    item.Actionability = ActionabilityLevel.SuggestOnly;
+                    item.SafetyNote = "Pas de preuve explicite — suggestion uniquement";
+                    result.Fixable.Remove(item);
+                    result.SuggestOnly.Add(item);
+                    downgraded.Add(item);
+                }
+            }
+            if (downgraded.Count > 0)
+            {
+                App.LogMessage($"[AutoFixReadiness] Evidence gate: {downgraded.Count} item(s) downgraded from Fixable to SuggestOnly (no evidence paths)");
+            }
             
             // Calculer le score de readiness
             result.ReadinessScore = CalculateReadinessScore(result, confidenceScore);

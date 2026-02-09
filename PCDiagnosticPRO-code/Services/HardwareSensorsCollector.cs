@@ -25,16 +25,13 @@ namespace PCDiagnosticPro.Services
         
         public Task<HardwareSensorsResult> CollectAsync(CancellationToken ct)
         {
-            // Use safe collector by default to avoid Defender alerts
-            if (UseSafeModeByDefault && !ForceUnsafeMode)
-            {
-                App.LogMessage("[HardwareSensors] Using SAFE mode (no kernel drivers) to avoid Defender alerts");
-                var safeCollector = new SafeHardwareSensorsCollector();
-                return safeCollector.CollectAsync(ct);
-            }
-            
-            App.LogMessage("[HardwareSensors] Using FULL mode (LibreHardwareMonitor with WinRing0) - may trigger Defender");
-            return Task.Run(() => CollectInternal(ct), ct);
+            // SECURITY FIX: ALWAYS use safe mode. WinRing0 is eliminated entirely.
+            // The FULL mode code path (CollectInternal with Computer.Open()) is preserved but
+            // never reached. This avoids WinRing0 kernel driver extraction, Defender alerts,
+            // and writes to C:\Windows\SystemTemp.
+            App.LogMessage("[HardwareSensors] Using SAFE mode (WMI/NVML) — WinRing0 eliminated");
+            var safeCollector = new SafeHardwareSensorsCollector();
+            return safeCollector.CollectAsync(ct);
         }
 
         private HardwareSensorsResult CollectInternal(CancellationToken ct)
@@ -109,12 +106,35 @@ namespace PCDiagnosticPro.Services
             var exLower = ex.Message.ToLowerInvariant();
             var innerEx = ex.InnerException?.Message?.ToLowerInvariant() ?? "";
             
+            // Detailed logging for Defender/CFA diagnostics
+            App.LogMessage($"[HardwareSensors] Exception type: {ex.GetType().FullName}");
+            App.LogMessage($"[HardwareSensors] Message: {ex.Message}");
+            if (ex.InnerException != null)
+                App.LogMessage($"[HardwareSensors] InnerException: {ex.InnerException.GetType().FullName}: {ex.InnerException.Message}");
+            App.LogMessage($"[HardwareSensors] AppBaseDir: {AppContext.BaseDirectory}");
+            
             if (IsSecurityBlockingError(exLower) || IsSecurityBlockingError(innerEx))
             {
                 result.BlockedBySecurity = true;
                 result.BlockingMessage = "Capteurs bloqués par la sécurité. Exécuter en tant qu'administrateur ou ajouter une exclusion sur le dossier de l'application.";
                 App.LogMessage($"[HardwareSensors] SECURITY BLOCKING DETECTED: {ex.Message}");
+                App.LogMessage($"[HardwareSensors] Stack trace: {ex.StackTrace}");
             }
+        }
+
+        /// <summary>
+        /// Check if hardware sensor collection would require admin privileges.
+        /// Returns true if admin is NOT available and full sensors are requested.
+        /// </summary>
+        public static bool RequiresAdminForFullSensors()
+        {
+            try
+            {
+                var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+                var principal = new System.Security.Principal.WindowsPrincipal(identity);
+                return !principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+            }
+            catch { return true; }
         }
         
         /// <summary>

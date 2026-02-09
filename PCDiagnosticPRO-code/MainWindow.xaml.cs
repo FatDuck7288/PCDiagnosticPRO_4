@@ -245,64 +245,66 @@ namespace PCDiagnosticPro
         }
 
         /// <summary>
-        /// Toggle l'affichage du champ de renommage du rapport
+        /// Pencil button on the report detail page — triggers RenameScanCommand on SelectedHistoryScan.
+        /// Uses the same unified IsRenaming flow as Page A.
         /// </summary>
-        private void ToggleReportRename(object sender, RoutedEventArgs e)
+        private void ReportPencil_Click(object sender, RoutedEventArgs e)
         {
-            try
+            if (DataContext is ViewModels.MainViewModel vm && vm.SelectedHistoryScan != null)
             {
-                var textBox = FindName("ReportNameTextBox") as TextBox;
-                var display = FindName("ReportNameDisplay") as StackPanel;
-                
-                if (textBox == null || display == null) return;
-                
-                if (textBox.Visibility == Visibility.Collapsed)
-                {
-                    // Activer le mode édition
-                    textBox.Visibility = Visibility.Visible;
-                    display.Visibility = Visibility.Collapsed;
-                    textBox.Focus();
-                    textBox.SelectAll();
-                    
-                    // Fermer l'édition quand on perd le focus ou appuie sur Entrée
-                    textBox.LostFocus -= ReportNameTextBox_LostFocus;
-                    textBox.LostFocus += ReportNameTextBox_LostFocus;
-                    textBox.KeyDown -= ReportNameTextBox_KeyDown;
-                    textBox.KeyDown += ReportNameTextBox_KeyDown;
-                }
-                else
-                {
-                    // Désactiver le mode édition
-                    textBox.Visibility = Visibility.Collapsed;
-                    display.Visibility = Visibility.Visible;
-                }
-            }
-            catch (Exception ex)
-            {
-                App.LogMessage($"[ToggleReportRename] Erreur: {ex.Message}");
+                vm.RenameScanCommand.Execute(vm.SelectedHistoryScan);
             }
         }
 
-        private void ReportNameTextBox_LostFocus(object sender, RoutedEventArgs e)
+        // ========== INLINE RENAME (liste d'historique) ==========
+
+        /// <summary>Double-clic sur le titre dans la liste d'historique → active le mode renommage.</summary>
+        private void HistoryTitle_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            var textBox = FindName("ReportNameTextBox") as TextBox;
-            var display = FindName("ReportNameDisplay") as StackPanel;
-            if (textBox != null) textBox.Visibility = Visibility.Collapsed;
-            if (display != null) display.Visibility = Visibility.Visible;
-            if (DataContext is ViewModels.MainViewModel vm)
-                vm.PersistReportDisplayNames();
+            if (e.ClickCount >= 2 && sender is FrameworkElement fe && fe.DataContext is ViewModels.ScanHistoryItem item)
+            {
+                if (DataContext is ViewModels.MainViewModel vm)
+                    vm.RenameScanCommand.Execute(item);
+            }
         }
 
-        private void ReportNameTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        /// <summary>Quand le TextBox inline apparaît, focus + sélectionner tout le texte.</summary>
+        private void InlineRenameBox_Loaded(object sender, RoutedEventArgs e)
         {
-            if (e.Key == System.Windows.Input.Key.Enter || e.Key == System.Windows.Input.Key.Escape)
+            if (sender is TextBox tb && tb.Visibility == Visibility.Visible)
             {
-                var textBox = FindName("ReportNameTextBox") as TextBox;
-                var display = FindName("ReportNameDisplay") as StackPanel;
-                if (textBox != null) textBox.Visibility = Visibility.Collapsed;
-                if (display != null) display.Visibility = Visibility.Visible;
-                if (e.Key == System.Windows.Input.Key.Enter && DataContext is ViewModels.MainViewModel vm)
-                    vm.PersistReportDisplayNames();
+                tb.Focus();
+                tb.SelectAll();
+            }
+        }
+
+        /// <summary>Quand le TextBox perd le focus → valider le renommage.</summary>
+        private void InlineRenameBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (sender is TextBox tb && tb.Tag is ViewModels.ScanHistoryItem item)
+            {
+                if (DataContext is ViewModels.MainViewModel vm)
+                    vm.CommitRename(item);
+            }
+        }
+
+        /// <summary>Entrée = valider (commit + validate), Escape = annuler (cancel without saving).</summary>
+        private void InlineRenameBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (sender is TextBox tb && tb.Tag is ViewModels.ScanHistoryItem item)
+            {
+                if (e.Key == System.Windows.Input.Key.Enter)
+                {
+                    if (DataContext is ViewModels.MainViewModel vm)
+                        vm.CommitRename(item);
+                    e.Handled = true;
+                }
+                else if (e.Key == System.Windows.Input.Key.Escape)
+                {
+                    if (DataContext is ViewModels.MainViewModel vm)
+                        vm.CancelRename(item);
+                    e.Handled = true;
+                }
             }
         }
     }

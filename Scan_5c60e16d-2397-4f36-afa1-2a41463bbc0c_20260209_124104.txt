@@ -7,9 +7,9 @@ L'analyse et l'interpretation sont effectuees par l'IA externe.
 
 METADATA
 --------------------------------------------------
-Run ID               : 809ee1b6-c944-4afd-9947-853276326760
+Run ID               : 5c60e16d-2397-4f36-afa1-2a41463bbc0c
 Version              : 7.0
-Date                 : 2026-02-09 09:38:01
+Date                 : 2026-02-09 12:41:04
 Machine              : PC-52391b
 Admin                : True
 Redaction            : Full
@@ -35,7 +35,7 @@ Build                    : 26200
 UPTIME
 --------------------------------------------------
 Dernier Boot             : 2026-02-07 19:01
-Uptime                   : 1j 14h
+Uptime                   : 1j 17h
 
 FABRICANT
 --------------------------------------------------
@@ -73,7 +73,7 @@ PROCESSEUR(S)
 CPU: AMD Ryzen 9 5900X 12-Core Processor            
   Cores/Threads          : 12 / 24
   Frequence Max          : 3701 MHz
-  Charge Actuelle        : 4%
+  Charge Actuelle        : 16%
 
 ====================================================================================================
 [4. MEMOIRE]
@@ -81,8 +81,8 @@ CPU: AMD Ryzen 9 5900X 12-Core Processor
 MEMOIRE PHYSIQUE (RAM)
 --------------------------------------------------
 Memoire Totale           : 95.93 GB
-Memoire Libre            : 73.33 GB
-Utilisation              : 23.6%
+Memoire Libre            : 70.84 GB
+Utilisation              : 26.2%
 
 MODULES
 --------------------------------------------------
@@ -102,8 +102,6 @@ Disque: Micron_2210_MTFDHBA1T0QFD
   Type: HDD | Taille: 953.86 GB | Status: OK
 Disque: Micron CT2000X9PROSSD9 SCSI Disk Device
   Type: SSD | Taille: 1863.01 GB | Status: OK
-Disque: SanDisk Cruzer Glide USB Device
-  Type: HDD | Taille: 14.32 GB | Status: OK
 Disque: Samsung SSD 990 PRO with Heatsink 2TB
   Type: SSD | Taille: 1863.01 GB | Status: OK
 Disque: TOSHIBA DT01ACA200
@@ -111,8 +109,8 @@ Disque: TOSHIBA DT01ACA200
 
 VOLUMES
 --------------------------------------------------
-C: 952.65 GB | Libre: 368.7 GB (61.3% utilise)
-D: 1863.02 GB | Libre: 1092.43 GB (41.4% utilise)
+C: 952.65 GB | Libre: 368.11 GB (61.4% utilise)
+D: 1863.02 GB | Libre: 1092.21 GB (41.4% utilise)
 E: 1862.17 GB | Libre: 1460.41 GB (21.6% utilise)
 H: 1862.88 GB | Libre: 696.01 GB (62.6% utilise)
 
@@ -155,7 +153,7 @@ Interface: RZ616 Wi-Fi 6E 160MHz
 
 CONNEXIONS
 --------------------------------------------------
-Total connexions: 243 | Ports en ecoute: 38
+Total connexions: 205 | Ports en ecoute: 39
 
 ====================================================================================================
 [8. SECURITE]
@@ -191,7 +189,7 @@ SERVICES CRITIQUES
 [OK] Journal d’événements Windows
 [OK] Services de chiffrement
 
-Total: 310 | Running: 131
+Total: 310 | Running: 129
 
 ====================================================================================================
 [10. DEMARRAGE]
@@ -242,7 +240,7 @@ BSOD detectes: 0
 ====================================================================================================
 WINDOWS UPDATE
 --------------------------------------------------
-Mises a jour en attente  : 3
+Mises a jour en attente  : 2
 
 ====================================================================================================
 [14. AUDIO]
@@ -252,6 +250,7 @@ PERIPHERIQUES AUDIO
 Device: Realtek High Definition Audio - OK
 Device: NVIDIA High Definition Audio - OK
 Device: NVIDIA Virtual Audio Device (Wave Extensible) (WDM) - OK
+Device: Périphérique audio USB - OK
 
 ====================================================================================================
 [15. PERIPHERIQUES]
@@ -327,7 +326,7 @@ Points disponibles: 3
 FICHIERS TEMPORAIRES
 --------------------------------------------------
 Temp User : 2,08 GB
-Temp Windows : 132,49 MB
+Temp Windows : 132,75 MB
 TOTAL: 2,21 GB
 
 ====================================================================================================
@@ -378,11 +377,10 @@ TEMPERATURES HARDWARE
 
 CPU: Non disponible (WMI non supporte ou admin requis)
 GPU: Non disponible (limitation WMI - collecte externalisee)
-Disques: 6
+Disques: 5
   - VendorCo ProductCode USB Device : N/A [SMART]
   - Micron_2210_MTFDHBA1T0QFD : N/A [SMART]
   - Micron CT2000X9PROSSD9 SCSI Disk Device : N/A [SMART]
-  - SanDisk Cruzer Glide USB Device : N/A [SMART]
   - Samsung SSD 990 PRO with Heatsink 2TB : N/A [SMART]
   - TOSHIBA DT01ACA200 : N/A [SMART]
 
@@ -451,7 +449,7 @@ SMART DETAILLE
 Disque: 5&221baba8&0&020000_0
   Prediction defaillance : Non
   Reallocated Sectors    : 0
-  Power-On Hours         : 23106 h
+  Power-On Hours         : 23109 h
   Temperature            : 31 C
   Reallocation Events    : 0
   Pending Sectors        : 0
@@ -466,12 +464,12 @@ SIGNES DYNAMIQUES (DONNEES BRUTES)
 
 [CONFIG] Duree: 3s | Echantillons: 3
 
-CPU: moyenne 12% | max 12% | min 12% [WMI-Fallback]
-Memoire: 23.8% utilisee | 74853.43 MB libres [WMI-Fallback]
+CPU: moyenne 5% | max 5% | min 5% [WMI-Fallback]
+Memoire: 26.77% utilisee | 71932.36 MB libres [WMI-Fallback]
 Disque: utilisation 0% | file 0 [WMI-Fallback]
 Top CPU: opera
-Top RAM: opera (834.08 MB)
-Reseau: 65.99 Mbps | erreurs: 0
+Top RAM: Cursor (1734.88 MB)
+Reseau: 8.02 Mbps | erreurs: 0
 
 ====================================================================================================
 [37. ANALYSE AVANCEE]
@@ -524,8 +522,8 @@ RESUME DE COLLECTE
 METADATA
 --------------------------------------------------
 Version              : 7.0
-Run ID               : 809ee1b6-c944-4afd-9947-853276326760
-Date                 : 2026-02-09 09:38:58
+Run ID               : 5c60e16d-2397-4f36-afa1-2a41463bbc0c
+Date                 : 2026-02-09 12:42:09
 Admin                : True
 Redaction            : Full
 QuickScan            : False
@@ -577,7 +575,7 @@ ERREURS
 Erreurs de collecte: 1
 
 ####################################################################################################
-Duree collecte       : 57 secondes
-Genere le            : 2026-02-09 09:38:58
+Duree collecte       : 65.5 secondes
+Genere le            : 2026-02-09 12:42:09
 
-Hash (SHA256): 4088802BCCB9A11D2E573D13233BF023A3F1634204194879A32A8D20A393A10E
+Hash (SHA256): 330AB5AEE9D504BA4DE6535F56499DB5BED9A1A54C102F7CDBE0A6AA53517DA6

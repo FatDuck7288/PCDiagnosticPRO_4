@@ -531,4 +531,33 @@ namespace PCDiagnosticPro.Converters
             throw new NotImplementedException();
         }
     }
+
+    /// <summary>
+    /// Retourne 1.0 si le grade actuel correspond au paramètre, sinon 0.45.
+    /// Utilisé pour auto-surligner la ligne de légende du grade actif.
+    /// Usage XAML : Opacity="{Binding Grade, ConverterParameter=A+, Converter={StaticResource GradeMatchOpacity}}"
+    /// </summary>
+    public class GradeMatchOpacityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is string grade && parameter is string target)
+            {
+                // Match exact ou match grade family (ex: "B+" matches "B" target)
+                if (string.Equals(grade, target, StringComparison.OrdinalIgnoreCase))
+                    return 1.0;
+                // B+ et B- matchent la ligne B, etc.
+                if (grade.Length == 2 && (grade[1] == '+' || grade[1] == '-')
+                    && string.Equals(grade.Substring(0, 1), target, StringComparison.OrdinalIgnoreCase))
+                    return 1.0;
+                return 0.45;
+            }
+            return 0.45;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }

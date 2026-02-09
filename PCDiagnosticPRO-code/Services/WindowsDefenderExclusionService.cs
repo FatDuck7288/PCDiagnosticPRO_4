@@ -109,9 +109,80 @@ namespace PCDiagnosticPro.Services
         /// Adds process-based exclusions for scan executables. Requires admin.
         /// Excludes PCDiagnosticPro.exe and librespeed-cli.exe from Windows Defender scanning.
         /// </summary>
+        /// <summary>
+        /// Adds an additional path exclusion (e.g. output/reports directory).
+        /// </summary>
+        public static async Task<(bool Success, string Message)> AddOutputDirectoryExclusionAsync(string outputDir)
+        {
+            if (string.IsNullOrWhiteSpace(outputDir) || !Directory.Exists(outputDir))
+            {
+                App.LogMessage($"[DefenderExclusion] Output dir exclusion skipped (path empty or missing): {outputDir}");
+                return (false, "Dossier de sortie introuvable.");
+            }
+            App.LogMessage($"[DefenderExclusion] Adding output dir exclusion: {outputDir}");
+            return await AddMachineExclusionAsync(outputDir);
+        }
+
+        /// <summary>
+        /// Checks if Controlled Folder Access is enabled and logs CFA allowed applications.
+        /// </summary>
+        public static async Task<(bool CfaEnabled, string Details)> CheckControlledFolderAccessStatusAsync()
+        {
+            try
+            {
+                var command = "try { $pref = Get-MpPreference; Write-Output \"CFA_STATE=$($pref.EnableControlledFolderAccess)\"; $apps = $pref.ControlledFolderAccessAllowedApplications; if($apps) { foreach($a in $apps) { Write-Output \"CFA_APP=$a\" } } } catch { Write-Output \"CFA_ERROR=$($_.Exception.Message)\" }";
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{command}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.UTF8
+                };
+
+                using var process = Process.Start(psi);
+                if (process == null) return (false, "Impossible de lancer PowerShell.");
+
+                var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+                await process.WaitForExitAsync().ConfigureAwait(false);
+
+                var lines = (output ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                var cfaEnabled = false;
+                var details = new System.Text.StringBuilder();
+
+                foreach (var line in lines)
+                {
+                    if (line.StartsWith("CFA_STATE="))
+                    {
+                        var val = line.Substring("CFA_STATE=".Length).Trim();
+                        cfaEnabled = val == "1" || val.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
+                        details.AppendLine($"Controlled Folder Access: {(cfaEnabled ? "ENABLED" : "Disabled")} (raw={val})");
+                    }
+                    else if (line.StartsWith("CFA_APP="))
+                    {
+                        details.AppendLine($"  Allowed: {line.Substring("CFA_APP=".Length).Trim()}");
+                    }
+                    else if (line.StartsWith("CFA_ERROR="))
+                    {
+                        details.AppendLine($"  Error: {line.Substring("CFA_ERROR=".Length).Trim()}");
+                    }
+                }
+
+                App.LogMessage($"[DefenderExclusion] CFA Status:\n{details}");
+                return (cfaEnabled, details.ToString());
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[DefenderExclusion] CFA check failed: {ex.Message}");
+                return (false, $"Erreur: {ex.Message}");
+            }
+        }
+
         public static async Task<(bool Success, string Message)> AddProcessExclusionsAsync()
         {
-            var processes = new[] { "PCDiagnosticPro.exe", "librespeed-cli.exe" };
+            var processes = new[] { "PCDiagnosticPro.exe", "librespeed-cli.exe", "powershell.exe", "conhost.exe" };
             var failedProcesses = new System.Collections.Generic.List<string>();
 
             foreach (var proc in processes)

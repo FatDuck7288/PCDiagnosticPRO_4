@@ -176,6 +176,10 @@ namespace PCDiagnosticPro.Services
             {
                 App.LogMessage($"[DiagnosticFindingsBuilder] Erreur: {ex.Message}");
             }
+
+            // Apply IT-only policy gate: reject non-IT findings, downgrade autofix without evidence
+            findings = ItPolicyGate.ApplyPolicy(findings);
+
             return findings;
         }
 

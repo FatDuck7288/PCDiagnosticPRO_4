@@ -4,62 +4,98 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Erreurs collecteur" 
-        Height="300" Width="500"
-        MinHeight="200" MinWidth="400"
+        Title="Erreurs détectées" 
+        Height="420" Width="560"
+        MinHeight="300" MinWidth="440"
         ResizeMode="CanResizeWithGrip"
         WindowStartupLocation="CenterOwner"
-        Background="#F0F0F0">
+        Background="#FF0D1117">
 
-    <!-- Fenêtre style MessageBox simple comme demandé -->
-    <Grid Margin="15">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#FFE6EDF3"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#FF8B949E"/>
+        <SolidColorBrush x:Key="AccentRed" Color="#FFFF4757"/>
+        <SolidColorBrush x:Key="AccentYellow" Color="#FFFFA502"/>
+        <SolidColorBrush x:Key="BgMedium" Color="#FF161B22"/>
+        <SolidColorBrush x:Key="BorderDark" Color="#FF30363D"/>
+    </Window.Resources>
+
+    <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Icône warning (triangle jaune avec !) -->
-        <Canvas Grid.Column="0" Grid.Row="0" Width="48" Height="48" 
-                VerticalAlignment="Top" Margin="0,0,15,0">
-            <Path Fill="#D4A017" Data="M 24 2 L 46 44 L 2 44 Z"/>
-            <Path Fill="Black" Data="M 22 18 L 26 18 L 26 30 L 22 30 Z M 22 34 L 26 34 L 26 38 L 22 38 Z"/>
-        </Canvas>
-
-        <!-- Contenu textuel -->
-        <StackPanel Grid.Column="1" Grid.Row="0" VerticalAlignment="Top">
-            <!-- Erreurs -->
-            <TextBlock Text="Erreurs:" FontWeight="Bold" Margin="0,0,0,5"
-                       Visibility="{Binding HasErrors, Converter={StaticResource BoolToVisibility}}"/>
-            <ItemsControl ItemsSource="{Binding ErrorListSimple}" Margin="0,0,0,10"
-                          Visibility="{Binding HasErrors, Converter={StaticResource BoolToVisibility}}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2"/>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            
-            <!-- Données manquantes -->
-            <TextBlock Text="Données manquantes:" FontWeight="Bold" Margin="0,0,0,5"
-                       Visibility="{Binding HasMissing, Converter={StaticResource BoolToVisibility}}"/>
-            <ItemsControl ItemsSource="{Binding MissingListSimple}" Margin="0,0,0,10"
-                          Visibility="{Binding HasMissing, Converter={StaticResource BoolToVisibility}}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2"/>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="{Binding SummaryText}" FontSize="18" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimary}"/>
         </StackPanel>
 
+        <!-- Scrollable content -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <!-- Erreurs -->
+                <TextBlock Text="ERREURS" FontSize="11" FontWeight="Bold" FontFamily="Consolas"
+                           Foreground="{StaticResource AccentRed}" Margin="0,0,0,8"
+                           Visibility="{Binding HasErrors, Converter={StaticResource BoolToVisibility}}"/>
+                <ItemsControl ItemsSource="{Binding FormattedErrors}" Margin="0,0,0,16"
+                              Visibility="{Binding HasErrors, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource BgMedium}" CornerRadius="6" Padding="12,10"
+                                    Margin="0,0,0,6" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <Border Background="{StaticResource AccentRed}" CornerRadius="3" 
+                                                Padding="6,2" Margin="0,0,8,0">
+                                            <TextBlock Text="{Binding Code}" FontSize="10" FontWeight="Bold"
+                                                       Foreground="White" FontFamily="Consolas"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding Number}" FontSize="11"
+                                                   Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Explanation}" FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{StaticResource TextPrimary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Données manquantes -->
+                <TextBlock Text="DONNÉES MANQUANTES" FontSize="11" FontWeight="Bold" FontFamily="Consolas"
+                           Foreground="{StaticResource AccentYellow}" Margin="0,0,0,8"
+                           Visibility="{Binding HasMissing, Converter={StaticResource BoolToVisibility}}"/>
+                <ItemsControl ItemsSource="{Binding FormattedMissingData}" Margin="0,0,0,8"
+                              Visibility="{Binding HasMissing, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource BgMedium}" CornerRadius="6" Padding="12,10"
+                                    Margin="0,0,0,6" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="{Binding Details}" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0"/>
+                                    <TextBlock Text="{Binding Timestamp}" FontSize="9" FontFamily="Consolas"
+                                               Foreground="#4D5566" Margin="0,3,0,0"
+                                               Visibility="{Binding HasTimestamp, Converter={StaticResource BoolToVisibility}}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
         <!-- Bouton OK -->
-        <Button Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1" 
-                Content="OK" Width="80" Height="28"
-                HorizontalAlignment="Right"
+        <Button Grid.Row="2" Content="Fermer" Width="100" Height="34" Margin="0,12,0,0"
+                HorizontalAlignment="Right" Cursor="Hand"
+                Background="{StaticResource AccentRed}" Foreground="White"
+                BorderThickness="0" FontWeight="SemiBold"
                 Click="CloseButton_Click"/>
     </Grid>
 </Window>

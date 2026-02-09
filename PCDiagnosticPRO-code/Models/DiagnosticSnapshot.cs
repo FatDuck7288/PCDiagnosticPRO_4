@@ -60,6 +60,39 @@ namespace PCDiagnosticPro.Models
         [JsonPropertyName("psSummary")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public PowerShellSummary? PsSummary { get; set; }
+
+        /// <summary>PowerShell section coverage (mapped vs missing vs unmapped)</summary>
+        [JsonPropertyName("psCoverage")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public PsCoverage? PsCoverage { get; set; }
+    }
+
+    /// <summary>
+    /// Tracks which PowerShell sections were mapped to normalized metrics,
+    /// which mandatory sections are missing, and which PS sections had no mapping.
+    /// </summary>
+    public class PsCoverage
+    {
+        [JsonPropertyName("totalExpectedSections")]
+        public int TotalExpectedSections { get; set; }
+
+        [JsonPropertyName("mappedSections")]
+        public int MappedSections { get; set; }
+
+        [JsonPropertyName("missingSections")]
+        public int MissingSections { get; set; }
+
+        [JsonPropertyName("coveragePercent")]
+        public double CoveragePercent { get; set; }
+
+        [JsonPropertyName("mappedSectionNames")]
+        public List<string> MappedSectionNames { get; set; } = new();
+
+        [JsonPropertyName("missingSectionNames")]
+        public List<string> MissingSectionNames { get; set; } = new();
+
+        [JsonPropertyName("unmappedPsSections")]
+        public List<string> UnmappedPsSections { get; set; } = new();
     }
 
     /// <summary>

@@ -1113,13 +1113,29 @@ function Test-Administrator {
 
 function Show-Progress {
     param([int]$current, [int]$total, [string]$section)
+    # Legacy wrapper — delegates to Emit-Status for structured output
+    Emit-Status -Type 'PROGRESS' -Section $section -Current $current -Total $total
+}
+
+function Emit-Status {
+    param(
+        [string]$Type,       # PROGRESS | STATUS | DONE | ERROR | WARN | INFO | SECTION
+        [string]$Section,
+        [string]$Message = '',
+        [int]$Current = 0,
+        [int]$Total = 0
+    )
     try {
-        if ($total -le 0) { return }
-        $percent = [math]::Floor(($current * 100) / $total)
-        $width = 40
-        $filled = [math]::Floor(($percent * $width) / 100)
-        $bar = '[' + ('#' * $filled) + (' ' * ($width - $filled)) + ']'
-        Write-Host "`r$section | $bar $percent%".PadRight(100) -NoNewline -ForegroundColor Green
+        if ($Type -eq 'PROGRESS' -and $Total -gt 0) {
+            $pct = [math]::Floor(($Current * 100) / $Total)
+            Write-Host "[PROGRESS] $Section | $Current/$Total | $pct%"
+        }
+        elseif ($Type -eq 'SECTION') {
+            Write-Host "[SECTION] $Section | $Message"
+        }
+        else {
+            Write-Host "[$Type] $Section | $Message"
+        }
     }
     catch { }
 }
@@ -1595,7 +1611,7 @@ function Invoke-PreflightCheck {
     try {
         $policy = Get-ExecutionPolicy
         if ($policy -in @('Restricted','Default')) {
-            Write-Host "[PREFLIGHT] Policy: $policy" -ForegroundColor Yellow
+            Emit-Status -Type 'WARN' -Section 'Preflight' -Message "Policy: $policy"
             return $false
         }
         return $true
@@ -3399,21 +3415,21 @@ function Generate-Summary {
 
 #region ============== EXECUTION PRINCIPALE ==============
 try {
-    Write-Host "COLLECTE DIAGNOSTIC PC v$($Script:ScriptVersion) - Run ID: $($Script:RunId)" -ForegroundColor Cyan
-    Write-Host "Sortie: $($Script:OutputPath)"
-    Write-Host "[MODE] Collecte pure - Analyse par IA externe" -ForegroundColor Yellow
-    if (-not $Script:NoRedact) { Write-Host "[REDACTION] Niveau: $($Script:RedactLevel)" -ForegroundColor Cyan }
-    Write-Host "[MONITORING] $($Script:MonitorSeconds) secondes" -ForegroundColor Cyan
+    Emit-Status -Type 'INFO' -Section 'Diagnostic' -Message "COLLECTE v$($Script:ScriptVersion) - Run $($Script:RunId)"
+    Emit-Status -Type 'INFO' -Section 'Diagnostic' -Message "Sortie: $($Script:OutputPath)"
+    Emit-Status -Type 'INFO' -Section 'Mode' -Message "Collecte pure - Analyse par IA externe"
+    if (-not $Script:NoRedact) { Emit-Status -Type 'INFO' -Section 'Redaction' -Message "Niveau: $($Script:RedactLevel)" }
+    Emit-Status -Type 'INFO' -Section 'Monitoring' -Message "$($Script:MonitorSeconds) secondes"
 
     $preflightOK = Invoke-PreflightCheck -ScriptPath $PSCommandPath -SkipCheck:$SkipPreflightCheck
     if (-not $preflightOK) {
-        Write-Host "[WARN] Execution Policy non valide - collecte degradee" -ForegroundColor Yellow
+        Emit-Status -Type 'WARN' -Section 'Preflight' -Message "Execution Policy non valide - collecte degradee"
         Add-ErrorLog -Type 'PREFLIGHT_ERROR' -Source 'Preflight' -Message "Execution Policy non valide"
     }
 
     $Script:IsAdmin = Test-Administrator
-    if ($Script:IsAdmin) { Write-Host "[OK] Mode Administrateur" -ForegroundColor Green }
-    else { Write-Host "[!] Mode utilisateur standard" -ForegroundColor Yellow }
+    if ($Script:IsAdmin) { Emit-Status -Type 'DONE' -Section 'Privileges' -Message "Mode Administrateur" }
+    else { Emit-Status -Type 'WARN' -Section 'Privileges' -Message "Mode utilisateur standard" }
 
     Write-ReportLine ("#" * 100)
     Write-ReportLine "#" + (" " * 15) + "RAPPORT DE COLLECTE DIAGNOSTIC PC v$($Script:ScriptVersion) - DONNEES BRUTES" + (" " * 15) + "#"
@@ -3475,34 +3491,38 @@ try {
         $collectorName = Get-SafeDictValue $collector 'Name' 'Unknown'
         $collectorSection = Get-SafeDictValue $collector 'Section' '?'
         $collectorFunc = Get-SafeDictValue $collector 'Function'
-        Show-Progress -current $current -total $total -section $collectorName
+        Emit-Status -Type 'PROGRESS' -Section $collectorName -Current $current -Total $total
+        Emit-Status -Type 'STATUS' -Section $collectorName -Message "Collecte en cours..."
         try {
             if ($null -ne $collectorFunc) {
                 $sectionContent = & $collectorFunc
                 Write-Section -Title "$collectorSection. $($collectorName.ToUpper())" -Content $sectionContent
                 Set-CollectorStatus -Name $collectorName -Status 'ok'
+                Emit-Status -Type 'DONE' -Section $collectorName -Message 'OK'
             }
         } catch {
             Write-Section -Title "$collectorSection. $($collectorName.ToUpper())" -Content @("[ERREUR] $($_.Exception.Message)")
             Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source $collectorName -Message $_.Exception.Message
             Set-CollectorStatus -Name $collectorName -Status 'failed' -Message $_.Exception.Message
+            Emit-Status -Type 'ERROR' -Section $collectorName -Message $_.Exception.Message
         }
     }
 
-    Write-Host "`r[Monitoring dynamique ($($Script:MonitorSeconds)s)...]".PadRight(100) -NoNewline -ForegroundColor Cyan
-    try { $dynContent = Collect-DynamicSignals; Write-Section -Title "36. SIGNES DYNAMIQUES" -Content $dynContent; Set-CollectorStatus -Name 'DynamicSignals' -Status 'ok' }
-    catch { Write-Section -Title "36. SIGNES DYNAMIQUES" -Content @("[ERREUR] $($_.Exception.Message)"); Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'DynamicSignals' -Message $_.Exception.Message; Set-CollectorStatus -Name 'DynamicSignals' -Status 'failed' -Message $_.Exception.Message }
+    Emit-Status -Type 'STATUS' -Section 'Signaux Dynamiques' -Message "Monitoring $($Script:MonitorSeconds)s..."
+    try { $dynContent = Collect-DynamicSignals; Write-Section -Title "36. SIGNES DYNAMIQUES" -Content $dynContent; Set-CollectorStatus -Name 'DynamicSignals' -Status 'ok'; Emit-Status -Type 'DONE' -Section 'Signaux Dynamiques' -Message 'OK' }
+    catch { Write-Section -Title "36. SIGNES DYNAMIQUES" -Content @("[ERREUR] $($_.Exception.Message)"); Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'DynamicSignals' -Message $_.Exception.Message; Set-CollectorStatus -Name 'DynamicSignals' -Status 'failed' -Message $_.Exception.Message; Emit-Status -Type 'ERROR' -Section 'Signaux Dynamiques' -Message $_.Exception.Message }
 
-    Write-Host "`r[Analyse avancee...]".PadRight(100) -NoNewline -ForegroundColor Cyan
-    try { $advContent = Collect-AdvancedAnalysis; Write-Section -Title "37. ANALYSE AVANCEE" -Content $advContent; Set-CollectorStatus -Name 'AdvancedAnalysis' -Status 'ok' }
-    catch { Write-Section -Title "37. ANALYSE AVANCEE" -Content @("[ERREUR] $($_.Exception.Message)"); Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'AdvancedAnalysis' -Message $_.Exception.Message; Set-CollectorStatus -Name 'AdvancedAnalysis' -Status 'failed' -Message $_.Exception.Message }
+    Emit-Status -Type 'STATUS' -Section 'Analyse Avancee' -Message "Analyse en cours..."
+    try { $advContent = Collect-AdvancedAnalysis; Write-Section -Title "37. ANALYSE AVANCEE" -Content $advContent; Set-CollectorStatus -Name 'AdvancedAnalysis' -Status 'ok'; Emit-Status -Type 'DONE' -Section 'Analyse Avancee' -Message 'OK' }
+    catch { Write-Section -Title "37. ANALYSE AVANCEE" -Content @("[ERREUR] $($_.Exception.Message)"); Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'AdvancedAnalysis' -Message $_.Exception.Message; Set-CollectorStatus -Name 'AdvancedAnalysis' -Status 'failed' -Message $_.Exception.Message; Emit-Status -Type 'ERROR' -Section 'Analyse Avancee' -Message $_.Exception.Message }
 
     $errorContent = Generate-ErrorReport
     if ($null -ne $errorContent) { Write-Section -Title "38. ERREURS DE COLLECTE" -Content $errorContent }
 
-    Write-Host "`r[Generation resume...]".PadRight(100)
+    Emit-Status -Type 'STATUS' -Section 'Resume' -Message "Generation du resume..."
     $summaryContent = Generate-Summary
     Write-Section -Title "RESUME FINAL" -Content $summaryContent
+    Emit-Status -Type 'DONE' -Section 'Resume' -Message 'OK'
 
     $Script:EndTime = Get-Date
     $Script:GlobalStopwatch.Stop()
@@ -3521,12 +3541,12 @@ try {
     }
 
     # FIX RISK #4: Write file first, then compute hash from actual file bytes (avoids CRLF mismatch)
-    Write-Host ""
+    Emit-Status -Type 'STATUS' -Section 'Ecriture' -Message "Sauvegarde du rapport..."
     try {
         $reportArray = @($Script:ReportLines)
         [System.IO.File]::WriteAllLines($Script:OutputPath, $reportArray, (New-Object System.Text.UTF8Encoding($true)))
         Try-HardenOutputAcl -Path $Script:OutputDir
-        Write-Host "[OK] Rapport: $($Script:OutputPath)" -ForegroundColor Green
+        Emit-Status -Type 'DONE' -Section 'Rapport' -Message $Script:OutputPath
         $Script:ReportWritten = $true
         
         # Compute SHA256 from actual file bytes written to disk (guarantees match)
@@ -3538,33 +3558,32 @@ try {
             # Append hash to the file (re-write with hash included)
             $hashLine = "`r`nHash (SHA256): $hashString"
             [System.IO.File]::AppendAllText($Script:OutputPath, $hashLine, (New-Object System.Text.UTF8Encoding($true)))
-            Write-Host "[OK] Hash SHA256 inclus: $hashString" -ForegroundColor DarkGray
+            Emit-Status -Type 'INFO' -Section 'Hash' -Message "SHA256 inclus: $hashString"
         } catch {
-            Write-Host "[WARN] Hash calculation failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            Emit-Status -Type 'WARN' -Section 'Hash' -Message "Calcul echoue: $($_.Exception.Message)"
         }
         try {
             $jsonString = (ConvertTo-JsonSafeObject (Build-JsonSnapshot)) | ConvertTo-Json -Depth 10 -Compress
             [System.IO.File]::WriteAllText($Script:JsonOutputPath, $jsonString, (New-Object System.Text.UTF8Encoding($true)))
             Try-HardenOutputAcl -Path $Script:OutputDir
-            Write-Host "[OK] JSON: $($Script:JsonOutputPath)" -ForegroundColor Green
+            Emit-Status -Type 'DONE' -Section 'JSON' -Message $Script:JsonOutputPath
             $Script:JsonWritten = $true
         } catch {
-            Write-Host "[ERREUR JSON] $($_.Exception.Message)" -ForegroundColor Red
+            Emit-Status -Type 'ERROR' -Section 'JSON' -Message $_.Exception.Message
         }
     } catch {
-        Write-Host "[ERREUR] Impossible d'ecrire: $($_.Exception.Message)" -ForegroundColor Red
+        Emit-Status -Type 'ERROR' -Section 'Ecriture' -Message "Impossible d'ecrire: $($_.Exception.Message)"
     }
 
-    Write-Host ""; Write-Host "Duree: ${durationSeconds}s" -ForegroundColor Cyan
     $sectionKeys = @()
     if ($null -ne $Script:SectionData -and $Script:SectionData -is [System.Collections.IDictionary]) { $sectionKeys = @($Script:SectionData.Keys) }
-    Write-Host "Sections collectees: $(Get-SafeCount $sectionKeys)"
+    Emit-Status -Type 'DONE' -Section 'Diagnostic' -Message "Termine en ${durationSeconds}s | $(Get-SafeCount $sectionKeys) sections"
     $errorCount = Get-SafeCount $Script:ErrorLog
-    if ($errorCount -gt 0) { Write-Host "Erreurs de collecte: $errorCount" -ForegroundColor Yellow }
-    Write-Host ""; Write-Host "[INFO] Donnees brutes pretes pour analyse par IA externe" -ForegroundColor Green
+    if ($errorCount -gt 0) { Emit-Status -Type 'WARN' -Section 'Erreurs' -Message "$errorCount erreurs de collecte" }
+    Emit-Status -Type 'INFO' -Section 'Resultat' -Message "Donnees brutes pretes pour analyse IA"
 }
 catch {
-    Write-Host "[ECHEC CRITIQUE] $($_.Exception.Message)" -ForegroundColor Red
+    Emit-Status -Type 'ERROR' -Section 'Fatal' -Message $_.Exception.Message
     Add-ErrorLog -Type 'FATAL' -Source 'Execution' -Message $_.Exception.Message
     $Script:PartialFailure = $true
 }

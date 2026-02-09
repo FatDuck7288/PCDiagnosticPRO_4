@@ -18,6 +18,11 @@ namespace PCDiagnosticPro.Services
     {
         private readonly DiagnosticSnapshot _snapshot;
         private readonly List<string> _buildLog = new();
+        private readonly HashSet<string> _mappedPsSections = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _unmappedPsSections = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>The 10 mandatory metric domains that must be present in the snapshot.</summary>
+        private static readonly string[] MandatoryDomains = { "os", "memory", "security", "stability", "storage", "network", "updates", "startup", "devices", "boot" };
 
         public DiagnosticSnapshotBuilder()
         {
@@ -222,6 +227,42 @@ namespace PCDiagnosticPro.Services
             }
             
             LogBuild($"[Build] Completed: {available}/{total} metrics available ({_snapshot.CollectionQuality.CoveragePercent}%)");
+
+            // === PS COVERAGE: ensure sentinel metrics for missing mandatory domains ===
+            var missingSectionNames = new List<string>();
+            var mappedSectionNames = new List<string>();
+            foreach (var domain in MandatoryDomains)
+            {
+                if (_snapshot.Metrics.ContainsKey(domain) && _snapshot.Metrics[domain].Count > 0)
+                {
+                    mappedSectionNames.Add(domain);
+                }
+                else
+                {
+                    missingSectionNames.Add(domain);
+                    // Create sentinel metric so the domain exists with available=false + explicit reason
+                    _snapshot.Metrics[domain] = new Dictionary<string, NormalizedMetric>
+                    {
+                        ["available"] = MetricFactory.CreateUnavailable("bool", "DiagnosticSnapshotBuilder", $"ps_section_{domain}_not_collected")
+                    };
+                    LogBuild($"[Build] Sentinel metric created for missing domain '{domain}'");
+                }
+            }
+
+            _snapshot.PsCoverage = new PsCoverage
+            {
+                TotalExpectedSections = MandatoryDomains.Length,
+                MappedSections = mappedSectionNames.Count,
+                MissingSections = missingSectionNames.Count,
+                CoveragePercent = MandatoryDomains.Length > 0
+                    ? Math.Round((double)mappedSectionNames.Count / MandatoryDomains.Length * 100, 1)
+                    : 0,
+                MappedSectionNames = mappedSectionNames,
+                MissingSectionNames = missingSectionNames,
+                UnmappedPsSections = _unmappedPsSections.Except(missingSectionNames, StringComparer.OrdinalIgnoreCase).ToList()
+            };
+
+            LogBuild($"[Build] PsCoverage: {_snapshot.PsCoverage.MappedSections}/{_snapshot.PsCoverage.TotalExpectedSections} sections mapped ({_snapshot.PsCoverage.CoveragePercent}%)");
             LogBuild($"[Build] SchemaVersion={_snapshot.SchemaVersion}");
             WriteLogToTemp();
 
@@ -658,6 +699,7 @@ namespace PCDiagnosticPro.Services
                 if (!TryGetSectionData(sections, out var data, sectionNames))
                 {
                     skipped++;
+                    _unmappedPsSections.Add(sectionNames[0]);
                     LogBuild($"[NoiseFilter] Section '{string.Join("/", sectionNames)}' absente ou vide — ignorée");
                     return 0;
                 }
@@ -673,6 +715,7 @@ namespace PCDiagnosticPro.Services
                         if (status == "error" || status == "failed")
                         {
                             skipped++;
+                            _unmappedPsSections.Add(name);
                             LogBuild($"[NoiseFilter] Section '{name}' en erreur (status={status}) — ignorée");
                             return 0;
                         }
@@ -680,11 +723,13 @@ namespace PCDiagnosticPro.Services
                     }
                 }
                 mapper(sections);
+                _mappedPsSections.Add(sectionNames[0]);
                 return 1;
             }
             catch (Exception ex)
             {
                 skipped++;
+                _unmappedPsSections.Add(sectionNames[0]);
                 LogBuild($"[NoiseFilter] Exception mapping section '{sectionNames[0]}': {ex.Message}");
                 return 0;
             }
