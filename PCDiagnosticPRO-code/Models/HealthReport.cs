@@ -234,6 +234,12 @@ namespace PCDiagnosticPro.Models
                     "Importance : Des événements fréquents indiquent un problème d'alimentation ou de stabilité nécessitant une attention immédiate.\n\n" +
                     "Que faire : Vérifiez l'alimentation (onduleur recommandé), contrôlez les températures, mettez à jour les pilotes.",
                     
+                "updatestatus" =>
+                    "UpdateStatus (état des mises à jour Windows)\n\n" +
+                    "Source : Windows Update Agent (collecte C#). Reflète l'état du patching Windows.\n\n" +
+                    "\"À jour\" = aucune mise à jour en attente.\n" +
+                    "\"Obsolète (N)\" = N mises à jour en attente ; un redémarrage peut être requis après installation.\n\n" +
+                    "Interprétation : Neutre. Recommandation : maintenir le système à jour et redémarrer si demandé.",
                 "points de restauration" => 
                     "Points de restauration système\n\n" +
                     "Définition : Sauvegardes automatiques de l'état du système (registre, fichiers système, programmes installés) créées par Windows avant des modifications importantes.\n\n" +
@@ -388,6 +394,8 @@ namespace PCDiagnosticPro.Models
                     
                     // CPU - termes techniques  
                     "Throttling",
+                    // OS - termes techniques
+                    "UpdateStatus",
                     
                     // Pilotes - termes techniques
                     "Non signés",
