@@ -8,6 +8,16 @@ using PCDiagnosticPro.Models;
 
 namespace PCDiagnosticPro.Services
 {
+    /// <summary>
+    /// CPU temperature collection methods (documentation):
+    /// - LibreHardwareMonitor (LHM): software sensors via driver; may require admin, can trigger security;
+    ///   when not in safe mode, provides real-time CPU package/core temps (can be "noisy" for some AV).
+    /// - WMI (MSAcpi_ThermalZoneTemperature, Win32_TemperatureProbe): built-in Windows, no extra driver;
+    ///   often limited or empty on desktops; "silent" (no special signals).
+    /// - Performance Counters: Windows does not expose CPU temperature in PerfCounter; only frequency/load.
+    /// - ACPI: not used in this codebase; would require kernel/BIOS support.
+    /// Safe mode uses only WMI/PerfCounter (and for GPU: PerfCounter + NVML); no LHM.
+    /// </summary>
     public class HardwareSensorsCollector
     {
         /// <summary>
@@ -345,7 +355,9 @@ namespace PCDiagnosticPro.Services
                 LogGpuMemorySensors(sensors, vramTotal, vramUsed);
                 App.LogMessage($"[VRAM] Selected sensor: '{vramUsedSource}' = {vramUsed:F0} MB");
 
-                // GPU Load - look for "GPU Core" load sensor (percentage)
+                // GPU Load: use only "GPU Core" / 3D engine to align with Task Manager "GPU 3D".
+                // LHM can expose multiple engines (3D, Copy, Video Decode); we take a single sensor only.
+                // If multiple were summed, the % would differ from Task Manager which shows 3D separately.
                 var gpuLoad = FindSensorValueByType(sensors, SensorType.Load, "GPU Core", "D3D 3D", "Core");
                 if (gpuLoad.HasValue)
                     result.Gpu.GpuLoadPercent = Available(gpuLoad.Value);

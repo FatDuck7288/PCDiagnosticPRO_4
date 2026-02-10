@@ -189,63 +189,80 @@ namespace PCDiagnosticPro.Services
                 report.Sections = BuildHealthSections(psRoot, report.ScoreV2, sensors);
                 
                 // 4b. Neutralisation des valeurs sentinelles / impossibles
-                NeutralizeSentinelValues(report, sensors);
+                try { NeutralizeSentinelValues(report, sensors); }
+                catch (Exception ex4b) { App.LogMessage($"[HealthReportBuilder] NeutralizeSentinelValues failed (non-fatal): {ex4b.Message}"); }
 
                 // 4c. Enrichissement C# (Drivers / Updates)
-                if (driverInventory != null)
-                    InjectDriverInventory(report, driverInventory);
-                if (updatesCsharp != null)
-                    InjectUpdatesCsharp(report, updatesCsharp);
+                try { if (driverInventory != null) InjectDriverInventory(report, driverInventory); }
+                catch (Exception ex4c) { App.LogMessage($"[HealthReportBuilder] InjectDriverInventory failed (non-fatal): {ex4c.Message}"); }
+                try { if (updatesCsharp != null) InjectUpdatesCsharp(report, updatesCsharp); }
+                catch (Exception ex4c2) { App.LogMessage($"[HealthReportBuilder] InjectUpdatesCsharp failed (non-fatal): {ex4c2.Message}"); }
                 
                 // 5. Capteurs hardware C#
-                if (sensors != null)
-                    InjectHardwareSensors(report, sensors);
+                try { if (sensors != null) InjectHardwareSensors(report, sensors); }
+                catch (Exception ex5) { App.LogMessage($"[HealthReportBuilder] InjectHardwareSensors failed (non-fatal): {ex5.Message}"); }
+
+                // 5b. Score performance heuristique (Bureautique / Création / Jeux)
+                try { InjectPerformanceScore(report, root, sensors); }
+                catch (Exception ex5b) { App.LogMessage($"[HealthReportBuilder] InjectPerformanceScore failed (non-fatal): {ex5b.Message}"); }
                 
                 // 6. Modèle de confiance
-                report.ConfidenceModel = BuildConfidenceModel(report, sensors);
-                report.ConfidenceModel.ConfidenceScore = CollectorDiagnosticsService.ApplyConfidenceGating(report.ConfidenceModel.ConfidenceScore, diagnostics);
+                try
+                {
+                    report.ConfidenceModel = BuildConfidenceModel(report, sensors);
+                    report.ConfidenceModel.ConfidenceScore = CollectorDiagnosticsService.ApplyConfidenceGating(report.ConfidenceModel.ConfidenceScore, diagnostics);
+                }
+                catch (Exception ex6) { App.LogMessage($"[HealthReportBuilder] BuildConfidenceModel failed (non-fatal): {ex6.Message}"); }
                 
                 // 7. UDIS — Unified Diagnostic Intelligence Scoring (source de vérité unique) — psRoot pour findings (sections objet)
-                var udis = UnifiedDiagnosticScoreEngine.Compute(report, psRoot, sensors, diagnostics);
-                report.GlobalScore = udis.UdisScore;
-                report.Grade = udis.Grade;
-                report.GlobalMessage = udis.Message;
-                report.GlobalSeverity = HealthReport.ScoreToSeverity(udis.UdisScore);
-                report.MachineHealthScore = udis.MachineHealthScore;
-                report.DataReliabilityScore = udis.DataReliabilityScore;
-                report.DiagnosticClarityScore = udis.DiagnosticClarityScore;
-                report.UdisFindings = udis.Findings;
-                report.AutoFixAllowed = udis.AutoFixAllowed;
-                report.UdisReport = udis;
-                report.InsufficientDataForDiagnostic = udis.InsufficientDataForDiagnostic;
-                if (report.InsufficientDataForDiagnostic)
-                    report.CollectionStatus = "FAILED";
-                report.Divergence.PowerShellScore = report.ScoreV2.Score;
-                report.Divergence.PowerShellGrade = report.ScoreV2.Grade;
-                report.Divergence.GradeEngineScore = udis.UdisScore;  // Rempli par UDIS (legacy field name)
-                report.Divergence.GradeEngineGrade = udis.Grade;
-                report.Divergence.SourceOfTruth = "UDIS";
+                try
+                {
+                    var udis = UnifiedDiagnosticScoreEngine.Compute(report, psRoot, sensors, diagnostics);
+                    report.GlobalScore = udis.UdisScore;
+                    report.Grade = udis.Grade;
+                    report.GlobalMessage = udis.Message;
+                    report.GlobalSeverity = HealthReport.ScoreToSeverity(udis.UdisScore);
+                    report.MachineHealthScore = udis.MachineHealthScore;
+                    report.DataReliabilityScore = udis.DataReliabilityScore;
+                    report.DiagnosticClarityScore = udis.DiagnosticClarityScore;
+                    report.UdisFindings = udis.Findings;
+                    report.AutoFixAllowed = udis.AutoFixAllowed;
+                    report.UdisReport = udis;
+                    report.InsufficientDataForDiagnostic = udis.InsufficientDataForDiagnostic;
+                    if (report.InsufficientDataForDiagnostic)
+                        report.CollectionStatus = "FAILED";
+                    report.Divergence.PowerShellScore = report.ScoreV2.Score;
+                    report.Divergence.PowerShellGrade = report.ScoreV2.Grade;
+                    report.Divergence.GradeEngineScore = udis.UdisScore;  // Rempli par UDIS (legacy field name)
+                    report.Divergence.GradeEngineGrade = udis.Grade;
+                    report.Divergence.SourceOfTruth = "UDIS";
+                }
+                catch (Exception ex7) { App.LogMessage($"[HealthReportBuilder] UDIS failed (non-fatal): {ex7.Message}"); }
                 
                 // 8. Garde-fou confiance : plafonner si collecte insuffisante
-                var confScore = report.ConfidenceModel?.ConfidenceScore ?? 0;
-                if (confScore < 50 && report.GlobalScore > 60)
+                try
                 {
-                    var originalScore = report.GlobalScore;
-                    report.GlobalScore = Math.Min(report.GlobalScore, 60);
-                    report.Grade = ScoreToGrade(report.GlobalScore);
-                    report.GlobalSeverity = HealthReport.ScoreToSeverity(report.GlobalScore);
-                    report.GlobalMessage = $"Score plafonné ({originalScore}→{report.GlobalScore}) : collecte trop faible ({confScore}/100)";
-                    App.LogMessage($"[HealthReportBuilder] GARDE-FOU: Score plafonné {originalScore}→{report.GlobalScore} (confiance={confScore})");
+                    var confScore = report.ConfidenceModel?.ConfidenceScore ?? 0;
+                    if (confScore < 50 && report.GlobalScore > 60)
+                    {
+                        var originalScore = report.GlobalScore;
+                        report.GlobalScore = Math.Min(report.GlobalScore, 60);
+                        report.Grade = ScoreToGrade(report.GlobalScore);
+                        report.GlobalSeverity = HealthReport.ScoreToSeverity(report.GlobalScore);
+                        report.GlobalMessage = $"Score plafonné ({originalScore}→{report.GlobalScore}) : collecte trop faible ({confScore}/100)";
+                        App.LogMessage($"[HealthReportBuilder] GARDE-FOU: Score plafonné {originalScore}→{report.GlobalScore} (confiance={confScore})");
+                    }
+                    else if (confScore < 70 && report.GlobalScore > 75)
+                    {
+                        var originalScore = report.GlobalScore;
+                        report.GlobalScore = Math.Min(report.GlobalScore, 75);
+                        report.Grade = ScoreToGrade(report.GlobalScore);
+                        report.GlobalSeverity = HealthReport.ScoreToSeverity(report.GlobalScore);
+                        report.GlobalMessage = $"Score ajusté ({originalScore}→{report.GlobalScore}) : collecte partielle ({confScore}/100)";
+                        App.LogMessage($"[HealthReportBuilder] GARDE-FOU: Score ajusté {originalScore}→{report.GlobalScore} (confiance={confScore})");
+                    }
                 }
-                else if (confScore < 70 && report.GlobalScore > 75)
-                {
-                    var originalScore = report.GlobalScore;
-                    report.GlobalScore = Math.Min(report.GlobalScore, 75);
-                    report.Grade = ScoreToGrade(report.GlobalScore);
-                    report.GlobalSeverity = HealthReport.ScoreToSeverity(report.GlobalScore);
-                    report.GlobalMessage = $"Score ajusté ({originalScore}→{report.GlobalScore}) : collecte partielle ({confScore}/100)";
-                    App.LogMessage($"[HealthReportBuilder] GARDE-FOU: Score ajusté {originalScore}→{report.GlobalScore} (confiance={confScore})");
-                }
+                catch (Exception ex8) { App.LogMessage($"[HealthReportBuilder] Garde-fou failed (non-fatal): {ex8.Message}"); }
                 
                 // 8b. Verdict collecte
                 if (report.InsufficientDataForDiagnostic)
@@ -262,7 +279,8 @@ namespace PCDiagnosticPro.Services
                 }
                 
                 // 9. Recommandations
-                report.Recommendations = GenerateRecommendations(report);
+                try { report.Recommendations = GenerateRecommendations(report); }
+                catch (Exception ex9) { App.LogMessage($"[HealthReportBuilder] GenerateRecommendations failed (non-fatal): {ex9.Message}"); }
                 
                 App.LogMessage($"[HealthReportBuilder] UDIS={report.GlobalScore}, MHS={report.MachineHealthScore}, DRS={report.DataReliabilityScore}, " +
                     $"CollectorErrorsLogical={report.CollectorErrorsLogical}, CollectionStatus={report.CollectionStatus}");
@@ -280,9 +298,13 @@ namespace PCDiagnosticPro.Services
                     Code = "PARSE_ERROR", 
                     Message = ex.Message 
                 });
-                // Garder le tableau visible : remplir Sections avec des sections minimales
-                // pour que la liste dépliable (Processeur, GPU, etc.) reste affichée.
-                report.Sections = BuildMinimalSections(ex.Message);
+                // FIX: Only replace sections with minimal ones if we don't already have valid sections
+                // Previously, this ALWAYS overwrote sections, wiping out successfully extracted data
+                // when a later step (UDIS, ConfidenceModel, etc.) threw an exception.
+                if (report.Sections == null || report.Sections.Count == 0)
+                    report.Sections = BuildMinimalSections(ex.Message);
+                else
+                    App.LogMessage($"[HealthReportBuilder] Preserved {report.Sections.Count} already-built sections despite error: {ex.Message}");
             }
             
             return report;
@@ -349,15 +371,14 @@ namespace PCDiagnosticPro.Services
                     gpuSection.EvidenceData["GPU"] = sensors.Gpu.Name.Value ?? "N/A";
                 
                 // Température GPU (vérifie les deux clés pour éviter les doublons)
-                if (sensors.Gpu.GpuTempC.Available && 
+                if (sensors.Gpu.GpuTempC.Available &&
                     !gpuSection.EvidenceData.ContainsKey("Temperature") && 
                     !gpuSection.EvidenceData.ContainsKey("Température GPU"))
                 {
-                    // Include source info for debugging GPU temp discrepancies
-                    var sourceInfo = !string.IsNullOrEmpty(sensors.Gpu.GpuTempSource) && sensors.Gpu.GpuTempSource != "N/A"
-                        ? $" (source: {sensors.Gpu.GpuTempSource})"
-                        : "";
-                    gpuSection.EvidenceData["Température GPU"] = $"{sensors.Gpu.GpuTempC.Value:F1}°C{sourceInfo}";
+                    // Résumé: valeur sans source (source dans tooltip uniquement). Rapport intégral garde la source.
+                    gpuSection.EvidenceData["Température GPU"] = $"{sensors.Gpu.GpuTempC.Value:F1}°C";
+                    if (!string.IsNullOrEmpty(sensors.Gpu.GpuTempSource) && sensors.Gpu.GpuTempSource != "N/A")
+                        gpuSection.EvidenceTooltips["Température GPU"] = "Source: " + sensors.Gpu.GpuTempSource;
                     App.LogMessage($"[Sensors→GPU] Température injectée: {sensors.Gpu.GpuTempC.Value:F1}°C from {sensors.Gpu.GpuTempSource}");
                 }
                 
@@ -498,6 +519,102 @@ namespace PCDiagnosticPro.Services
 
             if (updatesCsharp.RebootRequired.HasValue)
                 osSection.EvidenceData["Redémarrage requis"] = updatesCsharp.RebootRequired.Value ? "Oui" : "Non";
+
+            // 1A.1: Redémarrage requis = Oui → section OS en "Attention", pas "OK" (pas de badge vert)
+            if (osSection.EvidenceData.TryGetValue("Redémarrage requis", out var rebootVal) && rebootVal == "Oui")
+            {
+                osSection.Score = Math.Min(osSection.Score, 69);
+                osSection.Severity = HealthReport.ScoreToSeverity(osSection.Score);
+            }
+        }
+
+        /// <summary>
+        /// Injecte le score performance heuristique (0-100) et les bullets Capable de / Limites dans la section Performance.
+        /// Données extraites du JSON (machine, CPU, GPU, stockage) et des capteurs C#.
+        /// </summary>
+        private static void InjectPerformanceScore(HealthReport report, JsonElement root, HardwareSensorsResult? sensors)
+        {
+            var section = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.Performance);
+            if (section == null) return;
+
+            string? cpuName = null;
+            int cpuCores = 0, cpuThreads = 0;
+            double ramGb = 0;
+            string? gpuName = null;
+            double gpuVramMb = 0;
+            bool hasSsd = true;
+
+            // diagnostic_snapshot
+            if (root.TryGetProperty("diagnostic_snapshot", out var snap) && snap.ValueKind == JsonValueKind.Object)
+            {
+                if (snap.TryGetProperty("machine", out var machine))
+                {
+                    if (machine.TryGetProperty("totalRamGB", out var r) && r.ValueKind == JsonValueKind.Number && r.TryGetDouble(out var rg)) ramGb = rg;
+                    if (machine.TryGetProperty("cpuName", out var cn)) cpuName = cn.GetString();
+                }
+                if (snap.TryGetProperty("metrics", out var metrics) && metrics.ValueKind == JsonValueKind.Object)
+                {
+                    if (metrics.TryGetProperty("cpu", out var cpuM) && cpuM.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var kv in cpuM.EnumerateObject())
+                        {
+                            if (kv.Name.Equals("model", StringComparison.OrdinalIgnoreCase) && kv.Value.ValueKind == JsonValueKind.String) cpuName = kv.Value.GetString();
+                            if (kv.Name.Equals("cores", StringComparison.OrdinalIgnoreCase) && kv.Value.TryGetInt32(out var c)) cpuCores = c;
+                            if (kv.Name.Equals("threads", StringComparison.OrdinalIgnoreCase) && kv.Value.TryGetInt32(out var t)) cpuThreads = t;
+                        }
+                    }
+                    if (metrics.TryGetProperty("gpu", out var gpuM) && gpuM.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var kv in gpuM.EnumerateObject())
+                        {
+                            if (kv.Name.Equals("model", StringComparison.OrdinalIgnoreCase) && kv.Value.ValueKind == JsonValueKind.String) gpuName = kv.Value.GetString();
+                            if (kv.Name.Equals("vramTotalMB", StringComparison.OrdinalIgnoreCase) && kv.Value.TryGetDouble(out var v)) gpuVramMb = v;
+                        }
+                    }
+                }
+            }
+            // scan_powershell.sections
+            if (root.TryGetProperty("scan_powershell", out var ps) && ps.TryGetProperty("sections", out var sections))
+            {
+                if (sections.TryGetProperty("CPU", out var cpuSec) && cpuSec.TryGetProperty("data", out var cpuData))
+                {
+                    if (cpuData.TryGetProperty("cpus", out var cpus) && cpus.GetArrayLength() > 0)
+                    {
+                        var c0 = cpus[0];
+                        if (cpuName == null && c0.TryGetProperty("name", out var n)) cpuName = n.GetString();
+                        if (cpuCores == 0 && c0.TryGetProperty("cores", out var co) && co.TryGetInt32(out var cc)) cpuCores = cc;
+                        if (cpuThreads == 0 && c0.TryGetProperty("threads", out var th) && th.TryGetInt32(out var tt)) cpuThreads = tt;
+                    }
+                    if (ramGb == 0 && cpuData.TryGetProperty("totalRamGB", out var tr) && tr.TryGetDouble(out var rg2)) ramGb = rg2;
+                }
+                if (sections.TryGetProperty("GPU", out var gpuSec) && gpuSec.TryGetProperty("data", out var gpuData))
+                {
+                    if (gpuData.TryGetProperty("gpuList", out var gl) && gl.GetArrayLength() > 0)
+                    {
+                        var g0 = gl[0];
+                        if (gpuName == null && g0.TryGetProperty("name", out var gn)) gpuName = gn.GetString();
+                        if (gpuVramMb == 0 && g0.TryGetProperty("vramTotalMB", out var vm) && vm.TryGetDouble(out var v2)) gpuVramMb = v2;
+                    }
+                }
+            }
+            // Capteurs C#
+            if (sensors != null)
+            {
+                if (gpuName == null && sensors.Gpu?.Name?.Available == true) gpuName = sensors.Gpu.Name.Value;
+                if (gpuVramMb == 0 && sensors.Gpu?.VramTotalMB?.Available == true) gpuVramMb = sensors.Gpu.VramTotalMB.Value;
+            }
+
+            var result = PerformanceScoreCalculator.Calculate(cpuName, cpuCores, cpuThreads, gpuName, gpuVramMb, ramGb, hasSsd);
+            section.HasData = true;
+            section.EvidenceData["Score performance"] = $"{result.Score}/100";
+            section.EvidenceData["Catégories"] = result.Categories.Count > 0 ? string.Join(", ", result.Categories) : "—";
+            for (int i = 0; i < result.CapableDe.Count; i++)
+                section.EvidenceData[$"Capable de ({i + 1})"] = result.CapableDe[i];
+            for (int i = 0; i < result.Limites.Count; i++)
+                section.EvidenceData[$"Limite ({i + 1})"] = result.Limites[i];
+            section.Score = result.Score;
+            section.Severity = HealthReport.ScoreToSeverity(result.Score);
+            section.StatusMessage = result.Score >= 60 ? "Bon potentiel" : (result.Score >= 40 ? "Potentiel modéré" : "Potentiel limité");
         }
 
         /// <summary>
@@ -1148,7 +1265,7 @@ namespace PCDiagnosticPro.Services
                                         // Fréquence max
                                         if (firstCpu.TryGetProperty("maxClockSpeed", out var maxClock))
                                         {
-                                            var mhz = maxClock.ValueKind == JsonValueKind.Number ? maxClock.GetDouble() : 0;
+                                            var mhz = SafeGetDouble(maxClock, 0);
                                             if (mhz > 0)
                                                 evidence["Fréquence max"] = $"{mhz:F0} MHz";
                                         }
@@ -1168,7 +1285,7 @@ namespace PCDiagnosticPro.Services
                                 // Nombre de CPU
                                 if (data.TryGetProperty("cpuCount", out var cpuCount))
                                 {
-                                    var count = cpuCount.ValueKind == JsonValueKind.Number ? cpuCount.GetInt32() : 0;
+                                    var count = SafeGetInt(cpuCount, 0);
                                     if (count > 0)
                                         evidence["Nombre de CPU"] = count.ToString();
                                 }
@@ -1250,10 +1367,9 @@ namespace PCDiagnosticPro.Services
                                         // VRAM: Try vramTotalMB first, fallback to vramNote, then adapterRAM_GB
                                         bool vramFound = false;
                                         
-                                        if (firstGpu.TryGetProperty("vramTotalMB", out var vramMB) && 
-                                            vramMB.ValueKind == JsonValueKind.Number)
+                                        if (firstGpu.TryGetProperty("vramTotalMB", out var vramMB))
                                         {
-                                            var mb = vramMB.GetDouble();
+                                            var mb = SafeGetDouble(vramMB, 0);
                                             if (mb > 0)
                                             {
                                                 evidence["VRAM totale"] = mb >= 1024 
@@ -1275,10 +1391,9 @@ namespace PCDiagnosticPro.Services
                                         }
                                         
                                         // Fallback to adapterRAM_GB (legacy field)
-                                        if (!vramFound && firstGpu.TryGetProperty("adapterRAM_GB", out var adapterRam) &&
-                                            adapterRam.ValueKind == JsonValueKind.Number)
+                                        if (!vramFound && firstGpu.TryGetProperty("adapterRAM_GB", out var adapterRam))
                                         {
-                                            var gb = adapterRam.GetDouble();
+                                            var gb = SafeGetDouble(adapterRam, 0);
                                             if (gb > 0)
                                                 evidence["VRAM totale"] = $"{gb:F1} GB";
                                         }
@@ -1288,7 +1403,7 @@ namespace PCDiagnosticPro.Services
                                 // Nombre de GPU
                                 if (data.TryGetProperty("gpuCount", out var gpuCount))
                                 {
-                                    var count = gpuCount.ValueKind == JsonValueKind.Number ? gpuCount.GetInt32() : 0;
+                                    var count = SafeGetInt(gpuCount, 0);
                                     if (count > 0)
                                         evidence["Nombre de GPU"] = count.ToString();
                                 }
@@ -1301,16 +1416,18 @@ namespace PCDiagnosticPro.Services
                                 double? totalGB = null;
                                 double? availableGB = null;
                                 
-                                if (data.TryGetProperty("totalGB", out var total) && total.ValueKind == JsonValueKind.Number)
+                                if (data.TryGetProperty("totalGB", out var total))
                                 {
-                                    totalGB = total.GetDouble();
+                                    var t = SafeGetDouble(total, -1);
+                                    totalGB = t >= 0 ? t : (double?)null;
                                     if (totalGB > 0)
                                         evidence["Total"] = $"{totalGB:F1} GB";
                                 }
                                 
-                                if (data.TryGetProperty("availableGB", out var avail) && avail.ValueKind == JsonValueKind.Number)
+                                if (data.TryGetProperty("availableGB", out var avail))
                                 {
-                                    availableGB = avail.GetDouble();
+                                    var a = SafeGetDouble(avail, -1);
+                                    availableGB = a >= 0 ? a : (double?)null;
                                     evidence["Disponible"] = $"{availableGB:F1} GB";
                                 }
                                 
@@ -1329,9 +1446,9 @@ namespace PCDiagnosticPro.Services
                                     if (moduleCount > 0)
                                         evidence["Barrettes"] = moduleCount.ToString();
                                 }
-                                else if (data.TryGetProperty("moduleCount", out var modCount) && modCount.ValueKind == JsonValueKind.Number)
+                                else if (data.TryGetProperty("moduleCount", out var modCount))
                                 {
-                                    var count = modCount.GetInt32();
+                                    var count = SafeGetInt(modCount, 0);
                                     if (count > 0)
                                         evidence["Barrettes"] = count.ToString();
                                 }
@@ -1441,10 +1558,9 @@ namespace PCDiagnosticPro.Services
                                             if (!string.IsNullOrEmpty(speedStr))
                                                 evidence["Vitesse"] = speedStr;
                                         }
-                                        else if (activeAdapter.TryGetProperty("speedMbps", out var speedMbps) &&
-                                            speedMbps.ValueKind == JsonValueKind.Number)
+                                        else if (activeAdapter.TryGetProperty("speedMbps", out var speedMbps))
                                         {
-                                            var mbps = speedMbps.GetDouble();
+                                            var mbps = SafeGetDouble(speedMbps, 0);
                                             if (mbps > 0)
                                                 evidence["Vitesse"] = $"{mbps:F0} Mbps";
                                         }
@@ -1488,8 +1604,8 @@ namespace PCDiagnosticPro.Services
                         case HealthDomain.Drivers:
                             if (sectionName == "DevicesDrivers" && data.ValueKind == JsonValueKind.Object)
                             {
-                                var problemCount = data.TryGetProperty("problemDeviceCount", out var pc) ? pc.GetInt32() : 
-                                                   data.TryGetProperty("ProblemDeviceCount", out var pc2) ? pc2.GetInt32() : -1;
+                                var problemCount = data.TryGetProperty("problemDeviceCount", out var pc) ? SafeGetInt(pc, -1) : 
+                                                   data.TryGetProperty("ProblemDeviceCount", out var pc2) ? SafeGetInt(pc2, -1) : -1;
                                 if (problemCount >= 0)
                                 {
                                     evidence["Périph. en erreur"] = problemCount > 0 ? $"⚠️ {problemCount}" : "0 ✅";
@@ -1505,8 +1621,8 @@ namespace PCDiagnosticPro.Services
                             }
                             else if (sectionName == "Audio" && data.ValueKind == JsonValueKind.Object)
                             {
-                                var deviceCount = data.TryGetProperty("deviceCount", out var dc) ? dc.GetInt32() :
-                                                  data.TryGetProperty("DeviceCount", out var dc2) ? dc2.GetInt32() : -1;
+                                var deviceCount = data.TryGetProperty("deviceCount", out var dc) ? SafeGetInt(dc, -1) :
+                                                  data.TryGetProperty("DeviceCount", out var dc2) ? SafeGetInt(dc2, -1) : -1;
                                 if (deviceCount >= 0)
                                 {
                                     evidence["Périph. audio"] = deviceCount.ToString();
@@ -1514,8 +1630,8 @@ namespace PCDiagnosticPro.Services
                             }
                             else if (sectionName == "Printers" && data.ValueKind == JsonValueKind.Object)
                             {
-                                var printerCount = data.TryGetProperty("printerCount", out var prc) ? prc.GetInt32() :
-                                                   data.TryGetProperty("PrinterCount", out var prc2) ? prc2.GetInt32() : -1;
+                                var printerCount = data.TryGetProperty("printerCount", out var prc) ? SafeGetInt(prc, -1) :
+                                                   data.TryGetProperty("PrinterCount", out var prc2) ? SafeGetInt(prc2, -1) : -1;
                                 if (printerCount >= 0)
                                 {
                                     evidence["Imprimantes"] = printerCount.ToString();
@@ -1737,19 +1853,21 @@ namespace PCDiagnosticPro.Services
             catch { return wmiDate ?? ""; }
         }
         
-        /// <summary>Helper: extrait un int depuis un JsonElement de façon sûre (Number ou String)</summary>
+        /// <summary>Helper: extrait un int depuis un JsonElement de façon sûre (Number, String, ou Object avec "value").</summary>
         private static int SafeGetInt(JsonElement el, int defaultValue = 0)
         {
             if (el.ValueKind == JsonValueKind.Number) return el.GetInt32();
             if (el.ValueKind == JsonValueKind.String && int.TryParse(el.GetString(), out var i)) return i;
+            if (el.ValueKind == JsonValueKind.Object && el.TryGetProperty("value", out var v)) return SafeGetInt(v, defaultValue);
             return defaultValue;
         }
         
-        /// <summary>Helper: extrait un double depuis un JsonElement de façon sûre (Number ou String)</summary>
+        /// <summary>Helper: extrait un double depuis un JsonElement de façon sûre (Number, String, ou Object avec "value").</summary>
         private static double SafeGetDouble(JsonElement el, double defaultValue = 0)
         {
             if (el.ValueKind == JsonValueKind.Number) return el.GetDouble();
             if (el.ValueKind == JsonValueKind.String && double.TryParse(el.GetString(), out var d)) return d;
+            if (el.ValueKind == JsonValueKind.Object && el.TryGetProperty("value", out var v)) return SafeGetDouble(v, defaultValue);
             return defaultValue;
         }
     }

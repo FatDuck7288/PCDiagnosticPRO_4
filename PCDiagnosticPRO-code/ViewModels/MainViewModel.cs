@@ -1042,6 +1042,38 @@ namespace PCDiagnosticPro.ViewModels
                 }
             });
         }
+
+        /// <summary>
+        /// Injecte les résultats du speed test (download/upload/ping/jitter) dans la section Réseau du rapport.
+        /// Si aucun speed test n'a été fait, affiche "Speed test" = "Non effectué".
+        /// </summary>
+        private void InjectSpeedTestIntoNetworkSection(HealthReport? report)
+        {
+            if (report?.Sections == null) return;
+            var networkSection = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.Network);
+            if (networkSection == null) return;
+
+            var dl = NetworkDownloadMbps;
+            var ul = NetworkUploadMbps;
+            var ping = NetworkLatencyMs;
+            var jitter = _lastNetworkDiagnostics?.OverallJitterMsP95;
+
+            if (dl.HasValue || ul.HasValue || ping.HasValue)
+            {
+                if (dl.HasValue)
+                    networkSection.EvidenceData["Débit descendant (speed test)"] = $"{dl.Value:F0} Mbps";
+                if (ul.HasValue)
+                    networkSection.EvidenceData["Débit montant (speed test)"] = $"{ul.Value:F0} Mbps";
+                if (ping.HasValue)
+                    networkSection.EvidenceData["Ping (speed test)"] = $"{ping.Value:F0} ms";
+                if (jitter.HasValue)
+                    networkSection.EvidenceData["Jitter (speed test)"] = $"{jitter.Value:F0} ms";
+            }
+            else
+            {
+                networkSection.EvidenceData["Speed test"] = "Non effectué";
+            }
+        }
         
         /// <summary>
         /// Notify UI when process telemetry data changes
@@ -1195,7 +1227,9 @@ namespace PCDiagnosticPro.ViewModels
                         HealthReport.UdisReport.NetworkSpeedTier = libreResult.SpeedTier;
                         HealthReport.UdisReport.NetworkRecommendation = _standaloneRecommendation;
                     }
-                    
+                    InjectSpeedTestIntoNetworkSection(HealthReport);
+                    UpdateHealthSections();
+
                     // Sauvegarder le résultat en JSON pour inspection LLM
                     var jsonPath = await _libreSpeedService.SaveResultToJsonAsync(libreResult);
                     if (!string.IsNullOrEmpty(jsonPath))
@@ -1222,7 +1256,9 @@ namespace PCDiagnosticPro.ViewModels
                             
                             App.LogMessage($"[SpeedTest] Fallback OK: Download={fallbackResult.DownloadMbps:F1} Mbps");
                             AddLiveFeedItem($"✅ Speed Test (fallback): {fallbackResult.DownloadMbps:F1} Mbps ↓");
-                            
+                            InjectSpeedTestIntoNetworkSection(HealthReport);
+                            UpdateHealthSections();
+
                             // FIX #4: Fallback upload — use NetworkDiagnosticsCollector's upload test
                             // instead of leaving upload as null
                             try
@@ -2812,6 +2848,7 @@ namespace PCDiagnosticPro.ViewModels
                 var reportToSet = healthReportForUi;
                 Application.Current?.Dispatcher?.Invoke(() =>
                 {
+                    InjectSpeedTestIntoNetworkSection(reportToSet);
                     HealthReport = reportToSet;
                     if (result.IsValid)
                         OnScanPipelineCompleted(result, string.Empty, GetString("ResultsCompletedTitle"), forceCompletedStatus: true);

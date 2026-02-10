@@ -28,27 +28,6 @@ namespace PCDiagnosticPro.Services
         public static bool DebugPathsEnabled { get; set; } = 
             Environment.GetEnvironmentVariable("PCDIAG_DEBUG_PATHS") == "1";
 
-        // #region agent log
-        private static readonly string DebugLogPath = @"d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\.cursor\debug.log";
-        private static void DebugLog(string hypothesisId, string location, string message, object? data = null)
-        {
-            try
-            {
-                var entry = System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    sessionId = "debug-session",
-                    hypothesisId,
-                    location,
-                    message,
-                    data
-                });
-                System.IO.File.AppendAllText(DebugLogPath, entry + "\n");
-            }
-            catch { /* ignore logging errors */ }
-        }
-        // #endregion
-
         /// <summary>
         /// Résultat d'extraction avec score de couverture
         /// </summary>
@@ -144,16 +123,12 @@ namespace PCDiagnosticPro.Services
 
             // 3. Uptime
             var lastBoot = GetString(osData, "lastBootUpTime");
-            // #region agent log
-            DebugLog("C", "ExtractOS:uptime", "lastBootUpTime from OS.data", new { lastBoot });
             // Fallback to MachineIdentity.data.lastBoot
             if (string.IsNullOrEmpty(lastBoot))
             {
                 var machineId = GetSectionData(root, "MachineIdentity");
                 lastBoot = GetString(machineId, "lastBoot") ?? GetString(machineId, "LastBoot");
-                DebugLog("C", "ExtractOS:uptime", "fallback to MachineIdentity.lastBoot", new { lastBoot });
             }
-            // #endregion
             if (!string.IsNullOrEmpty(lastBoot) && DateTime.TryParse(lastBoot, out var bootDt))
             {
                 var uptime = DateTime.Now - bootDt;
@@ -334,25 +309,10 @@ namespace PCDiagnosticPro.Services
             var cpuData = GetSectionData(root, "CPU");
             JsonElement? firstCpu = null;
             
-            // #region agent log
-            DebugLog("A", "ExtractCPU:entry", "cpuData exists", new { hasCpuData = cpuData.HasValue });
-            if (cpuData.HasValue)
-            {
-                // Log the actual structure of cpus/cpuList
-                var cpusKind = cpuData.Value.TryGetProperty("cpus", out var cpusEl) ? cpusEl.ValueKind.ToString() : "NotFound";
-                var cpuListKind = cpuData.Value.TryGetProperty("cpuList", out var cpuListEl) ? cpuListEl.ValueKind.ToString() : "NotFound";
-                DebugLog("A", "ExtractCPU:structure", "cpus/cpuList structure", new { cpusKind, cpuListKind });
-            }
-            // #endregion
-            
             if (cpuData.HasValue)
             {
                 // Supporte array et object pour cpus/cpuList
                 firstCpu = GetFirstItemFromArrayOrObject(cpuData, "cpus") ?? GetFirstItemFromArrayOrObject(cpuData, "cpuList");
-                
-                // #region agent log
-                DebugLog("A", "ExtractCPU:result", "firstCpu resolved", new { hasCpu = firstCpu.HasValue, kind = firstCpu?.ValueKind.ToString() });
-                // #endregion
             }
 
             // 1. Modèle CPU
@@ -447,27 +407,12 @@ namespace PCDiagnosticPro.Services
 
             // 7. Throttling (Oui/Non + raison)
             var signals = GetDiagnosticSignals(root);
-            // #region agent log
-            if (signals.HasValue && signals.Value.ValueKind == JsonValueKind.Object)
-            {
-                var signalNames = new List<string>();
-                foreach (var prop in signals.Value.EnumerateObject()) signalNames.Add(prop.Name);
-                DebugLog("D", "ExtractCPU:signals", "available signal names", new { signalNames });
-            }
-            else
-            {
-                DebugLog("D", "ExtractCPU:signals", "diagnostic_signals is NULL or not an Object", null);
-            }
-            // #endregion
             if (signals.HasValue)
             {
                 // Try multiple naming conventions for throttle signal
                 var throttle = GetSignalResult(signals.Value, "cpu_throttle") 
                     ?? GetSignalResult(signals.Value, "cpuThrottle")
                     ?? GetSignalResult(signals.Value, "CpuThrottle");
-                // #region agent log
-                DebugLog("D", "ExtractCPU:throttle", "throttle signal found", new { hasThrottle = throttle.HasValue });
-                // #endregion
                 if (throttle.HasValue)
                 {
                     var detected = GetBool(throttle, "detected") ?? false;
@@ -581,10 +526,6 @@ namespace PCDiagnosticPro.Services
             {
                 // Supporte array et object pour gpuList/gpus
                 firstGpu = GetFirstItemFromArrayOrObject(gpuData, "gpuList") ?? GetFirstItemFromArrayOrObject(gpuData, "gpus");
-                
-                // #region agent log
-                DebugLog("A", "ExtractGPU:result", "firstGpu resolved", new { hasGpu = firstGpu.HasValue, kind = firstGpu?.ValueKind.ToString() });
-                // #endregion
             }
 
             // 1. Nom GPU
@@ -726,21 +667,13 @@ namespace PCDiagnosticPro.Services
                 AddUnknown(ev, "Charge GPU", sensors?.Gpu?.GpuLoadPercent?.Reason ?? "capteur indisponible");
             }
 
-            // 9. Température GPU (capteurs C# - UNE SEULE LIGNE + SOURCE pour debug)
+            // 9. Température GPU (résumé: valeur uniquement; source dans tooltip / Rapport intégral)
             // FIX #1: Remove white ⚠️ glyph - severity shown via color in UI
             if (sensors?.Gpu?.GpuTempC?.Available == true)
             {
                 var temp = sensors.Gpu.GpuTempC.Value;
-                // Textual severity indicator without emoji (color handled by UI)
                 var status = temp > 85 ? " (Critique)" : temp > 75 ? " (Élevée)" : "";
-                // Affiche la source de température pour debug
-                var source = sensors.Gpu.GpuTempSource ?? "LHM";
-                Add(ev, "Température GPU", $"{temp:F0}°C{status}", $"sensors_csharp.gpu.gpuTempC ({source})");
-                
-                // ADD: Temperature source trace for GPU
-                // NOTE: Task Manager shows "GPU Edge" typically ~10-15°C lower than "Hot Spot"
-                // LibreHardwareMonitor may pick Hot Spot if Edge isn't available
-                Add(ev, "Source temp GPU", source, "sensors_csharp.gpu.gpuTempSource");
+                Add(ev, "Température GPU", $"{temp:F0}°C{status}", "sensors_csharp.gpu.gpuTempC");
             }
             else
             {
@@ -1215,19 +1148,6 @@ namespace PCDiagnosticPro.Services
             JsonElement? netQualityValue = null;
             if (netQuality.HasValue && netQuality.Value.TryGetProperty("value", out var nqv))
                 netQualityValue = nqv;
-            
-            // #region agent log
-            if (netDiag.HasValue && netDiag.Value.ValueKind == JsonValueKind.Object)
-            {
-                var netDiagProps = new List<string>();
-                foreach (var prop in netDiag.Value.EnumerateObject()) netDiagProps.Add(prop.Name);
-                DebugLog("B", "ExtractNetwork:netDiag", "network_diagnostics properties", new { netDiagProps });
-            }
-            else
-            {
-                DebugLog("B", "ExtractNetwork:netDiag", "network_diagnostics is NULL or not an Object", null);
-            }
-            // #endregion
             
             bool hasNetDiagData = false;
             
@@ -1876,35 +1796,6 @@ namespace PCDiagnosticPro.Services
             
             var secData = GetSectionData(root, "Security");
             var machineIdData = GetSectionData(root, "MachineIdentity");
-            
-            // #region agent log
-            if (secData.HasValue && secData.Value.ValueKind == JsonValueKind.Object)
-            {
-                var secProps = new List<string>();
-                foreach (var prop in secData.Value.EnumerateObject()) secProps.Add(prop.Name);
-                DebugLog("C", "ExtractSecurity:entry", "Security section properties", new { secProps });
-                // Check for antivirusProducts
-                if (secData.Value.TryGetProperty("antivirusProducts", out var avProducts))
-                {
-                    DebugLog("C", "ExtractSecurity:av", "antivirusProducts found", new { kind = avProducts.ValueKind.ToString() });
-                }
-                // Check for firewall structure
-                if (secData.Value.TryGetProperty("firewall", out var fw))
-                {
-                    DebugLog("C", "ExtractSecurity:fw", "firewall found", new { kind = fw.ValueKind.ToString() });
-                    if (fw.ValueKind == JsonValueKind.Object)
-                    {
-                        var fwProps = new List<string>();
-                        foreach (var p in fw.EnumerateObject()) fwProps.Add(p.Name);
-                        DebugLog("C", "ExtractSecurity:fw", "firewall properties", new { fwProps });
-                    }
-                }
-            }
-            else
-            {
-                DebugLog("C", "ExtractSecurity:entry", "Security section is NULL", null);
-            }
-            // #endregion
             
             // 1. Antivirus - try multiple sources
             // antivirusProducts peut être string ou array
@@ -2579,14 +2470,27 @@ namespace PCDiagnosticPro.Services
             return null;
         }
 
+        private static int? GetIntFromElement(JsonElement prop)
+        {
+            if (prop.ValueKind == JsonValueKind.Number) return prop.GetInt32();
+            if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out var i)) return i;
+            if (prop.ValueKind == JsonValueKind.Object && prop.TryGetProperty("value", out var v)) return GetIntFromElement(v);
+            return null;
+        }
+
         private static int? GetInt(JsonElement? element, string propName)
         {
             if (!element.HasValue || element.Value.ValueKind != JsonValueKind.Object) return null;
             if (element.Value.TryGetProperty(propName, out var prop))
-            {
-                if (prop.ValueKind == JsonValueKind.Number) return prop.GetInt32();
-                if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out var i)) return i;
-            }
+                return GetIntFromElement(prop);
+            return null;
+        }
+
+        private static double? GetDoubleFromElement(JsonElement prop)
+        {
+            if (prop.ValueKind == JsonValueKind.Number) return prop.GetDouble();
+            if (prop.ValueKind == JsonValueKind.String && double.TryParse(prop.GetString(), out var d)) return d;
+            if (prop.ValueKind == JsonValueKind.Object && prop.TryGetProperty("value", out var v)) return GetDoubleFromElement(v);
             return null;
         }
 
@@ -2594,10 +2498,7 @@ namespace PCDiagnosticPro.Services
         {
             if (!element.HasValue || element.Value.ValueKind != JsonValueKind.Object) return null;
             if (element.Value.TryGetProperty(propName, out var prop))
-            {
-                if (prop.ValueKind == JsonValueKind.Number) return prop.GetDouble();
-                if (prop.ValueKind == JsonValueKind.String && double.TryParse(prop.GetString(), out var d)) return d;
-            }
+                return GetDoubleFromElement(prop);
             return null;
         }
 
@@ -2763,18 +2664,6 @@ namespace PCDiagnosticPro.Services
             
             // Source 1: process_telemetry (C# collector) - HIGHEST PRIORITY
             var telemetry = GetNestedElement(root, "process_telemetry");
-            // #region agent log
-            if (telemetry.HasValue && telemetry.Value.ValueKind == JsonValueKind.Object)
-            {
-                var propNames = new List<string>();
-                foreach (var prop in telemetry.Value.EnumerateObject()) propNames.Add(prop.Name);
-                DebugLog("B", "GetTopProcesses:entry", $"process_telemetry props for metric={metric}", new { propNames });
-            }
-            else
-            {
-                DebugLog("B", "GetTopProcesses:entry", "process_telemetry is NULL", new { metric });
-            }
-            // #endregion
             
             if (telemetry.HasValue)
             {
@@ -2806,9 +2695,6 @@ namespace PCDiagnosticPro.Services
                             .Where(n => !string.IsNullOrEmpty(n))
                             .Take(count)
                             .ToList();
-                        // #region agent log
-                        DebugLog("B", "GetTopProcesses:found", $"Found data at process_telemetry.{name}", new { resultCount = result.Count });
-                        // #endregion
                         if (result.Count > 0) break;
                     }
                 }
@@ -2840,7 +2726,6 @@ namespace PCDiagnosticPro.Services
                             
                             if (result.Count > 0)
                             {
-                                DebugLog("B", "GetTopProcesses:fallback", $"Found data at DynamicSignals.{name}", new { resultCount = result.Count });
                                 break;
                             }
                         }

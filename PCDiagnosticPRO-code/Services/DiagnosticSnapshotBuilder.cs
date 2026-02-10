@@ -1408,6 +1408,8 @@ namespace PCDiagnosticPro.Services
                 return element.GetDouble();
             if (element.ValueKind == JsonValueKind.String && double.TryParse(element.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d))
                 return d;
+            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("value", out var v))
+                return GetDoubleValue(v);
             return null;
         }
 
@@ -1527,6 +1529,11 @@ namespace PCDiagnosticPro.Services
                     return MetricFactory.CreateAvailable(Math.Round(val.GetDouble(), 2), unit, source, 100);
                 if (val.ValueKind == JsonValueKind.String && double.TryParse(val.GetString(), out var d))
                     return MetricFactory.CreateAvailable(Math.Round(d, 2), unit, source, 100);
+                if (val.ValueKind == JsonValueKind.Object && val.TryGetProperty("value", out var v))
+                {
+                    var dVal = GetDoubleValue(v);
+                    if (dVal.HasValue) return MetricFactory.CreateAvailable(Math.Round(dVal.Value, 2), unit, source, 100);
+                }
             }
             return MetricFactory.CreateUnavailable(unit, source, "property_not_found");
         }

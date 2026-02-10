@@ -52,7 +52,7 @@ namespace PCDiagnosticPro.Views {
                 return;
             }
             _contentLoaded = true;
-            System.Uri resourceLocater = new System.Uri("/PCDiagnosticPro;component/views/collectorerrorswindow.xaml", System.UriKind.Relative);
+            System.Uri resourceLocater = new System.Uri("/PCDiagnosticPro;V1.0.0.0;component/views/collectorerrorswindow.xaml", System.UriKind.Relative);
             
             #line 1 "..\..\..\..\Views\CollectorErrorsWindow.xaml"
             System.Windows.Application.LoadComponent(this, resourceLocater);

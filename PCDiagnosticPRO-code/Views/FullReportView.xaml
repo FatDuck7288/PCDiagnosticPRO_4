@@ -6,7 +6,8 @@
              xmlns:vm="clr-namespace:PCDiagnosticPro.ViewModels"
              xmlns:conv="clr-namespace:PCDiagnosticPro.Converters"
              mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="900"
-             Background="#0D1117">
+             Background="#0D1117"
+             PreviewMouseWheel="UserControl_PreviewMouseWheel">
 
     <UserControl.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
@@ -74,12 +75,11 @@
                     <TextBlock Text="{Binding SummaryLine1}" FontSize="12" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" Margin="0,0,0,4"/>
                     <TextBlock Text="{Binding SummaryLine2}" FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,0,0,12"/>
 
-                    <!-- KEY/VALUE TABLE (always visible when has data) -->
+                    <!-- KEY/VALUE TABLE: always visible so section data is never hidden by binding issues -->
                     <DataGrid ItemsSource="{Binding KeyValues}" AutoGenerateColumns="False" IsReadOnly="True"
                               HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0"
                               Background="Transparent" AlternatingRowBackground="#1A2129"
-                              Margin="0,0,0,12"
-                              Visibility="{Binding DataContext.IsSummaryMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                              Margin="0,0,0,12">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Clé" Binding="{Binding Key}" Width="*" MinWidth="120">
                                 <DataGridTextColumn.ElementStyle>

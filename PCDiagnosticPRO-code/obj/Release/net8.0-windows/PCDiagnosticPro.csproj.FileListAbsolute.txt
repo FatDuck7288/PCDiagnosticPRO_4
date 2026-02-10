@@ -70,3 +70,7 @@ D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-detail
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Release\net8.0-windows\PCDiagnosticPro.pdb
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Release\net8.0-windows\PCDiagnosticPro.genruntimeconfig.cache
 D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Release\net8.0-windows\ref\PCDiagnosticPro.dll
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Release\net8.0-windows\Views\FullReportView.g.cs
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Release\net8.0-windows\Views\FullReportWindow.g.cs
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Release\net8.0-windows\Views\FullReportView.baml
+D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Release\net8.0-windows\Views\FullReportWindow.baml

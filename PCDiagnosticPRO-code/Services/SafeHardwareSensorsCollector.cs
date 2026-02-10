@@ -14,6 +14,9 @@ namespace PCDiagnosticPro.Services
     /// Safe hardware sensors collector that does NOT use WinRing0 or any kernel drivers.
     /// Uses only Windows-native APIs: WMI, Performance Counters, and vendor-specific usermode APIs.
     /// This avoids triggering Windows Defender alerts for vulnerable drivers.
+    /// CPU temp: WMI only (MSAcpi_ThermalZoneTemperature, TemperatureProbe, etc.) — often "Non disponible"
+    /// on desktops; no PerfCounter for CPU temp (Windows does not expose it); no LHM in safe mode.
+    /// GPU load: Performance Counter "GPU Engine" with engtype_3D only (aligned with Task Manager "GPU 3D").
     /// </summary>
     public class SafeHardwareSensorsCollector
     {
@@ -305,7 +308,8 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
-        /// Try to get GPU load from Windows Performance Counters
+        /// Try to get GPU load from Windows Performance Counters.
+        /// Uses only "engtype_3D" instances so the value matches Task Manager "GPU 3D" (not Copy/Video Decode).
         /// </summary>
         private double? TryGetGpuLoadFromPerfCounters()
         {

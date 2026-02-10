@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -43,7 +44,8 @@ namespace PCDiagnosticPro.Services
         {
             _detected = 0;
             _mapped = 0;
-
+            try
+            {
             var vm = new FullReportViewModel();
             var snapshot = combined.DiagnosticSnapshot;
             var metadata = combined.Metadata;
@@ -68,18 +70,35 @@ namespace PCDiagnosticPro.Services
             var sections = new List<ReportSectionViewModel>
             {
                 BuildSystemSection(snapshot, metadata),
-                BuildCpuSection(snapshot, combined.SensorsCsharp),
+                BuildCpuSection(snapshot, combined.SensorsCsharp, combined),
                 BuildGpuSection(snapshot, combined.SensorsCsharp),
                 BuildMemorySection(snapshot),
                 BuildStorageSection(snapshot, combined.SensorsCsharp),
                 BuildNetworkSection(snapshot, combined.NetworkDiagnostics),
-                BuildStabilitySection(snapshot),
+                BuildStabilitySection(snapshot, combined),
+                BuildPerformanceSection(snapshot, combined),
                 BuildSecuritySection(snapshot, combined.SecurityInfoCsharp),
                 BuildUpdatesSection(snapshot, combined.UpdatesCsharp),
                 BuildDevicesSection(snapshot, combined.DriverInventory),
                 BuildCollectorErrorsSection(errors, missingData, combined.CollectorDiagnostics, snapshot),
                 BuildTechnicalLogSection(snapshot, combined)
             };
+
+            // Fallback: when DiagnosticSnapshot is null or sections are empty, fill from scan_powershell so report is never blank
+            if (snapshot == null || sections.Any(s => s.KeyValues.Count == 0))
+                FillSectionsFromScanPowershell(combined, sections);
+
+            // Ensure no section is completely empty (placeholder so UI always shows something)
+            foreach (var s in sections)
+            {
+                if (s.KeyValues.Count == 0)
+                {
+                    AddKV(s, "Information", "Données non disponibles pour cette section.", "");
+                    s.SummaryLine1 = "Aucune donnée collectée.";
+                    s.SummaryLine2 = "Lancer un scan complet puis rouvrir le rapport intégral.";
+                    if (s.SectionScore == 0) s.SectionScore = 50;
+                }
+            }
 
             foreach (var s in sections)
                 vm.Sections.Add(s);
@@ -96,8 +115,262 @@ namespace PCDiagnosticPro.Services
                     App.LogMessage($"[UI_NA] Section={s.Id} champs_NA={naCount} (total_lignes={s.KeyValues.Count})");
             }
 
+            LogUnmappedFieldWarnings(combined, sections);
             vm.SelectFirstSection();
             return vm;
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
+        /// <summary>When DiagnosticSnapshot is null or sections are empty, fill KeyValues from scan_powershell so the report is never blank.</summary>
+        private static void FillSectionsFromScanPowershell(CombinedScanResult combined, List<ReportSectionViewModel> sections)
+        {
+            try
+            {
+                var ps = combined.ScanPowershell;
+                if (ps.ValueKind != JsonValueKind.Object) return;
+                // Support both root "sections" and "data.sections" (some PS outputs wrap under data)
+                if (!ps.TryGetProperty("sections", out var sectionsEl) || sectionsEl.ValueKind != JsonValueKind.Object)
+                {
+                    if (!ps.TryGetProperty("data", out var data) || !data.TryGetProperty("sections", out sectionsEl) || sectionsEl.ValueKind != JsonValueKind.Object)
+                        return;
+                }
+
+                var byId = sections.ToDictionary(s => s.Id, StringComparer.OrdinalIgnoreCase);
+
+                // System / OS
+                var sys = byId.GetValueOrDefault("System");
+                if (sys != null && sys.KeyValues.Count == 0)
+                {
+                    if (combined.Metadata != null)
+                    {
+                        AddKV(sys, "Script version", combined.Metadata.Version, "");
+                        AddKV(sys, "RunId", combined.Metadata.RunId, "");
+                        AddKV(sys, "Durée scan", combined.Metadata.DurationSeconds > 0 ? $"{combined.Metadata.DurationSeconds:F1}" : null, "s");
+                        AddKV(sys, "PartialFailure", combined.Metadata.PartialFailure ? "Oui" : "Non", "");
+                    }
+                    if (sectionsEl.TryGetProperty("OS", out var osSec) && osSec.TryGetProperty("data", out var osData))
+                    {
+                        AddKVIfNew(sys, "Caption", GetStringFromJe(osData, "caption"), "");
+                        AddKVIfNew(sys, "Version", GetStringFromJe(osData, "version"), "");
+                        AddKVIfNew(sys, "Architecture", GetStringFromJe(osData, "architecture"), "");
+                        AddKVIfNew(sys, "Dernier démarrage", GetStringFromJe(osData, "lastBootUpTime"), "");
+                    }
+                    if (sectionsEl.TryGetProperty("MachineIdentity", out var mi) && mi.TryGetProperty("data", out var miData))
+                    {
+                        AddKVIfNew(sys, "Nom d'hôte", GetStringFromJe(miData, "hostname") ?? GetStringFromJe(miData, "computerName"), "");
+                        AddKVIfNew(sys, "Utilisateur", GetStringFromJe(miData, "username"), "");
+                    }
+                    if (sys.KeyValues.Count > 0)
+                    {
+                        sys.SummaryLine1 = sys.KeyValues.FirstOrDefault(kv => kv.Key.Contains("Caption") || kv.Key.Contains("Version"))?.Value ?? "Données depuis scan PowerShell.";
+                        sys.SummaryLine2 = "Source: scan_powershell (fallback)";
+                        sys.SectionScore = 70;
+                    }
+                }
+
+                // CPU (cpus can be Array or Object in PS output)
+                var cpu = byId.GetValueOrDefault("CPU");
+                if (cpu != null && cpu.KeyValues.Count == 0 && sectionsEl.TryGetProperty("CPU", out var cpuSec) && cpuSec.TryGetProperty("data", out var cpuData))
+                {
+                    if (cpuData.TryGetProperty("cpus", out var cpus))
+                    {
+                        var c0 = GetFirstElementFromArrayOrObject(cpus);
+                        if (c0.HasValue)
+                        {
+                            AddKV(cpu, "Modèle", GetStringFromJe(c0.Value, "name"), "");
+                            AddKV(cpu, "Cœurs", GetIntFromJe(c0.Value, "cores"), "");
+                            AddKV(cpu, "Threads", GetIntFromJe(c0.Value, "threads"), "");
+                            AddKV(cpu, "Charge", GetDoubleFromJe(c0.Value, "currentLoad"), "%");
+                        }
+                    }
+                    AddKVIfNew(cpu, "RAM totale", GetDoubleFromJe(cpuData, "totalRamGB"), "GB");
+                    if (cpu.KeyValues.Count > 0)
+                    {
+                        cpu.SummaryLine1 = cpu.KeyValues.FirstOrDefault(kv => string.Equals(kv.Key, "Modèle", StringComparison.OrdinalIgnoreCase))?.Value ?? "CPU (PS)";
+                        cpu.SummaryLine2 = "Source: scan_powershell.sections.CPU";
+                        cpu.SectionScore = 70;
+                    }
+                }
+
+                // GPU (gpuList can be Array or Object)
+                var gpu = byId.GetValueOrDefault("GPU");
+                if (gpu != null && gpu.KeyValues.Count == 0 && sectionsEl.TryGetProperty("GPU", out var gpuSec) && gpuSec.TryGetProperty("data", out var gpuData))
+                {
+                    var gpuListEl = gpuData.TryGetProperty("gpuList", out var gl) ? gl : (gpuData.TryGetProperty("gpus", out var gpus) ? gpus : default);
+                    if (gpuListEl.ValueKind != JsonValueKind.Undefined && gpuListEl.ValueKind != JsonValueKind.Null)
+                    {
+                        var g0 = GetFirstElementFromArrayOrObject(gpuListEl);
+                        if (g0.HasValue)
+                        {
+                            AddKV(gpu, "Modèle", GetStringFromJe(g0.Value, "name"), "");
+                            AddKV(gpu, "VRAM", GetDoubleFromJe(g0.Value, "vramTotalMB"), "MB");
+                            AddKV(gpu, "Pilote", GetStringFromJe(g0.Value, "driverVersion"), "");
+                        }
+                    }
+                    if (gpu.KeyValues.Count > 0)
+                    {
+                        gpu.SummaryLine1 = gpu.KeyValues.FirstOrDefault(kv => string.Equals(kv.Key, "Modèle", StringComparison.OrdinalIgnoreCase))?.Value ?? "GPU (PS)";
+                        gpu.SummaryLine2 = "Source: scan_powershell.sections.GPU";
+                        gpu.SectionScore = 70;
+                    }
+                }
+
+                // Memory (section Id is "RAM" in FullReportBuilder)
+                var mem = byId.GetValueOrDefault("RAM");
+                if (mem != null && mem.KeyValues.Count == 0 && sectionsEl.TryGetProperty("Memory", out var memSec) && memSec.TryGetProperty("data", out var memData))
+                {
+                    AddKV(mem, "RAM totale", GetDoubleFromJe(memData, "totalGB"), "GB");
+                    AddKV(mem, "RAM disponible", GetDoubleFromJe(memData, "availableGB"), "GB");
+                    AddKV(mem, "RAM utilisée", GetDoubleFromJe(memData, "usedGB"), "GB");
+                    if (mem.KeyValues.Count > 0)
+                    {
+                        mem.SummaryLine1 = $"RAM: {GetDoubleFromJe(memData, "totalGB")} GB total";
+                        mem.SummaryLine2 = "Source: scan_powershell.sections.Memory";
+                        mem.SectionScore = 70;
+                    }
+                }
+
+                // Storage (volumes object; disks array or object)
+                var storage = byId.GetValueOrDefault("Storage");
+                if (storage != null && storage.KeyValues.Count == 0 && sectionsEl.TryGetProperty("Storage", out var storSec) && storSec.TryGetProperty("data", out var storData))
+                {
+                    if (storData.TryGetProperty("volumes", out var vols) && vols.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var v in vols.EnumerateObject())
+                            AddKV(storage, $"Volume {v.Name}", v.Value.ValueKind == JsonValueKind.String ? v.Value.GetString() : v.Value.ToString(), "");
+                    }
+                    if (storage.KeyValues.Count == 0 && storData.TryGetProperty("disks", out var disks))
+                    {
+                        int idx = 0;
+                        foreach (var d in EnumerateArrayOrObject(disks))
+                        {
+                            if (idx >= 5) break;
+                            AddKV(storage, $"Disque {idx + 1}", GetStringFromJe(d, "model") ?? GetStringFromJe(d, "name"), "");
+                            idx++;
+                        }
+                    }
+                    if (storage.KeyValues.Count > 0)
+                    {
+                        storage.SummaryLine1 = $"Stockage: {storage.KeyValues.Count} élément(s)";
+                        storage.SummaryLine2 = "Source: scan_powershell.sections.Storage";
+                        storage.SectionScore = 70;
+                    }
+                }
+
+                // Network (adapters can be Array or Object)
+                var net = byId.GetValueOrDefault("Network");
+                if (net != null && net.KeyValues.Count == 0 && sectionsEl.TryGetProperty("Network", out var netSec) && netSec.TryGetProperty("data", out var netData))
+                {
+                    if (netData.TryGetProperty("adapters", out var adapters))
+                    {
+                        int idx = 0;
+                        foreach (var a in EnumerateArrayOrObject(adapters))
+                        {
+                            if (idx >= 3) break;
+                            AddKV(net, $"Adaptateur {idx + 1}", GetStringFromJe(a, "name") ?? GetStringFromJe(a, "description"), "");
+                            idx++;
+                        }
+                    }
+                    if (net.KeyValues.Count > 0)
+                    {
+                        net.SummaryLine1 = $"Réseau: {net.KeyValues.Count} adaptateur(s)";
+                        net.SummaryLine2 = "Source: scan_powershell.sections.Network";
+                        net.SectionScore = 70;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[FullReportBuilder] FillSectionsFromScanPowershell: {ex.Message}");
+            }
+        }
+
+        private static string? GetStringFromJe(JsonElement je, string prop)
+        {
+            if (je.TryGetProperty(prop, out var v))
+            {
+                if (v.ValueKind == JsonValueKind.String) return v.GetString();
+                if (v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i)) return i.ToString();
+                if (v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d)) return d.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+                if (v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False) return v.GetBoolean() ? "Oui" : "Non";
+            }
+            return null;
+        }
+
+        private static object? GetIntFromJe(JsonElement je, string prop)
+        {
+            if (je.TryGetProperty(prop, out var v) && v.TryGetInt32(out var i)) return i;
+            return null;
+        }
+
+        private static object? GetDoubleFromJe(JsonElement je, string prop)
+        {
+            if (je.TryGetProperty(prop, out var v) && v.TryGetDouble(out var d)) return d;
+            if (je.TryGetProperty(prop, out var v2) && v2.TryGetInt32(out var i)) return (double)i;
+            return null;
+        }
+
+        /// <summary>Get first element from JSON array or object (PS sometimes outputs cpus/gpuList as object).</summary>
+        private static JsonElement? GetFirstElementFromArrayOrObject(JsonElement je)
+        {
+            if (je.ValueKind == JsonValueKind.Array && je.GetArrayLength() > 0)
+                return je[0];
+            if (je.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var p in je.EnumerateObject())
+                    return p.Value;
+            }
+            return null;
+        }
+
+        private static IEnumerable<JsonElement> EnumerateArrayOrObject(JsonElement je)
+        {
+            if (je.ValueKind == JsonValueKind.Array)
+            {
+                for (int i = 0; i < je.GetArrayLength(); i++)
+                    yield return je[i];
+            }
+            else if (je.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var p in je.EnumerateObject())
+                    yield return p.Value;
+            }
+        }
+
+        /// <summary>Audit: logue un warning si des données collectées ne sont pas rendues dans le rapport intégral.</summary>
+        private static void LogUnmappedFieldWarnings(CombinedScanResult combined, List<ReportSectionViewModel> sections)
+        {
+            var allKeys = new HashSet<string>(sections.SelectMany(s => s.KeyValues.Select(kv => kv.Key)), StringComparer.OrdinalIgnoreCase);
+            if (combined.DiagnosticSignals != null)
+            {
+                foreach (var kv in combined.DiagnosticSignals)
+                {
+                    if (!kv.Value.Available) continue;
+                    var expected = kv.Key switch
+                    {
+                        "cpuThrottle" => "Throttling",
+                        "whea" => "WHEA",
+                        "driverStability" => "BSOD",
+                        _ => null
+                    };
+                    if (expected != null && !allKeys.Any(k => k.IndexOf(expected, StringComparison.OrdinalIgnoreCase) >= 0))
+                        App.LogMessage($"[FullReportBuilder] Champ collecté non rendu: diagnostic_signals.{kv.Key}");
+                }
+            }
+            if (combined.EventLogsDetailed != null && combined.EventLogsDetailed.Count > 0)
+            {
+                if (!allKeys.Any(k => k.IndexOf("EventLog", StringComparison.OrdinalIgnoreCase) >= 0 || k.IndexOf("WHEA", StringComparison.OrdinalIgnoreCase) >= 0))
+                    App.LogMessage("[FullReportBuilder] Champ collecté non rendu: event_logs_detailed");
+            }
+            if (combined.MinidumpsDetailed != null && combined.MinidumpsDetailed.Count > 0)
+            {
+                if (!allKeys.Any(k => k.IndexOf("Minidump", StringComparison.OrdinalIgnoreCase) >= 0 || k.IndexOf("BSOD", StringComparison.OrdinalIgnoreCase) >= 0))
+                    App.LogMessage("[FullReportBuilder] Champ collecté non rendu: minidumps_detailed");
+            }
         }
 
         // ===== HELPERS =====
@@ -228,7 +501,7 @@ namespace PCDiagnosticPro.Services
             return section;
         }
 
-        private static ReportSectionViewModel BuildCpuSection(DiagnosticSnapshot? snapshot, HardwareSensorsResult? sensors)
+        private static ReportSectionViewModel BuildCpuSection(DiagnosticSnapshot? snapshot, HardwareSensorsResult? sensors, CombinedScanResult combined)
         {
             var section = new ReportSectionViewModel { Id = "CPU", Title = "CPU", Level = IssueLevel.Info };
 
@@ -241,6 +514,17 @@ namespace PCDiagnosticPro.Services
             }
             if (sensors?.Cpu?.CpuLoadPercent?.Available == true)
                 AddKVIfNew(section, "cpuLoadPercent", sensors.Cpu.CpuLoadPercent.Value, "%", IssueLevel.Info, "C#");
+
+            // Source température / Méthode lecture (Rapport intégral)
+            var tempSource = sensors?.Cpu?.CpuTempC?.Available == true
+                ? (sensors.Cpu.CpuTempSource ?? "C#")
+                : (sensors?.Cpu?.CpuTempC?.Reason ?? "Non disponible");
+            AddKVIfNew(section, "Source température", tempSource, "", IssueLevel.Info, "C#");
+
+            // Throttling from diagnostic signals (cpuThrottle)
+            var throttleDisplay = GetCpuThrottleDisplay(combined.DiagnosticSignals);
+            if (throttleDisplay != null)
+                AddKVIfNew(section, "Throttling", throttleDisplay, "", IssueLevel.Info, "diagnostic_signals");
 
             // PS metrics (inventory); exclude "temperature" so we keep C# value and avoid duplicate/NA
             var cpuExclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "temperature" };
@@ -287,7 +571,7 @@ namespace PCDiagnosticPro.Services
                 if (gpu.GpuTempC?.Available == true)
                     AddKVIfNew(section, "Température GPU", gpu.GpuTempC.Value, "°C", IssueLevel.Info, $"C# ({gpu.GpuTempSource})");
                 if (gpu.GpuLoadPercent?.Available == true)
-                    AddKVIfNew(section, "Charge GPU", gpu.GpuLoadPercent.Value, "%", IssueLevel.Info, "C#");
+                    AddKVIfNew(section, "Charge GPU (3D)", gpu.GpuLoadPercent.Value, "%", IssueLevel.Info, "C# (aligné Gestionnaire des tâches)");
                 if (gpu.VramTotalMB?.Available == true)
                 {
                     vramTotal = gpu.VramTotalMB.Value;
@@ -469,17 +753,89 @@ namespace PCDiagnosticPro.Services
             return section;
         }
 
-        private static ReportSectionViewModel BuildStabilitySection(DiagnosticSnapshot? snapshot)
+        private static ReportSectionViewModel BuildStabilitySection(DiagnosticSnapshot? snapshot, CombinedScanResult combined)
         {
             var section = new ReportSectionViewModel { Id = "Stability", Title = "Stabilité système", Level = IssueLevel.Info };
 
-            // Stability metrics
+            // Stability metrics from snapshot
             AddMetricsGroup(section, snapshot, "stability", "PS");
-
-            // WHEA, power, performance groups if available
             AddMetricsGroup(section, snapshot, "whea", "PS");
             AddMetricsGroup(section, snapshot, "power", "PS");
             AddMetricsGroup(section, snapshot, "performance", "PS");
+
+            // DiagnosticSignals: WHEA (7d/30d, dernier, gravité)
+            var signals = combined.DiagnosticSignals;
+            if (signals != null)
+            {
+                if (signals.TryGetValue("whea", out var wheaSig) && wheaSig.Available && wheaSig.Value is JsonElement wheaJe)
+                {
+                    var whea7 = GetIntFromJe(wheaJe, "last7dCount", "Last7dCount");
+                    var whea30 = GetIntFromJe(wheaJe, "last30dCount", "Last30dCount");
+                    var fatal = GetIntFromJe(wheaJe, "fatalCount", "FatalCount");
+                    AddKVIfNew(section, "Erreurs WHEA (7j)", whea7, "count", (fatal ?? 0) > 0 ? IssueLevel.Critical : IssueLevel.Info, "diagnostic_signals");
+                    AddKVIfNew(section, "Erreurs WHEA (30j)", whea30, "count", (fatal ?? 0) > 0 ? IssueLevel.Critical : IssueLevel.Info, "diagnostic_signals");
+                    var lastWhea = GetLastEventFromJe(wheaJe, "lastEvents", "LastEvents");
+                    if (lastWhea != null) AddKVIfNew(section, "Dernier WHEA", lastWhea, "", IssueLevel.Info, "diagnostic_signals");
+                }
+                if (signals.TryGetValue("driverStability", out var drvSig) && drvSig.Available && drvSig.Value is JsonElement drvJe)
+                {
+                    var bsod30 = GetIntFromJe(drvJe, "bugcheckCount30d", "BugcheckCount30d");
+                    var kp41 = GetIntFromJe(drvJe, "kernelPower41Count30d", "KernelPower41Count30d");
+                    var tdr30 = GetIntFromJe(drvJe, "tdrCount30d", "TdrCount30d");
+                    if (bsod30.HasValue) AddKVIfNew(section, "BSOD (30j)", bsod30, "count", bsod30 > 0 ? IssueLevel.Critical : IssueLevel.Info, "diagnostic_signals");
+                    if (kp41.HasValue) AddKVIfNew(section, "Kernel-Power 41 (30j)", kp41, "count", kp41 > 0 ? IssueLevel.Warning : IssueLevel.Info, "diagnostic_signals");
+                    if (tdr30.HasValue) AddKVIfNew(section, "TDR (30j)", tdr30, "count", IssueLevel.Info, "diagnostic_signals");
+                    var lastDrv = GetLastEventFromJe(drvJe, "lastEvents", "LastEvents");
+                    if (lastDrv != null) AddKVIfNew(section, "Dernier événement stabilité", lastDrv, "", IssueLevel.Info, "diagnostic_signals");
+                }
+            }
+
+            // EventLogsDetailed: comptages 7j/30j et dernier événement (WHEA, Kernel-Power, BugCheck)
+            var eventLogs = combined.EventLogsDetailed;
+            if (eventLogs != null && eventLogs.Count > 0)
+            {
+                var now = DateTime.UtcNow;
+                var cutoff7 = now.AddDays(-7);
+                var cutoff30 = now.AddDays(-30);
+                int whea7 = 0, whea30 = 0, kp41_7 = 0, kp41_30 = 0, bug7 = 0, bug30 = 0;
+                EventLogDetailedEntry? lastWheaEv = null, lastKpEv = null, lastBugEv = null;
+                foreach (var e in eventLogs)
+                {
+                    var t = e.TimeCreated?.ToUniversalTime() ?? DateTime.MinValue;
+                    if (e.ProviderName?.IndexOf("WHEA", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        if (t >= cutoff7) whea7++; if (t >= cutoff30) whea30++;
+                        if (lastWheaEv == null || (e.TimeCreated > lastWheaEv.TimeCreated)) lastWheaEv = e;
+                    }
+                    if (e.ProviderName?.IndexOf("Kernel-Power", StringComparison.OrdinalIgnoreCase) >= 0 && e.EventId == 41)
+                    {
+                        if (t >= cutoff7) kp41_7++; if (t >= cutoff30) kp41_30++;
+                        if (lastKpEv == null || (e.TimeCreated > lastKpEv.TimeCreated)) lastKpEv = e;
+                    }
+                    if (e.ProviderName?.IndexOf("BugCheck", StringComparison.OrdinalIgnoreCase) >= 0 || e.EventId == 1001)
+                    {
+                        if (t >= cutoff7) bug7++; if (t >= cutoff30) bug30++;
+                        if (lastBugEv == null || (e.TimeCreated > lastBugEv.TimeCreated)) lastBugEv = e;
+                    }
+                }
+                if (whea7 > 0 || whea30 > 0) { AddKVIfNew(section, "WHEA (EventLog 7j)", whea7, "count", IssueLevel.Info, "event_logs"); AddKVIfNew(section, "WHEA (EventLog 30j)", whea30, "count", IssueLevel.Info, "event_logs"); }
+                if (kp41_7 > 0 || kp41_30 > 0) { AddKVIfNew(section, "Kernel-Power 41 (7j)", kp41_7, "count", IssueLevel.Info, "event_logs"); AddKVIfNew(section, "Kernel-Power 41 (30j)", kp41_30, "count", IssueLevel.Info, "event_logs"); }
+                if (lastKpEv != null) AddKVIfNew(section, "Dernier Kernel-Power", lastKpEv.TimeCreated?.ToString("g") ?? lastKpEv.Message?.Substring(0, Math.Min(50, lastKpEv.Message?.Length ?? 0)), "", IssueLevel.Info, "event_logs");
+            }
+
+            // MinidumpsDetailed: nombre, dernier dump, BugCheck
+            var minidumps = combined.MinidumpsDetailed;
+            if (minidumps != null && minidumps.Count > 0)
+            {
+                AddKVIfNew(section, "Minidumps (BSOD)", minidumps.Count, "count", minidumps.Count > 0 ? IssueLevel.Warning : IssueLevel.Info, "minidumps");
+                var last = minidumps.OrderByDescending(m => m.LastWriteTimeUtc ?? DateTime.MinValue).FirstOrDefault();
+                if (last != null)
+                {
+                    AddKVIfNew(section, "Dernier minidump", last.LastWriteTimeUtc?.ToString("g") ?? last.FileName, "", IssueLevel.Info, "minidumps");
+                    if (last.BugCheckCode.HasValue)
+                        AddKVIfNew(section, "BugCheck (dernier)", $"0x{last.BugCheckCode.Value:X}", "", IssueLevel.Info, "minidumps");
+                }
+            }
 
             // Findings related to stability
             var findings = snapshot?.Findings?
@@ -500,11 +856,82 @@ namespace PCDiagnosticPro.Services
                 section.SectionScore = 35;
             }
 
-            section.SummaryLine1 = section.KeyValues.Count > 0
-                ? "Erreurs système et application ci-dessous."
+            var stabSummary = section.KeyValues.Count > 0
+                ? "BSOD/WHEA/Kernel-Power: voir tableau ci-dessous."
                 : "Données de stabilité non disponibles.";
+            section.SummaryLine1 = stabSummary;
             section.SummaryLine2 = "Recommandation: inspecter EventId dominants dans l'Observateur d'événements.";
-            section.EvidenceText = BuildEvidenceText(snapshot?.GeneratedAt, null, "DiagnosticSnapshot.Metrics[stability,whea,power,performance]");
+            section.EvidenceText = BuildEvidenceText(snapshot?.GeneratedAt, null, "DiagnosticSnapshot.Metrics[stability,whea,power]", "DiagnosticSignals", "EventLogsDetailed", "MinidumpsDetailed");
+            return section;
+        }
+
+        private static int? GetIntFromJe(JsonElement je, string prop1, string prop2)
+        {
+            if (je.TryGetProperty(prop1, out var p)) { if (p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var v)) return v; }
+            if (je.TryGetProperty(prop2, out var p2)) { if (p2.ValueKind == JsonValueKind.Number && p2.TryGetInt32(out var v)) return v; }
+            return null;
+        }
+
+        private static string? GetLastEventFromJe(JsonElement je, string arrayName1, string arrayName2)
+        {
+            if (!je.TryGetProperty(arrayName1, out var arr) && !je.TryGetProperty(arrayName2, out arr))
+                return null;
+            if (arr.ValueKind != JsonValueKind.Array || arr.GetArrayLength() == 0) return null;
+            var first = arr[0];
+            if (first.TryGetProperty("time", out var t)) return t.GetString();
+            if (first.TryGetProperty("Time", out var t2)) return t2.GetString();
+            return null;
+        }
+
+        private static ReportSectionViewModel BuildPerformanceSection(DiagnosticSnapshot? snapshot, CombinedScanResult combined)
+        {
+            var section = new ReportSectionViewModel { Id = "Performance", Title = "Performance", Level = IssueLevel.Info };
+
+            string? cpuName = null;
+            int cpuCores = 0, cpuThreads = 0;
+            double ramGb = 0;
+            string? gpuName = null;
+            double gpuVramMb = 0;
+            bool hasSsd = true;
+
+            if (snapshot?.Machine != null)
+            {
+                ramGb = snapshot.Machine.TotalRamGB ?? 0;
+                cpuName = snapshot.Machine.CpuName;
+            }
+            var cpuMetrics = snapshot?.Metrics?.GetValueOrDefault("cpu");
+            if (cpuMetrics != null)
+            {
+                if (cpuMetrics.TryGetValue("model", out var m) && m.Available && m.Value != null) cpuName = m.Value.ToString();
+                if (cpuMetrics.TryGetValue("cores", out var c) && c.Available && c.Value is double cd) cpuCores = (int)cd;
+                if (cpuMetrics.TryGetValue("threads", out var t) && t.Available && t.Value is double td) cpuThreads = (int)td;
+            }
+            var gpuMetrics = snapshot?.Metrics?.GetValueOrDefault("gpu");
+            if (gpuMetrics != null)
+            {
+                if (gpuMetrics.TryGetValue("model", out var gm) && gm.Available && gm.Value != null) gpuName = gm.Value.ToString();
+                if (gpuMetrics.TryGetValue("vramTotalMB", out var v) && v.Available && v.Value is double vd) gpuVramMb = vd;
+            }
+            if (combined.SensorsCsharp?.Gpu != null)
+            {
+                if (gpuName == null && combined.SensorsCsharp.Gpu.Name?.Available == true) gpuName = combined.SensorsCsharp.Gpu.Name.Value;
+                if (gpuVramMb == 0 && combined.SensorsCsharp.Gpu.VramTotalMB?.Available == true) gpuVramMb = combined.SensorsCsharp.Gpu.VramTotalMB.Value;
+            }
+
+            var result = PerformanceScoreCalculator.Calculate(cpuName, cpuCores, cpuThreads, gpuName, gpuVramMb, ramGb, hasSsd);
+
+            AddKV(section, "Score performance", $"{result.Score}/100", "", IssueLevel.Info, "PerformanceScoreCalculator");
+            AddKV(section, "Version table", PerformanceScoreCalculator.TableVersion, "", IssueLevel.Info, "locale");
+            AddKV(section, "Catégories", result.Categories.Count > 0 ? string.Join(", ", result.Categories) : "—", "", IssueLevel.Info, "");
+            for (int i = 0; i < result.CapableDe.Count; i++)
+                AddKV(section, $"Capable de ({i + 1})", result.CapableDe[i], "", IssueLevel.Info, "");
+            for (int i = 0; i < result.Limites.Count; i++)
+                AddKV(section, $"Limite ({i + 1})", result.Limites[i], "", IssueLevel.Info, "");
+
+            section.SectionScore = result.Score;
+            section.SummaryLine1 = $"Score: {result.Score}/100 — {string.Join(", ", result.Categories)}";
+            section.SummaryLine2 = result.Limites.Count > 0 ? result.Limites[0] : "Détails ci-dessous.";
+            section.EvidenceText = BuildEvidenceText(snapshot?.GeneratedAt, null, "PerformanceScoreCalculator (table " + PerformanceScoreCalculator.TableVersion + ", règles heuristiques locales)");
             return section;
         }
 
@@ -780,6 +1207,34 @@ namespace PCDiagnosticPro.Services
                 }
             }
             return sentinels;
+        }
+
+        /// <summary>Extract CPU throttle display string from DiagnosticSignals (cpuThrottle / cpu_throttle / CpuThrottle).</summary>
+        private static string? GetCpuThrottleDisplay(Dictionary<string, SignalResult>? signals)
+        {
+            if (signals == null) return null;
+            foreach (var key in new[] { "cpuThrottle", "cpu_throttle", "CpuThrottle" })
+            {
+                if (!signals.TryGetValue(key, out var sig)) continue;
+                if (!sig.Available)
+                    return sig.Reason ?? Na;
+                try
+                {
+                    if (sig.Value is JsonElement je)
+                    {
+                        if (je.TryGetProperty("throttleSuspected", out var p))
+                            return p.ValueKind == JsonValueKind.True ? "Oui (thermal/power)" : "Non détecté";
+                        if (je.TryGetProperty("detected", out var p2))
+                            return p2.ValueKind == JsonValueKind.True ? "Oui" : "Non détecté";
+                    }
+                    return sig.Notes ?? "—";
+                }
+                catch
+                {
+                    return sig.Notes ?? "—";
+                }
+            }
+            return null;
         }
 
         private static IssueLevel SeverityToLevel(string? severity)
