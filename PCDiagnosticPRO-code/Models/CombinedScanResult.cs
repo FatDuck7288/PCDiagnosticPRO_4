@@ -73,6 +73,34 @@ namespace PCDiagnosticPro.Models
         [JsonPropertyName("collector_diagnostics")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public CollectorDiagnostics? CollectorDiagnostics { get; set; }
+
+        /// <summary>
+        /// Performance timeseries: min/max/avg over sampling interval (CPU, RAM, disk IO, network).
+        /// </summary>
+        [JsonPropertyName("performance_timeseries_summary")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public PerformanceTimeseriesSummary? PerformanceTimeseriesSummary { get; set; }
+
+        /// <summary>
+        /// Last N critical/error event log entries (EventId, ProviderName, Message, Timestamp).
+        /// </summary>
+        [JsonPropertyName("event_logs_detailed")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<EventLogDetailedEntry>? EventLogsDetailed { get; set; }
+
+        /// <summary>
+        /// SMART attributes per disk (PredictFailure + Reallocated, Pending, Wear, etc.).
+        /// </summary>
+        [JsonPropertyName("smart_attributes")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<SmartDiskEntry>? SmartAttributes { get; set; }
+
+        /// <summary>
+        /// List of recent minidumps (file name, date, optional BugCheck code / driver hint).
+        /// </summary>
+        [JsonPropertyName("minidumps_detailed")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<MinidumpEntry>? MinidumpsDetailed { get; set; }
         
         // ===================================================================
         // NŒUDS EXPLICITES pour compatibilité JSON - TOUJOURS PRÉSENTS

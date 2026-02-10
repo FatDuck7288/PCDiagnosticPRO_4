@@ -97,7 +97,7 @@ namespace PCDiagnosticPro.Services
                 BuildSection5_MemoireRam(sb, psData);
 
                 // Section 6: Stockage et Disques
-                BuildSection6_StockageDisques(sb, psData, sensors);
+                BuildSection6_StockageDisques(sb, psData, sensors, combinedRoot);
 
                 // Section 7: Températures et Refroidissement
                 BuildSection7_Temperatures(sb, sensors, psData);
@@ -768,6 +768,40 @@ namespace PCDiagnosticPro.Services
                 }
             }
 
+            // Performance timeseries (C#) — add-only: moyennes et pics sur la fenêtre d'échantillonnage
+            if (combinedRoot.HasValue && combinedRoot.Value.TryGetProperty("performance_timeseries_summary", out var pts) && pts.ValueKind == JsonValueKind.Object)
+            {
+                var interval = pts.TryGetProperty("interval_seconds", out var isec) ? isec.GetInt32() : 0;
+                if (pts.TryGetProperty("cpu_percent", out var cpuAgg) && cpuAgg.ValueKind == JsonValueKind.Object)
+                {
+                    var avg = cpuAgg.TryGetProperty("avg", out var a) ? SafeGetDouble(a, -1) : -1;
+                    var max = cpuAgg.TryGetProperty("max", out var m) ? SafeGetDouble(m, -1) : -1;
+                    if (avg >= 0 || max >= 0) rows.Add(("CPU (moy/pic sur " + interval + " s)", $"moy: {avg:F0}% / pic: {max:F0}%"));
+                }
+                if (pts.TryGetProperty("memory_available_mb", out var memAgg) && memAgg.ValueKind == JsonValueKind.Object)
+                {
+                    var min = memAgg.TryGetProperty("min", out var mn) ? SafeGetDouble(mn, -1) : -1;
+                    var avg = memAgg.TryGetProperty("avg", out var a) ? SafeGetDouble(a, -1) : -1;
+                    if (min >= 0 || avg >= 0) rows.Add(("RAM dispo (min/moy MB)", $"min: {min:F0} / moy: {avg:F0}"));
+                }
+                if (pts.TryGetProperty("disk_read_bytes_per_sec", out var dr) && dr.ValueKind == JsonValueKind.Object && pts.TryGetProperty("disk_write_bytes_per_sec", out var dw) && dw.ValueKind == JsonValueKind.Object)
+                {
+                    var rAvg = dr.TryGetProperty("avg", out var ra) ? SafeGetDouble(ra, -1) : -1;
+                    var wAvg = dw.TryGetProperty("avg", out var wa) ? SafeGetDouble(wa, -1) : -1;
+                    if (rAvg >= 0 || wAvg >= 0) rows.Add(("Disque R/W (moy B/s)", $"R: {rAvg:F0} / W: {wAvg:F0}"));
+                }
+                if (pts.TryGetProperty("disk_queue_length", out var dq) && dq.ValueKind == JsonValueKind.Object)
+                {
+                    var max = dq.TryGetProperty("max", out var mx) ? SafeGetDouble(mx, -1) : -1;
+                    if (max >= 0) rows.Add(("File d'attente disque (pic)", $"{max:F1}"));
+                }
+                if (pts.TryGetProperty("network_bytes_per_sec", out var netAgg) && netAgg.ValueKind == JsonValueKind.Object)
+                {
+                    var avg = netAgg.TryGetProperty("avg", out var a) ? SafeGetDouble(a, -1) : -1;
+                    if (avg >= 0) rows.Add(("Réseau (moy B/s)", $"{avg:F0}"));
+                }
+            }
+
             WriteTable(sb, rows);
             sb.AppendLine();
 
@@ -775,6 +809,7 @@ namespace PCDiagnosticPro.Services
             // FIX A: Multiple aliases + case-insensitive lookup
             JsonElement? topCpuArr = null;
             JsonElement? topMemArr = null;
+            bool usedCSharpProcessFallback = false;
             
             // Source 1: C# ProcessTelemetry (root level)
             if (combinedRoot.HasValue)
@@ -784,9 +819,9 @@ namespace PCDiagnosticPro.Services
                 {
                     // Support multiple naming conventions: TopByCpu, topByCpu, topCpuProcesses, TopCpu, etc.
                     if (TryGetPropertyRobust(procTelemetry, out var topCpu, "TopByCpu", "topByCpu", "topCpuProcesses", "TopCpu", "topCpu", "processesCpu"))
-                        topCpuArr = topCpu;
+                    { topCpuArr = topCpu; usedCSharpProcessFallback = true; }
                     if (TryGetPropertyRobust(procTelemetry, out var topMem, "TopByMemory", "topByMemory", "topRamProcesses", "TopMemory", "topMemory", "processesMemory", "topRam"))
-                        topMemArr = topMem;
+                    { topMemArr = topMem; usedCSharpProcessFallback = true; }
                 }
             }
             
@@ -837,6 +872,8 @@ namespace PCDiagnosticPro.Services
             if (topCpuArr.HasValue && topCpuArr.Value.ValueKind == JsonValueKind.Array)
             {
                 sb.AppendLine("  Top 5 Processus (CPU):");
+                if (usedCSharpProcessFallback)
+                    sb.AppendLine("  (source : collecte C# fallback)");
                 sb.AppendLine("  ┌────────────────────────────┬──────────┬────────────┐");
                 sb.AppendLine("  │ Processus                  │ CPU %    │ RAM (MB)   │");
                 sb.AppendLine("  ├────────────────────────────┼──────────┼────────────┤");
@@ -856,6 +893,8 @@ namespace PCDiagnosticPro.Services
             if (topMemArr.HasValue && topMemArr.Value.ValueKind == JsonValueKind.Array)
             {
                 sb.AppendLine("  Top 5 Processus (RAM):");
+                if (usedCSharpProcessFallback)
+                    sb.AppendLine("  (source : collecte C# fallback)");
                 sb.AppendLine("  ┌────────────────────────────┬────────────┬──────────┐");
                 sb.AppendLine("  │ Processus                  │ RAM (MB)   │ CPU %    │");
                 sb.AppendLine("  ├────────────────────────────┼────────────┼──────────┤");
@@ -998,7 +1037,7 @@ namespace PCDiagnosticPro.Services
 
         #region Section 6: Stockage et Disques
 
-        private static void BuildSection6_StockageDisques(StringBuilder sb, JsonElement? psData, HardwareSensorsResult? sensors)
+        private static void BuildSection6_StockageDisques(StringBuilder sb, JsonElement? psData, HardwareSensorsResult? sensors, JsonElement? combinedRoot = null)
         {
             sb.AppendLine("  ▶ SECTION 6 : STOCKAGE ET DISQUES");
             sb.AppendLine(SUBSEPARATOR);
@@ -1094,6 +1133,35 @@ namespace PCDiagnosticPro.Services
 
             WriteTable(sb, smartRows);
             sb.AppendLine();
+
+            // SMART détaillé (C#) — attributs par disque (add-only)
+            if (combinedRoot.HasValue && combinedRoot.Value.TryGetProperty("smart_attributes", out var smartArr) && smartArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var disk in smartArr.EnumerateArray())
+                {
+                    var instanceName = disk.TryGetProperty("instance_name", out var inEl) ? inEl.GetString() ?? "?" : disk.TryGetProperty("instanceName", out inEl) ? inEl.GetString() ?? "?" : "?";
+                    var predictFailure = disk.TryGetProperty("predict_failure", out var pf) && pf.ValueKind == JsonValueKind.True || disk.TryGetProperty("predictFailure", out pf) && pf.ValueKind == JsonValueKind.True;
+                    sb.AppendLine($"  SMART — {instanceName}: PredictFailure = {(predictFailure ? "Oui" : "Non")}");
+                    if (disk.TryGetProperty("attributes", out var attrs) && attrs.ValueKind == JsonValueKind.Array)
+                    {
+                        sb.AppendLine("  ┌─────────────────────────────────────┬─────────┬───────┬───────┬─────────┬───────────┐");
+                        sb.AppendLine("  │ Attribut                            │ Current │ Worst │ Raw   │ Seuil   │           │");
+                        sb.AppendLine("  ├─────────────────────────────────────┼─────────┼───────┼───────┼─────────┼───────────┤");
+                        foreach (var a in attrs.EnumerateArray())
+                        {
+                            var name = a.TryGetProperty("name", out var n) ? n.GetString() ?? "?" : a.TryGetProperty("Name", out n) ? n.GetString() ?? "?" : "?";
+                            var cur = a.TryGetProperty("current", out var c) ? c.GetInt32() : a.TryGetProperty("Current", out c) ? c.GetInt32() : 0;
+                            var worst = a.TryGetProperty("worst", out var w) ? w.GetInt32() : a.TryGetProperty("Worst", out w) ? w.GetInt32() : 0;
+                            var raw = a.TryGetProperty("raw", out var r) ? r.GetUInt64() : a.TryGetProperty("Raw", out r) ? r.GetUInt64() : 0UL;
+                            var thresh = a.TryGetProperty("threshold", out var t) ? t.GetInt32() : a.TryGetProperty("Threshold", out t) ? t.GetInt32() : 0;
+                            name = name.Length > 35 ? name.Substring(0, 32) + "..." : name;
+                            sb.AppendLine($"  │ {name,-35} │ {cur,7} │ {worst,5} │ {raw,5} │ {thresh,7} │           │");
+                        }
+                        sb.AppendLine("  └─────────────────────────────────────┴─────────┴───────┴───────┴─────────┴───────────┘");
+                    }
+                    sb.AppendLine();
+                }
+            }
         }
 
         #endregion
@@ -2475,6 +2543,49 @@ namespace PCDiagnosticPro.Services
 
             WriteTable(sb, rows);
             sb.AppendLine();
+
+            // Événements détaillés (C#) — derniers N Critical/Error (add-only)
+            if (combinedRoot.HasValue && combinedRoot.Value.TryGetProperty("event_logs_detailed", out var eventLogsArr) && eventLogsArr.ValueKind == JsonValueKind.Array)
+            {
+                sb.AppendLine("  ═ Événements détaillés (C#) ═");
+                int shown = 0;
+                foreach (var ev in eventLogsArr.EnumerateArray())
+                {
+                    if (shown >= 20) break;
+                    var eventId = ev.TryGetProperty("event_id", out var eid) ? eid.GetInt32() : ev.TryGetProperty("eventId", out eid) ? eid.GetInt32() : 0;
+                    var provider = ev.TryGetProperty("provider_name", out var pn) ? pn.GetString() ?? "?" : ev.TryGetProperty("providerName", out pn) ? pn.GetString() ?? "?" : "?";
+                    var msg = ev.TryGetProperty("message", out var m) ? m.GetString() ?? "" : ev.TryGetProperty("Message", out m) ? m.GetString() ?? "" : "";
+                    var timeCreated = ev.TryGetProperty("time_created", out var tc) ? tc.GetString() : ev.TryGetProperty("timeCreated", out tc) ? tc.GetString() : null;
+                    if (msg.Length > 80) msg = msg.Substring(0, 77) + "...";
+                    sb.AppendLine($"  [{shown + 1}] Id={eventId} | {provider} | {timeCreated ?? "?"}");
+                    sb.AppendLine($"      {msg}");
+                    shown++;
+                }
+                if (shown == 0)
+                    sb.AppendLine("  Aucun événement Critical/Error collecté.");
+                sb.AppendLine();
+            }
+
+            // Minidumps (C#) — liste fichier + date + BugCheck (add-only)
+            if (combinedRoot.HasValue && combinedRoot.Value.TryGetProperty("minidumps_detailed", out var minidumpsArr) && minidumpsArr.ValueKind == JsonValueKind.Array)
+            {
+                sb.AppendLine("  ═ Minidumps (C#) ═");
+                foreach (var md in minidumpsArr.EnumerateArray())
+                {
+                    var fileName = md.TryGetProperty("file_name", out var fn) ? fn.GetString() ?? "?" : md.TryGetProperty("fileName", out fn) ? fn.GetString() ?? "?" : "?";
+                    var dateStr = md.TryGetProperty("last_write_time_utc", out var dt) ? dt.GetString() : md.TryGetProperty("lastWriteTimeUtc", out dt) ? dt.GetString() : null;
+                    if (string.IsNullOrEmpty(dateStr) && dt.ValueKind == JsonValueKind.String)
+                        dateStr = dt.GetString();
+                    var bugCheck = md.TryGetProperty("bug_check_code", out var bc) ? bc.GetUInt32() : md.TryGetProperty("bugCheckCode", out bc) ? bc.GetUInt32() : (uint?)null;
+                    var driverHint = md.TryGetProperty("driver_hint", out var dh) ? dh.GetString() : md.TryGetProperty("driverHint", out dh) ? dh.GetString() : null;
+                    sb.AppendLine($"  Fichier: {fileName} | Date: {dateStr ?? "?"}");
+                    if (bugCheck.HasValue)
+                        sb.AppendLine($"      BugCheck: 0x{bugCheck.Value:X8}");
+                    if (!string.IsNullOrEmpty(driverHint))
+                        sb.AppendLine($"      Driver hint: {driverHint}");
+                }
+                sb.AppendLine();
+            }
         }
 
         #endregion

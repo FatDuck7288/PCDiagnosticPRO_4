@@ -312,9 +312,14 @@ namespace PCDiagnosticPro.Services
             }
             
             var root = psRoot.Value;
+            // Resolve sections: top-level "sections" or "scan_powershell"."sections" (depending on JSON source)
+            if (!TryGetPropertyCaseInsensitive(root, out var sections, "sections") && root.ValueKind == JsonValueKind.Object
+                && TryGetPropertyCaseInsensitive(root, out var scanPs, "scan_powershell", "scanPowershell")
+                && scanPs.ValueKind == JsonValueKind.Object)
+                TryGetPropertyCaseInsensitive(scanPs, out sections, "sections");
             
             // Map sections to snapshot domains (skip empty/error sections = noise filter)
-            if (TryGetPropertyCaseInsensitive(root, out var sections, "sections") && sections.ValueKind == JsonValueKind.Object)
+            if (sections.ValueKind == JsonValueKind.Object)
             {
                 int mapped = 0, skipped = 0;
                 
@@ -347,36 +352,67 @@ namespace PCDiagnosticPro.Services
         {
             try
             {
-                if (!TryGetPropertyCaseInsensitive(root, out var sections, "sections"))
+                if (!TryGetPropertyCaseInsensitive(root, out var sections, "sections")
+                    && (!TryGetPropertyCaseInsensitive(root, out var scanPs, "scan_powershell", "scanPowershell") || scanPs.ValueKind != JsonValueKind.Object
+                        || !TryGetPropertyCaseInsensitive(scanPs, out sections, "sections")))
                     return;
-                    
-                // From MachineIdentity (handle data wrapper)
-                if (TryGetSectionData(sections, out var machineId, "MachineIdentity"))
+                
+                JsonElement machineId = default;
+                // From MachineIdentity (script uses: computerName, osBuild, lastBoot, uptimeDays, uptimeHours)
+                if (TryGetSectionData(sections, out machineId, "MachineIdentity"))
                 {
-                    _snapshot.Machine.Hostname = GetStringValue(machineId, "ComputerName") ?? _snapshot.Machine.Hostname;
-                    _snapshot.Machine.CpuName = GetStringValue(machineId, "ProcessorName");
-                    
+                    _snapshot.Machine.Hostname = GetStringValue(machineId, "ComputerName", "computerName") ?? _snapshot.Machine.Hostname;
+                    _snapshot.Machine.OsBuild = GetStringValue(machineId, "osBuild", "OsBuild") ?? _snapshot.Machine.OsBuild;
+                    _snapshot.Machine.LastBootTime = GetStringValue(machineId, "lastBoot", "LastBoot", "LastBootUpTime") ?? _snapshot.Machine.LastBootTime;
+                    var uptimeDays = TryGetInt(machineId, "uptimeDays", "UptimeDays");
+                    var uptimeHours = TryGetInt(machineId, "uptimeHours", "UptimeHours");
+                    if (uptimeDays.HasValue || uptimeHours.HasValue)
+                        _snapshot.Machine.Uptime = $"{(uptimeDays ?? 0)}j {(uptimeHours ?? 0)}h";
                     if (TryGetPropertyCaseInsensitive(machineId, out var ram, "TotalRAM_GB", "TotalRamGB", "TotalRAM"))
                         _snapshot.Machine.TotalRamGB = GetDoubleValue(ram);
                 }
                 
-                // From OS section (handle data wrapper)
+                // From OS section (script uses: caption, architecture, displayVersion — no Build/LastBoot in OS)
                 if (TryGetSectionData(sections, out var os, "OS"))
                 {
-                    _snapshot.Machine.OsVersion = GetStringValue(os, "Caption") ?? GetStringValue(os, "OSName");
-                    _snapshot.Machine.OsBuild = GetStringValue(os, "BuildNumber") ?? GetStringValue(os, "Version");
-                    _snapshot.Machine.InstallDate = GetStringValue(os, "InstallDate");
-                    _snapshot.Machine.LastBootTime = GetStringValue(os, "LastBootUpTime");
-                    _snapshot.Machine.Architecture = GetStringValue(os, "OSArchitecture");
-                    _snapshot.Machine.Uptime = GetStringValue(os, "Uptime");
+                    _snapshot.Machine.OsVersion = GetStringValue(os, "Caption", "caption", "OSName") ?? _snapshot.Machine.OsVersion;
+                    _snapshot.Machine.OsBuild = GetStringValue(os, "BuildNumber", "buildNumber", "Version", "version") ?? _snapshot.Machine.OsBuild;
+                    _snapshot.Machine.Architecture = GetStringValue(os, "OSArchitecture", "architecture") ?? _snapshot.Machine.Architecture;
+                    _snapshot.Machine.InstallDate = GetStringValue(os, "InstallDate", "installDate");
+                    _snapshot.Machine.LastBootTime = GetStringValue(os, "LastBootUpTime", "lastBootUpTime") ?? _snapshot.Machine.LastBootTime;
+                    _snapshot.Machine.Uptime = GetStringValue(os, "Uptime", "uptime") ?? _snapshot.Machine.Uptime;
                 }
                 
+                // From CPU section (script uses: cpus[0].name)
+                if (TryGetSectionData(sections, out var cpuSection, "CPU") && TryGetPropertyCaseInsensitive(cpuSection, out var cpusEl, "cpus") && cpusEl.ValueKind == JsonValueKind.Array)
+                {
+                    var first = cpusEl.EnumerateArray().FirstOrDefault();
+                    if (first.ValueKind == JsonValueKind.Object)
+                        _snapshot.Machine.CpuName = GetStringValue(first, "name", "Name") ?? _snapshot.Machine.CpuName;
+                }
+                if (string.IsNullOrEmpty(_snapshot.Machine.CpuName) && machineId.ValueKind == JsonValueKind.Object)
+                    _snapshot.Machine.CpuName = GetStringValue(machineId, "ProcessorName", "processorName");
+                
+                // From Memory section (script uses: totalGB)
+                if (TryGetSectionData(sections, out var mem, "Memory", "MemoryInfo") && TryGetPropertyCaseInsensitive(mem, out var totalEl, "totalGB", "TotalGB", "TotalMemoryGB"))
+                    _snapshot.Machine.TotalRamGB = GetDoubleValue(totalEl);
+                
+                FillMachineFallbacksFromEnvironment();
                 LogBuild("[AddMachineInfoFromPs] Machine info enriched from PS");
             }
             catch (Exception ex)
             {
                 LogBuild($"[AddMachineInfoFromPs] Error: {ex.Message}");
             }
+        }
+        
+        /// <summary>Fill any still-empty Machine fields from C# so the report never shows "Non disponible" when we can derive a value.</summary>
+        private void FillMachineFallbacksFromEnvironment()
+        {
+            if (string.IsNullOrEmpty(_snapshot.Machine.OsBuild))
+                _snapshot.Machine.OsBuild = Environment.OSVersion.Version?.ToString();
+            if (string.IsNullOrEmpty(_snapshot.Machine.Architecture))
+                _snapshot.Machine.Architecture = Environment.Is64BitOperatingSystem ? "64-bit" : "32-bit";
         }
         
         private void AddOsMetricsFromPs(JsonElement sections)
@@ -422,13 +458,14 @@ namespace PCDiagnosticPro.Services
             {
                 if (TryGetSectionData(sections, out var mem, "Memory", "MemoryInfo"))
                 {
-                    memMetrics["totalGB"] = MetricFromNumber(mem, "TotalMemoryGB", "GB", "PS/Memory");
-                    memMetrics["availableGB"] = MetricFromNumber(mem, "AvailableMemoryGB", "GB", "PS/Memory");
-                    memMetrics["usedPercent"] = MetricFromNumber(mem, "UsedMemoryPercent", "%", "PS/Memory");
-                    memMetrics["freePercent"] = MetricFromNumber(mem, "FreeMemoryPercent", "%", "PS/Memory");
-                    memMetrics["commitTotalGB"] = MetricFromNumber(mem, "CommitTotalGB", "GB", "PS/Memory");
-                    memMetrics["commitUsedGB"] = MetricFromNumber(mem, "CommitUsedGB", "GB", "PS/Memory");
-                    memMetrics["pageFileUsagePercent"] = MetricFromNumber(mem, "PageFileUsagePercent", "%", "PS/Memory");
+                    // Script keys first: totalGB, freeGB, usedPercent (Total_PS_PC_Scan_v7.0.ps1)
+                    memMetrics["totalGB"] = MetricFromNumber(mem, "GB", "PS/Memory", "totalGB", "TotalMemoryGB");
+                    memMetrics["availableGB"] = MetricFromNumber(mem, "GB", "PS/Memory", "freeGB", "AvailableMemoryGB", "FreeMemoryGB");
+                    memMetrics["usedPercent"] = MetricFromNumber(mem, "%", "PS/Memory", "usedPercent", "UsedMemoryPercent");
+                    memMetrics["freePercent"] = MetricFromNumber(mem, "%", "PS/Memory", "freePercent", "FreeMemoryPercent");
+                    memMetrics["commitTotalGB"] = MetricFromNumber(mem, "GB", "PS/Memory", "commitTotalGB", "CommitTotalGB");
+                    memMetrics["commitUsedGB"] = MetricFromNumber(mem, "GB", "PS/Memory", "commitUsedGB", "CommitUsedGB");
+                    memMetrics["pageFileUsagePercent"] = MetricFromNumber(mem, "%", "PS/Memory", "pageFileUsagePercent", "PageFileUsagePercent");
                 }
                 
                 if (memMetrics.Count > 0)
@@ -451,8 +488,8 @@ namespace PCDiagnosticPro.Services
             {
                 if (TryGetSectionData(sections, out var net, "Network"))
                 {
-                    // Adapters info - handle both array and object
-                    if (net.TryGetProperty("Adapters", out var adapters))
+                    // Adapters info - script may use "adapters" or "Adapters"; handle array and object
+                    if (TryGetPropertyCaseInsensitive(net, out var adapters, "adapters", "Adapters"))
                     {
                         int adapterCount = 0;
                         if (adapters.ValueKind == JsonValueKind.Array)
@@ -461,10 +498,13 @@ namespace PCDiagnosticPro.Services
                             adapterCount = 1;
                         netMetrics["adapterCount"] = MetricFactory.CreateAvailable(adapterCount, "count", "PS/Network", 100);
                     }
-                    
-                    netMetrics["defaultGateway"] = MetricFromString(net, "DefaultGateway", "PS/Network");
-                    netMetrics["dnsServers"] = MetricFromString(net, "DnsServers", "PS/Network");
-                    netMetrics["publicIP"] = MetricFromString(net, "PublicIP", "PS/Network");
+                    var adapterCountVal = TryGetInt(net, "adapterCount", "AdapterCount");
+                    if (adapterCountVal.HasValue && !netMetrics.ContainsKey("adapterCount"))
+                        netMetrics["adapterCount"] = MetricFactory.CreateAvailable(adapterCountVal.Value, "count", "PS/Network", 100);
+
+                    netMetrics["defaultGateway"] = MetricFromString(net, "PS/Network", "defaultGateway", "DefaultGateway");
+                    netMetrics["dnsServers"] = MetricFromString(net, "PS/Network", "dnsServers", "DnsServers");
+                    netMetrics["publicIP"] = MetricFromString(net, "PS/Network", "publicIP", "PublicIP");
                 }
                 
                 if (TryGetSectionData(sections, out var latency, "NetworkLatency"))
@@ -566,12 +606,45 @@ namespace PCDiagnosticPro.Services
             {
                 if (TryGetSectionData(sections, out var sec, "Security"))
                 {
-                    secMetrics["antivirusStatus"] = MetricFromString(sec, "AntivirusStatus", "PS/Security");
-                    secMetrics["antivirusName"] = MetricFromString(sec, "AntivirusName", "PS/Security");
-                    secMetrics["firewallStatus"] = MetricFromString(sec, "FirewallStatus", "PS/Security");
-                    secMetrics["uacEnabled"] = MetricFromBool(sec, "UacEnabled", "PS/Security");
-                    secMetrics["secureBootEnabled"] = MetricFromBool(sec, "SecureBootEnabled", "PS/Security");
-                    secMetrics["bitlockerStatus"] = MetricFromString(sec, "BitlockerStatus", "PS/Security");
+                    // Script keys: defenderRTP, defenderEnabled, antivirusProducts (array), firewall (object), uacEnabled
+                    var avStatus = GetStringValue(sec, "AntivirusStatus", "antivirusStatus");
+                    if (string.IsNullOrEmpty(avStatus) && TryGetPropertyCaseInsensitive(sec, out var avProducts, "antivirusProducts"))
+                    {
+                        if (avProducts.ValueKind == JsonValueKind.Array && avProducts.GetArrayLength() > 0)
+                            avStatus = string.Join(", ", avProducts.EnumerateArray().Select(e => e.GetString() ?? ""));
+                        else if (TryGetPropertyCaseInsensitive(sec, out var defEnabled, "defenderEnabled", "defenderRTP"))
+                            avStatus = defEnabled.ValueKind == JsonValueKind.True ? "Actif" : (defEnabled.ValueKind == JsonValueKind.False ? "Inactif" : defEnabled.GetRawText());
+                    }
+                    if (!string.IsNullOrEmpty(avStatus))
+                        secMetrics["antivirusStatus"] = MetricFactory.CreateAvailable(avStatus, "", "PS/Security", 100);
+                    else
+                        secMetrics["antivirusStatus"] = MetricFromString(sec, "PS/Security", "antivirusStatus", "AntivirusStatus");
+
+                    secMetrics["antivirusName"] = MetricFromString(sec, "PS/Security", "antivirusName", "AntivirusName");
+                    if (!secMetrics["antivirusName"].Available && TryGetPropertyCaseInsensitive(sec, out var avList, "antivirusProducts") && avList.ValueKind == JsonValueKind.Array && avList.GetArrayLength() > 0)
+                        secMetrics["antivirusName"] = MetricFactory.CreateAvailable(avList[0].GetString() ?? "", "", "PS/Security", 100);
+
+                    var fwStatus = GetStringValue(sec, "FirewallStatus", "firewallStatus");
+                    if (string.IsNullOrEmpty(fwStatus) && sec.TryGetProperty("firewall", out var fwObj) && fwObj.ValueKind == JsonValueKind.Object)
+                    {
+                        var parts = new List<string>();
+                        foreach (var p in fwObj.EnumerateObject())
+                        {
+                            var on = p.Value.ValueKind == JsonValueKind.True || (p.Value.ValueKind == JsonValueKind.Number && p.Value.GetInt32() != 0);
+                            parts.Add($"{p.Name}: {(on ? "Actif" : "Inactif")}");
+                        }
+                        if (parts.Count > 0) fwStatus = string.Join(", ", parts);
+                    }
+                    if (!string.IsNullOrEmpty(fwStatus))
+                        secMetrics["firewallStatus"] = MetricFactory.CreateAvailable(fwStatus, "", "PS/Security", 100);
+                    else
+                        secMetrics["firewallStatus"] = MetricFromString(sec, "PS/Security", "firewallStatus", "FirewallStatus");
+
+                    secMetrics["uacEnabled"] = MetricFromBool(sec, "PS/Security", "uacEnabled", "UacEnabled");
+                    secMetrics["defenderRTP"] = MetricFromBool(sec, "PS/Security", "defenderRTP", "DefenderRTP", "RealTimeProtectionEnabled");
+                    secMetrics["defenderEnabled"] = MetricFromBool(sec, "PS/Security", "defenderEnabled", "DefenderEnabled", "AntivirusEnabled");
+                    secMetrics["secureBootEnabled"] = MetricFromBool(sec, "PS/Security", "secureBootEnabled", "SecureBootEnabled");
+                    secMetrics["bitlockerStatus"] = MetricFromString(sec, "PS/Security", "bitlockerStatus", "BitlockerStatus");
                 }
                 
                 if (secMetrics.Count > 0)
@@ -1035,32 +1108,51 @@ namespace PCDiagnosticPro.Services
                 
                 if (TryGetSectionData(sections, out var storage, "Storage"))
                 {
-                    // Disk space info
-                    if (storage.TryGetProperty("Drives", out var drives) && drives.ValueKind == JsonValueKind.Array)
+                    // Script uses "volumes" array with letter, totalGB, freeGB, usedPercent; fallback "Drives" with TotalSizeGB, FreeSpaceGB, UsedPercent
+                    var drivesArray = default(JsonElement);
+                    if (TryGetPropertyCaseInsensitive(storage, out drivesArray, "volumes", "Volumes", "Drives"))
+                    { }
+                    else
+                        storage.TryGetProperty("Drives", out drivesArray);
+
+                    if (drivesArray.ValueKind == JsonValueKind.Array)
                     {
                         int idx = 0;
-                        foreach (var drive in drives.EnumerateArray())
+                        foreach (var drive in drivesArray.EnumerateArray())
                         {
-                            storageMetrics[$"drive_{idx}_totalGB"] = MetricFromNumber(drive, "TotalSizeGB", "GB", "PS/Storage");
-                            storageMetrics[$"drive_{idx}_freeGB"] = MetricFromNumber(drive, "FreeSpaceGB", "GB", "PS/Storage");
-                            storageMetrics[$"drive_{idx}_usedPercent"] = MetricFromNumber(drive, "UsedPercent", "%", "PS/Storage");
+                            storageMetrics[$"drive_{idx}_totalGB"] = MetricFromNumber(drive, "GB", "PS/Storage", "totalGB", "TotalSizeGB");
+                            storageMetrics[$"drive_{idx}_freeGB"] = MetricFromNumber(drive, "GB", "PS/Storage", "freeGB", "FreeSpaceGB");
+                            storageMetrics[$"drive_{idx}_usedPercent"] = MetricFromNumber(drive, "%", "PS/Storage", "usedPercent", "UsedPercent");
                             idx++;
                         }
                     }
                 }
-                
-                // SMART data
+
+                // SMART: script has "smart" array under Storage; also try SmartDetails section
+                if (TryGetSectionData(sections, out var storageForSmart, "Storage") && TryGetPropertyCaseInsensitive(storageForSmart, out var smartArr, "smart") && smartArr.ValueKind == JsonValueKind.Array)
+                {
+                    int warnings = 0;
+                    foreach (var s in smartArr.EnumerateArray())
+                    {
+                        if (TryGetPropertyCaseInsensitive(s, out var pred, "predictFailure", "PredictFailure") && pred.ValueKind == JsonValueKind.True)
+                            warnings++;
+                    }
+                    storageMetrics["smartHealthy"] = MetricFactory.CreateAvailable(warnings == 0, "bool", "PS/Storage", 100);
+                    storageMetrics["smartWarnings"] = MetricFactory.CreateAvailable(warnings, "count", "PS/Storage", 100);
+                }
                 if (TryGetSectionData(sections, out var smart, "SmartDetails"))
                 {
-                    storageMetrics["smartHealthy"] = MetricFromBool(smart, "AllHealthy", "PS/SmartDetails");
-                    storageMetrics["smartWarnings"] = MetricFromNumber(smart, "WarningCount", "count", "PS/SmartDetails");
+                    if (!storageMetrics.ContainsKey("smartHealthy"))
+                        storageMetrics["smartHealthy"] = MetricFromBool(smart, "PS/SmartDetails", "AllHealthy", "allHealthy");
+                    if (!storageMetrics.ContainsKey("smartWarnings"))
+                        storageMetrics["smartWarnings"] = MetricFromNumber(smart, "count", "PS/SmartDetails", "WarningCount", "warningCount");
                 }
-                
+
                 // Temp files
                 if (TryGetSectionData(sections, out var temp, "TempFiles"))
                 {
-                    storageMetrics["tempFilesSizeMB"] = MetricFromNumber(temp, "TotalSizeMB", "MB", "PS/TempFiles");
-                    storageMetrics["tempFilesCount"] = MetricFromNumber(temp, "FileCount", "count", "PS/TempFiles");
+                    storageMetrics["tempFilesSizeMB"] = MetricFromNumber(temp, "MB", "PS/TempFiles", "TotalSizeMB", "totalSizeMB");
+                    storageMetrics["tempFilesCount"] = MetricFromNumber(temp, "count", "PS/TempFiles", "FileCount", "fileCount");
                 }
                 
                 LogBuild($"[AddStorageExtrasFromPs] Extended storage with PS data");
@@ -1281,10 +1373,13 @@ namespace PCDiagnosticPro.Services
         
         #region Helper Methods
         
-        private static string? GetStringValue(JsonElement element, string propertyName)
+        /// <summary>Gets a string value from JSON; tries given names case-insensitively so PS output (e.g. caption vs Caption) is found.</summary>
+        private static string? GetStringValue(JsonElement element, params string[] propertyNames)
         {
-            if (element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String)
-                return prop.GetString();
+            if (propertyNames == null || propertyNames.Length == 0) return null;
+            if (!TryGetPropertyCaseInsensitive(element, out var prop, propertyNames)) return null;
+            if (prop.ValueKind == JsonValueKind.String) return prop.GetString();
+            if (prop.ValueKind == JsonValueKind.Number) return prop.GetDouble().ToString();
             return null;
         }
 
@@ -1311,6 +1406,8 @@ namespace PCDiagnosticPro.Services
         {
             if (element.ValueKind == JsonValueKind.Number)
                 return element.GetDouble();
+            if (element.ValueKind == JsonValueKind.String && double.TryParse(element.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d))
+                return d;
             return null;
         }
 
@@ -1412,7 +1509,7 @@ namespace PCDiagnosticPro.Services
         
         private static NormalizedMetric MetricFromString(JsonElement parent, string prop, string source)
         {
-            if (parent.TryGetProperty(prop, out var val))
+            if (TryGetPropertyCaseInsensitive(parent, out var val, prop))
             {
                 if (val.ValueKind == JsonValueKind.String)
                     return MetricFactory.CreateAvailable(val.GetString() ?? "", "", source, 100);
@@ -1424,7 +1521,7 @@ namespace PCDiagnosticPro.Services
         
         private static NormalizedMetric MetricFromNumber(JsonElement parent, string prop, string unit, string source)
         {
-            if (parent.TryGetProperty(prop, out var val))
+            if (TryGetPropertyCaseInsensitive(parent, out var val, prop))
             {
                 if (val.ValueKind == JsonValueKind.Number)
                     return MetricFactory.CreateAvailable(Math.Round(val.GetDouble(), 2), unit, source, 100);
@@ -1432,6 +1529,37 @@ namespace PCDiagnosticPro.Services
                     return MetricFactory.CreateAvailable(Math.Round(d, 2), unit, source, 100);
             }
             return MetricFactory.CreateUnavailable(unit, source, "property_not_found");
+        }
+
+        /// <summary>Tries each property name in order; returns first available metric (script keys first, then fallbacks).</summary>
+        private static NormalizedMetric MetricFromNumber(JsonElement parent, string unit, string source, params string[] propNames)
+        {
+            foreach (var prop in propNames)
+            {
+                var m = MetricFromNumber(parent, prop, unit, source);
+                if (m.Available) return m;
+            }
+            return MetricFactory.CreateUnavailable(unit, source, "property_not_found");
+        }
+
+        private static NormalizedMetric MetricFromString(JsonElement parent, string source, params string[] propNames)
+        {
+            foreach (var prop in propNames)
+            {
+                var m = MetricFromString(parent, prop, source);
+                if (m.Available) return m;
+            }
+            return MetricFactory.CreateUnavailable("", source, "property_not_found");
+        }
+
+        private static NormalizedMetric MetricFromBool(JsonElement parent, string source, params string[] propNames)
+        {
+            foreach (var prop in propNames)
+            {
+                var m = MetricFromBool(parent, prop, source);
+                if (m.Available) return m;
+            }
+            return MetricFactory.CreateUnavailable("bool", source, "property_not_found");
         }
         
         private static NormalizedMetric MetricFromBool(JsonElement parent, string prop, string source)

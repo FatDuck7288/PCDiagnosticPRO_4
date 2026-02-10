@@ -297,18 +297,23 @@ namespace PCDiagnosticPro.Services
                 {
                     var v = gpu.VramUsedMB.Value;
                     var used = v is double d ? d : Convert.ToDouble(v);
-                    // Sanity: used > total => invalid; used >= 0.9*total => suspect (log only)
-                    if (vramTotal.HasValue && used > vramTotal.Value)
+                    // Reject committed-style value: > 8 GB is not "Dedicated GPU memory" (Task Manager); do not display
+                    if (used > 8000)
+                    {
+                        App.LogMessage($"[VRAM] UI: vramUsed ({used:F0} MB) > 8 GB — rejeté (committed, pas dedicated)");
+                    }
+                    else if (vramTotal.HasValue && used > vramTotal.Value)
                     {
                         App.LogMessage($"[VRAM] UI: vramUsed ({used:F0} MB) > vramTotal ({vramTotal.Value:F0} MB) — rejeté (invalide)");
                     }
-                    else if (vramTotal.HasValue && used >= vramTotal.Value * 0.95)
+                    else
                     {
-                        App.LogMessage($"[VRAM] UI: vramUsed ({used:F0} MB) proche du total — suspect, conservé. Source: {gpu.VramUsedSource}");
+                        if (vramTotal.HasValue && used >= vramTotal.Value * 0.95)
+                            App.LogMessage($"[VRAM] UI: vramUsed ({used:F0} MB) proche du total — conservé. Source: {gpu.VramUsedSource}");
+                        vramUsedRetained = used;
+                        vramUsedSourceRetained = gpu.VramUsedSource ?? "C#";
+                        AddKV(section, "VRAM Utilisée", used, "MB", IssueLevel.Info, $"C# ({gpu.VramUsedSource})");
                     }
-                    vramUsedRetained = used;
-                    vramUsedSourceRetained = gpu.VramUsedSource ?? "C#";
-                    AddKV(section, "VRAM Utilisée", used, "MB", IssueLevel.Info, $"C# ({gpu.VramUsedSource})");
                 }
                 if (gpu.Name?.Available == true)
                     AddKVIfNew(section, "Nom GPU (C#)", gpu.Name.Value, "", IssueLevel.Info, "C#");
@@ -347,7 +352,8 @@ namespace PCDiagnosticPro.Services
                     var m = kv.Value;
                     var val = m.Available ? m.Value : null;
                     AddKV(section, kv.Key, val, m.Unit ?? "", m.Available ? IssueLevel.Info : IssueLevel.Warning, m.Source);
-                    if (kv.Key.Contains("usage", StringComparison.OrdinalIgnoreCase) && val is double pct) usagePct = pct;
+                    if (val is double pct && (kv.Key.Contains("usage", StringComparison.OrdinalIgnoreCase) || string.Equals(kv.Key, "usedPercent", StringComparison.OrdinalIgnoreCase)))
+                        usagePct = pct;
                 }
                 section.SectionScore = metrics.Values.Count(m => m.Available) * 100 / Math.Max(1, metrics.Count);
             }

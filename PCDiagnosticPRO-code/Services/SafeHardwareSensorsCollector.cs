@@ -70,18 +70,12 @@ namespace PCDiagnosticPro.Services
                 }
                 else
                 {
-                    // Method 2: Try Win32_TemperatureProbe (less common but sometimes available)
-                    var tempProbe = TryGetWin32TemperatureProbe();
-                    if (tempProbe.HasValue)
-                    {
-                        result.Cpu.CpuTempC = Available(tempProbe.Value);
-                        result.Cpu.CpuTempSource = "WMI Win32_TemperatureProbe";
-                    }
-                    else
-                    {
-                        result.Cpu.CpuTempC = UnavailableDouble("Température CPU non accessible sans outils tiers");
-                        result.Cpu.CpuTempSource = "Non disponible (mode sécurisé)";
-                    }
+                    // WmiThermalZoneFallback already tried MSAcpi, TemperatureProbe, ThermalZoneInformation
+                    var reason = !string.IsNullOrEmpty(wmiResult.Reason)
+                        ? wmiResult.Reason
+                        : "ACPI ThermalZone vide; TemperatureProbe et ThermalZoneInformation non disponibles (mode sécurisé)";
+                    result.Cpu.CpuTempC = UnavailableDouble(reason);
+                    result.Cpu.CpuTempSource = "Non disponible (mode sécurisé)";
                 }
                 
                 // CPU Load via Performance Counter (always available)
@@ -157,71 +151,53 @@ namespace PCDiagnosticPro.Services
                 
                 result.Gpu.Name = Available(gpuName);
                 
-                // Tentative NVML pour VRAM total (évite le dépassement UInt32 de WMI)
-                bool nvmlVramSuccess = false;
+                // VRAM Total: NVML first (avoids WMI UInt32 overflow), then WMI fallback.
                 var nvmlMem = NvmlTemperatureReader.TryGetMemoryInfo();
                 if (nvmlMem.HasValue && nvmlMem.Value.Total > 0)
                 {
                     var totalMB = nvmlMem.Value.Total / (1024.0 * 1024.0);
                     result.Gpu.VramTotalMB = Available(totalMB);
-                    result.Gpu.VramUsedMB = Available(nvmlMem.Value.Used / (1024.0 * 1024.0));
-                    App.LogMessage($"[SafeSensors→GPU] VRAM via NVML: Total={totalMB:F0} Mo, Used={nvmlMem.Value.Used / (1024.0 * 1024.0):F0} Mo");
-                    nvmlVramSuccess = true;
+                    App.LogMessage($"[SafeSensors→GPU] VRAM Total via NVML: {totalMB:F0} Mo");
                 }
-                
-                // Fallback WMI pour VRAM uniquement si NVML a échoué
-                if (!nvmlVramSuccess)
+                else if (vramTotalBytesWmi > 0)
                 {
-                    if (vramTotalBytesWmi > 0)
+                    var vramTotalMBWmi = vramTotalBytesWmi / (1024.0 * 1024.0);
+                    var gpuNameUpper = gpuName.ToUpperInvariant();
+                    bool isHighEndGpu = gpuNameUpper.Contains("3090") || gpuNameUpper.Contains("4090") ||
+                                       gpuNameUpper.Contains("3080") || gpuNameUpper.Contains("4080") ||
+                                       gpuNameUpper.Contains("4070");
+                    if (isHighEndGpu && vramTotalMBWmi < 8192)
                     {
-                        var vramTotalMB = vramTotalBytesWmi / (1024.0 * 1024.0);
-                        
-                        // Détection de dépassement UInt32: si vramTotalMB < 8192 et GPU haut de gamme connu
-                        var gpuNameUpper = gpuName.ToUpperInvariant();
-                        bool isHighEndGpu = gpuNameUpper.Contains("3090") || gpuNameUpper.Contains("4090") ||
-                                           gpuNameUpper.Contains("3080") || gpuNameUpper.Contains("4080") ||
-                                           gpuNameUpper.Contains("4070");
-                        
-                        if (isHighEndGpu && vramTotalMB < 8192)
-                        {
-                            // Dépassement UInt32 détecté - ne pas écrire la valeur fausse
-                            App.LogMessage($"[SafeSensors→GPU] VRAM WMI overflow détecté: {vramTotalMB:F0} Mo pour {gpuName} (GPU haut de gamme > 8 Go attendu)");
-                            result.Gpu.VramTotalMB = UnavailableDouble("VRAM overflow WMI (UInt32) - installer NVML pour valeur correcte");
-                        }
-                        else if (vramTotalMB > 0 && vramTotalMB < 100000)
-                        {
-                            result.Gpu.VramTotalMB = Available(vramTotalMB);
-                            App.LogMessage($"[SafeSensors→GPU] VRAM via WMI fallback: {vramTotalMB:F0} Mo");
-                        }
-                        else
-                        {
-                            result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non fiable via WMI");
-                        }
+                        App.LogMessage($"[SafeSensors→GPU] VRAM WMI overflow détecté: {vramTotalMBWmi:F0} Mo pour {gpuName}");
+                        result.Gpu.VramTotalMB = UnavailableDouble("VRAM overflow WMI (UInt32) - installer NVML pour valeur correcte");
+                    }
+                    else if (vramTotalMBWmi > 0 && vramTotalMBWmi < 100000)
+                    {
+                        result.Gpu.VramTotalMB = Available(vramTotalMBWmi);
+                        App.LogMessage($"[SafeSensors→GPU] VRAM Total via WMI: {vramTotalMBWmi:F0} Mo");
                     }
                     else
-                    {
-                        result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non disponible");
-                    }
+                        result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non fiable via WMI");
                 }
+                else
+                    result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non disponible");
                 
-                // VRAM Used: Try Performance Counters "GPU Engine" (Windows 10+) if not already set by NVML
-                if (!nvmlVramSuccess)
+                // VRAM Used: Perf Counter "Dedicated Usage" + NVML Used as candidates; take minimum to avoid committed-style ~11 GB when Task Manager shows ~3 GB.
+                var vramTotalMB = result.Gpu.VramTotalMB?.Available == true ? result.Gpu.VramTotalMB.Value : (double?)null;
+                double? nvmlUsedMB = null;
+                if (nvmlMem.HasValue && nvmlMem.Value.Used > 0)
+                    nvmlUsedMB = nvmlMem.Value.Used / (1024.0 * 1024.0);
+                var vramUsed = TryGetGpuVramUsed(vramTotalMB, nvmlUsedMB);
+                if (vramUsed.HasValue)
                 {
-                    var vramUsed = TryGetGpuVramFromPerfCounters();
-                    if (vramUsed.HasValue)
-                    {
-                        result.Gpu.VramUsedMB = Available(vramUsed.Value);
-                        result.Gpu.VramUsedSource = "Performance Counters (GPU Memory)";
-                    }
-                    else
-                    {
-                        result.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisée: voir Gestionnaire des tâches");
-                        result.Gpu.VramUsedSource = "Non disponible (mode sécurisé)";
-                    }
+                    result.Gpu.VramUsedMB = Available(vramUsed.Value);
+                    result.Gpu.VramUsedSource = "Performance Counters (Dedicated Usage — matches Task Manager)";
+                    App.LogMessage($"[SafeSensors→GPU] VRAM Used: {vramUsed.Value:F0} Mo (Task Manager equivalent)");
                 }
                 else
                 {
-                    result.Gpu.VramUsedSource = "NVIDIA NVML (usermode)";
+                    result.Gpu.VramUsedMB = UnavailableDouble("VRAM utilisée: voir Gestionnaire des tâches");
+                    result.Gpu.VramUsedSource = "Non disponible (mode sécurisé)";
                 }
                 
                 // GPU Load via Performance Counters
@@ -266,33 +242,65 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
-        /// Try to get GPU VRAM usage from Windows Performance Counters (Windows 10+)
+        /// Gets dedicated GPU memory usage: Perf Counter "Dedicated Usage" + optional NVML Used. Returns minimum of all candidates so we never display committed-style ~11 GB when Task Manager shows ~3 GB. Rejects single value &gt; 8 GB as suspicious.
         /// </summary>
-        private double? TryGetGpuVramFromPerfCounters()
+        private double? TryGetGpuVramUsed(double? vramTotalMB, double? nvmlUsedMB)
         {
+            var candidates = new List<double>();
             try
             {
-                // Windows 10 1709+ has GPU performance counters
+                // 1) Add NVML Used if available and sensible (often matches Task Manager dedicated)
+                if (nvmlUsedMB.HasValue && nvmlUsedMB.Value > 0)
+                {
+                    if (!vramTotalMB.HasValue || nvmlUsedMB.Value <= vramTotalMB.Value)
+                    {
+                        candidates.Add(nvmlUsedMB.Value);
+                        App.LogMessage($"[SafeSensors→VRAM] Candidate NVML Used: {nvmlUsedMB.Value:F0} Mo");
+                    }
+                }
+
+                // 2) Perf counter instances (some report committed ~11 GB)
                 var category = new PerformanceCounterCategory("GPU Adapter Memory");
                 var instances = category.GetInstanceNames();
-                
-                double totalDedicatedMB = 0;
-                
-                foreach (var instance in instances)
+                if (instances != null && instances.Length > 0)
                 {
-                    using var counter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instance, true);
-                    var value = counter.NextValue();
-                    totalDedicatedMB += value / (1024.0 * 1024.0);
+                    App.LogMessage($"[SafeSensors→VRAM] Perf instances: {instances.Length} ({string.Join(", ", instances)})");
+                    foreach (var instance in instances)
+                    {
+                        try
+                        {
+                            using var counter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instance, true);
+                            var value = counter.NextValue();
+                            var dedicatedMB = value / (1024.0 * 1024.0);
+                            if (dedicatedMB <= 0) continue;
+                            if (vramTotalMB.HasValue && dedicatedMB > vramTotalMB.Value)
+                            {
+                                App.LogMessage($"[SafeSensors→VRAM] Skip instance '{instance}': {dedicatedMB:F0} Mo > total {vramTotalMB.Value:F0} Mo");
+                                continue;
+                            }
+                            candidates.Add(dedicatedMB);
+                            App.LogMessage($"[SafeSensors→VRAM] Candidate Perf '{instance}': {dedicatedMB:F0} Mo");
+                        }
+                        catch (Exception ex) { App.LogMessage($"[SafeSensors→VRAM] Perf instance '{instance}': {ex.Message}"); }
+                    }
                 }
-                
-                if (totalDedicatedMB > 0)
-                    return totalDedicatedMB;
+
+                if (candidates.Count == 0) return null;
+                var chosen = candidates.Min();
+                // Never display committed-style value: Task Manager "Dedicated GPU memory" is typically < 8 GB; 11 GB is wrong (committed).
+                const double MaxReasonableDedicatedMB = 8000; // 8 GB
+                if (chosen > MaxReasonableDedicatedMB)
+                {
+                    App.LogMessage($"[SafeSensors→VRAM] Reject {chosen:F0} Mo (> {MaxReasonableDedicatedMB:F0} Mo, committed not dedicated — cf. Gestionnaire des tâches)");
+                    return null;
+                }
+                App.LogMessage($"[SafeSensors→VRAM] Chosen: {chosen:F0} Mo (min of {candidates.Count} candidates)");
+                return chosen;
             }
             catch (Exception ex)
             {
-                App.LogMessage($"[SafeSensors] GPU Memory PerfCounter error: {ex.Message}");
+                App.LogMessage($"[SafeSensors] GPU VRAM error: {ex.Message}");
             }
-            
             return null;
         }
 

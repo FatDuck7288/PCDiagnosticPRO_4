@@ -32,7 +32,6 @@
         <conv:ScoreToHealthColorConverter x:Key="ScoreToHealthColor"/>
         <conv:HealthSeverityToAlertVisibilityConverter x:Key="SeverityToAlertVisibility"/>
         <conv:HexToSolidColorBrushConverter x:Key="HexToColorBrush"/>
-        <conv:InsightLevelToBrushConverter x:Key="InsightLevelToBrush"/>
         <sys:Double x:Key="CompactPanelHeight">140</sys:Double>
         
         <!-- Style pour texte sélectionnable et copiable dans les tableaux -->
@@ -672,8 +671,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>  <!-- Bloc 1: Temps écoulé -->
                             <RowDefinition Height="Auto"/>  <!-- Bloc 2: Étapes -->
-                            <RowDefinition Height="Auto"/>  <!-- Bloc 3: Constats -->
-                            <RowDefinition Height="Auto"/>  <!-- Bloc 4: Speed Test Réseau (même écart 12 qu'entre les autres) -->
+                            <RowDefinition Height="Auto"/>  <!-- Bloc 3: Speed Test Réseau -->
                         </Grid.RowDefinitions>
                         
                         <!-- BLOC 1: Temps écoulé (écart 12 comme entre tous les blocs) -->
@@ -816,25 +814,8 @@
                                 </ItemsControl>
                             </StackPanel>
                         </Border>
-                        <!-- BLOC 3: Constats en temps réel -->
-                        <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="Constats" FontSize="11" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
-                                <ItemsControl ItemsSource="{Binding LiveFindings}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding}" FontSize="10" 
-                                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                                       Margin="0,2" TextWrapping="Wrap"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-                        
-                        <!-- BLOC 4: Speed Test Réseau (écart 12 = marge basse de Constats, comme entre Temps écoulé et Étapes) -->
-                        <Border Grid.Row="3" Style="{StaticResource PanelBorder}" Margin="0,0,0,0">
+                        <!-- BLOC 3: Speed Test Réseau -->
+                        <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,0">
                             <StackPanel>
                                 <!-- Titre à gauche, animation globe à droite (sprite 30fps avec 30 PNG) -->
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
@@ -995,7 +976,12 @@
                         </TextBlock.Text>
                     </TextBlock>
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <Grid Grid.Row="1">
+                        <TextBlock Visibility="{Binding HasNoScanHistory, Converter={StaticResource BoolToVisibility}}"
+                                  Text="{Binding ResultsMessage, FallbackValue='Aucun rapport pour le moment.'}"
+                                  Foreground="{StaticResource TextSecondaryBrush}" FontSize="14" TextWrapping="Wrap"
+                                  VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20,40"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding ScanHistory}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -1077,7 +1063,8 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </ScrollViewer>
+                        </ScrollViewer>
+                    </Grid>
 
                     <Button Grid.Row="2" Content="{Binding ArchivesButtonText}" 
                             Style="{StaticResource FuturisticButton}"
@@ -1402,34 +1389,6 @@
                                             <!-- NOTE: Santé machine / Fiabilité UDIS / AutoFix déplacés dans la fenêtre "Détails des erreurs de collecte" -->
                                     <!-- NOTE: Métriques Thermal/Boot/IO/Stabilité supprimées du premier écran (redondantes avec sections détaillées) -->
                                     <!-- NOTE: Speed Test Réseau déplacé vers la page de scan (panneau droit) -->
-                                    
-                                    <!-- Constats validés (findings avec sévérité et explication) -->
-                                    <Border Background="{StaticResource BackgroundLightBrush}" CornerRadius="4" Padding="10,8" Margin="0,0,0,12"
-                                            Visibility="{Binding HasValidatedFindings, Converter={StaticResource BoolToVisibility}}">
-                                        <StackPanel>
-                                            <TextBlock Text="Constats (anomalies détectées)" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
-                                            <ItemsControl ItemsSource="{Binding ValidatedFindings}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="#1A1F28" CornerRadius="4" Padding="8,6" Margin="0,0,0,4">
-                                                            <Grid>
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{Binding Severity}" FontSize="10" FontWeight="SemiBold" 
-                                                                           Foreground="#FFA726" Margin="0,0,8,0" VerticalAlignment="Top"/>
-                                                                <StackPanel Grid.Column="1">
-                                                                    <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                                                    <TextBlock Text="{Binding SuggestedAction}" FontSize="10" Foreground="#6B7685" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                                                </StackPanel>
-                                                            </Grid>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
-                                    </Border>
                                     
                                     <!-- Liste des 8 domaines - CLIQUABLES avec expansion (sans flèches, effet pressé) -->
                                     <ItemsControl ItemsSource="{Binding HealthSections}">
@@ -1886,7 +1845,7 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- BOUTON RAPPORT INTÉGRALE CENTRÉ EN BAS (Constats affichés uniquement sur page Scan Health) -->
+                    <!-- BOUTON RAPPORT INTÉGRALE CENTRÉ EN BAS -->
                     <Border Grid.Row="2" Padding="0,15,0,10">
                         <Button Content="Rapport intégrale" 
                                 Style="{StaticResource FuturisticButton}"

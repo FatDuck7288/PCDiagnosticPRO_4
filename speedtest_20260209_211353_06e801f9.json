@@ -1,0 +1,12 @@
+{
+  "Timestamp": "2026-02-09T21:13:28.1154314-05:00",
+  "RunId": "06e801f9",
+  "Provider": "LibreSpeed CLI",
+  "DownloadMbps": 221.9,
+  "UploadMbps": 97.82,
+  "LatencyMs": 25.82,
+  "JitterMs": 1.13,
+  "ServerName": "Grand Rapids, Michigan (RackGenius)",
+  "SpeedTier": "Tr\u00E8s rapide",
+  "Success": true
+}

@@ -67,6 +67,7 @@ namespace PCDiagnosticPro.Services
                 sectionsEl = sec;
 
             // ProcessList vide = fail-close uniquement si la section existe ET est explicitement vide
+            // ET qu'aucun fallback C# (process_telemetry) n'est disponible
             if (sectionsEl.TryGetProperty("Processes", out var proc) && proc.ValueKind == JsonValueKind.Object)
             {
                 JsonElement procData = proc;
@@ -74,6 +75,18 @@ namespace PCDiagnosticPro.Services
                     procData = pd;
                 if (procData.TryGetProperty("ProcessList", out var list) && list.ValueKind == JsonValueKind.Array && list.GetArrayLength() == 0)
                 {
+                    // Fallback C#: si process_telemetry est disponible avec des processus, ne pas fail-close
+                    if (root.TryGetProperty("process_telemetry", out var pt) && pt.ValueKind == JsonValueKind.Object)
+                    {
+                        var available = (pt.TryGetProperty("available", out var av) || pt.TryGetProperty("Available", out av)) && av.ValueKind == JsonValueKind.True;
+                        var countEl = default(JsonElement);
+                        var hasCount = (pt.TryGetProperty("totalProcessCount", out countEl) || pt.TryGetProperty("TotalProcessCount", out countEl)) && countEl.ValueKind == JsonValueKind.Number && countEl.GetInt32() > 0;
+                        if (available && hasCount)
+                        {
+                            App.LogMessage("[UDIS] ProcessList PS vide mais process_telemetry C# disponible — pas de fail-close");
+                            return false;
+                        }
+                    }
                     App.LogMessage("[UDIS] Fail-Close: ProcessList présent mais vide (0 processus)");
                     return true;
                 }

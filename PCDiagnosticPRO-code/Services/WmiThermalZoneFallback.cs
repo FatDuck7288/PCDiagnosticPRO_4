@@ -1,5 +1,6 @@
 using System;
 using System.Management;
+using System.Runtime.InteropServices;
 
 namespace PCDiagnosticPro.Services
 {
@@ -31,7 +32,17 @@ namespace PCDiagnosticPro.Services
                 if (result.TempC.HasValue)
                     return result;
 
-                return (null, "WMI_ThermalZone", "thermal_zone_not_available");
+                // Méthode 3: Win32_PerfFormattedData_Counters_ThermalZoneInformation (Windows 10+)
+                result = TryWin32PerfThermalZoneInformation(minValidC, maxValidC);
+                if (result.TempC.HasValue)
+                    return result;
+
+                // Méthode 4: HWiNFO shared memory (optionnel, si HWiNFO est lancé avec Shared Memory)
+                result = TryHwInfoSharedMemory(minValidC, maxValidC);
+                if (result.TempC.HasValue)
+                    return result;
+
+                return (null, "WMI_ThermalZone", "ACPI ThermalZone vide; TemperatureProbe, ThermalZoneInformation et HWiNFO non disponibles (mode sécurisé)");
             }
             catch (Exception ex)
             {
@@ -138,5 +149,125 @@ namespace PCDiagnosticPro.Services
                 return (null, "WMI_Win32_TemperatureProbe", $"error: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Tente la température via Win32_PerfFormattedData_Counters_ThermalZoneInformation (Windows 10+).
+        /// HighPrecisionTemperature est en dixièmes de Kelvin.
+        /// </summary>
+        private static (double? TempC, string Source, string? Reason) TryWin32PerfThermalZoneInformation(
+            double minValidC, double maxValidC)
+        {
+            try
+            {
+                using var searcher = new ManagementObjectSearcher(
+                    @"root\CIMV2",
+                    "SELECT HighPrecisionTemperature, Temperature FROM Win32_PerfFormattedData_Counters_ThermalZoneInformation");
+
+                searcher.Options.Timeout = TimeSpan.FromSeconds(3);
+                double maxTemp = double.MinValue;
+                int validCount = 0;
+
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    try
+                    {
+                        // HighPrecisionTemperature = tenths of Kelvin (e.g. 3032 = 30.0°C)
+                        object? raw = obj["HighPrecisionTemperature"];
+                        if (raw == null)
+                            raw = obj["Temperature"];
+                        if (raw == null) continue;
+
+                        double tenthsKelvin = Convert.ToDouble(raw);
+                        double celsius = (tenthsKelvin / 10.0) - 273.15;
+
+                        if (celsius >= minValidC && celsius <= maxValidC)
+                        {
+                            validCount++;
+                            if (celsius > maxTemp)
+                                maxTemp = celsius;
+                        }
+                    }
+                    catch { /* skip */ }
+                }
+
+                if (validCount > 0)
+                {
+                    App.LogMessage($"[WMI ThermalZone] ThermalZoneInformation: {maxTemp:F1}°C (zones: {validCount})");
+                    return (maxTemp, "WMI_ThermalZoneInformation", null);
+                }
+                return (null, "WMI_ThermalZoneInformation", "no_valid_thermal_zone");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[WMI ThermalZone] ThermalZoneInformation error: {ex.Message}");
+                return (null, "WMI_ThermalZoneInformation", $"error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Tente de lire la température CPU depuis la shared memory HWiNFO (Global\HWiNFO_SENS_SM2).
+        /// Optionnel, best-effort : ne fonctionne que si HWiNFO est lancé avec "Shared Memory" activé.
+        /// </summary>
+        private static (double? TempC, string Source, string? Reason) TryHwInfoSharedMemory(
+            double minValidC, double maxValidC)
+        {
+            IntPtr hMap = IntPtr.Zero;
+            IntPtr pView = IntPtr.Zero;
+            try
+            {
+                hMap = OpenFileMappingW(0x0002 /* FILE_MAP_READ */, false, "Global\\HWiNFO_SENS_SM2");
+                if (hMap == IntPtr.Zero)
+                    return (null, "HWiNFO_SM2", "not_present");
+
+                pView = MapViewOfFile(hMap, 0x0004 /* FILE_MAP_READ */, 0, 0, 0);
+                if (pView == IntPtr.Zero)
+                    return (null, "HWiNFO_SM2", "map_failed");
+
+                // HWiNFO SM2 layout (reverse-engineered): header has dwReadingOffset at offset 8
+                if (Marshal.ReadInt32(pView, 8) is int dwReadingOffset && dwReadingOffset >= 16 && dwReadingOffset < 0x10000)
+                {
+                    // Each sensor reading element: value (double) at offset 0x11C within element; element size ~0x140
+                    const int valueOffsetInElement = 0x11C;
+                    const int elementSize = 0x140;
+                    for (int i = 0; i < 20; i++)
+                    {
+                        int offset = dwReadingOffset + i * elementSize + valueOffsetInElement;
+                        try
+                        {
+                            double value = Marshal.PtrToStructure<double>(IntPtr.Add(pView, offset));
+                            if (!double.IsNaN(value) && !double.IsInfinity(value) && value >= minValidC && value <= maxValidC)
+                            {
+                                App.LogMessage($"[WMI ThermalZone] HWiNFO shared memory: {value:F1}°C");
+                                return (value, "HWiNFO_SM2", null);
+                            }
+                        }
+                        catch { /* skip */ }
+                    }
+                }
+                return (null, "HWiNFO_SM2", "no_valid_temperature_in_sm2");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[WMI ThermalZone] HWiNFO SM2 error: {ex.Message}");
+                return (null, "HWiNFO_SM2", $"error: {ex.Message}");
+            }
+            finally
+            {
+                if (pView != IntPtr.Zero) UnmapViewOfFile(pView);
+                if (hMap != IntPtr.Zero) CloseHandle(hMap);
+            }
+        }
+
+        [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr OpenFileMappingW(uint dwDesiredAccess, bool bInheritHandle, string lpName);
+
+        [DllImport("kernel32", SetLastError = true)]
+        private static extern IntPtr MapViewOfFile(IntPtr hFileMappingObject, uint dwDesiredAccess, uint dwFileOffsetHigh, uint dwFileOffsetLow, UIntPtr dwNumberOfBytesToMap);
+
+        [DllImport("kernel32", SetLastError = true)]
+        private static extern bool UnmapViewOfFile(IntPtr lpBaseAddress);
+
+        [DllImport("kernel32", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr hObject);
     }
 }

@@ -9,7 +9,8 @@
 
 | Backend | Rôle | Fichier principal |
 |--------|------|--------------------|
-| **WMI / CIM** | Température CPU (MSAcpi_ThermalZoneTemperature, Win32_TemperatureProbe), temp disques (MSStorageDriver_*), infos GPU | `SafeHardwareSensorsCollector`, `WmiThermalZoneFallback`, `WmiQueryRunner` |
+| **WMI / CIM** | Température CPU (MSAcpi_ThermalZoneTemperature, Win32_TemperatureProbe, ThermalZoneInformation), temp disques (MSStorageDriver_*), infos GPU | `SafeHardwareSensorsCollector`, `WmiThermalZoneFallback`, `WmiQueryRunner` |
+| **HWiNFO shared memory** | Température CPU (optionnel) si HWiNFO est lancé avec "Shared Memory" | `WmiThermalZoneFallback.TryHwInfoSharedMemory` |
 | **PDH / Performance Counters** | Charge CPU, disque, réseau | `SafeHardwareSensorsCollector`, `PerfCounterCollector` |
 | **NVML (NVIDIA)** | Temp GPU, VRAM, load GPU (user mode, pas de kernel driver) | `SafeHardwareSensorsCollector` (NvmlGpuReader) |
 | **Storage API Windows** | SMART / disques via WMI (MSStorageDriver_*) | `SafeHardwareSensorsCollector.TryCollectDiskMetricsWmi` |
@@ -18,7 +19,7 @@
 
 | Métrique | Source | Ring0 ? | Note |
 |----------|--------|---------|------|
-| Température CPU | WMI ThermalZone / TemperatureProbe | Non | Souvent limité ou absent selon firmware |
+| Température CPU | WMI ThermalZone / TemperatureProbe / ThermalZoneInformation + HWiNFO SM2 (optionnel) | Non | Souvent limité ou absent selon firmware. API Intel/AMD officielles nécessitent en général un driver kernel ; les sources utilisées sont 100 % user-mode (WMI, HWiNFO shared memory si présent). |
 | Température GPU | WMI + NVML (NVIDIA) | Non | AMD/Intel : WMI ou non disponible |
 | Température disques | WMI MSStorageDriver_* | Non | SMART détaillé peut être partiel → "Non disponible" si absent |
 | Charge CPU | Performance Counter "Processor, % Processor Time" | Non | Toujours disponible |
@@ -35,5 +36,5 @@
 
 - `Services/SafeHardwareSensorsCollector.cs` : collecte CPU/GPU/disques en user mode.
 - `Services/HardwareSensorsCollector.cs` : délègue toujours à SafeHardwareSensorsCollector (`ForceUnsafeMode = false`).
-- `Services/WmiThermalZoneFallback.cs` : température CPU via WMI.
+- `Services/WmiThermalZoneFallback.cs` : température CPU via WMI (MSAcpi, TemperatureProbe, ThermalZoneInformation) puis, en 4e tentative, HWiNFO shared memory (Global\HWiNFO_SENS_SM2) si HWiNFO est lancé avec Shared Memory. Optionnel, best-effort.
 - `Services/DataSanitizer.cs` : normalisation des valeurs invalides avant écriture JSON.

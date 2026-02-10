@@ -604,32 +604,6 @@ namespace PCDiagnosticPro.Converters
     }
 
     /// <summary>
-    /// Convertit InsightLevel (White, Yellow, Red) en couleur de voyant pour les Constats.
-    /// </summary>
-    public class InsightLevelToBrushConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is InsightLevel level)
-            {
-                return level switch
-                {
-                    InsightLevel.Red => new SolidColorBrush(Color.FromRgb(255, 71, 87)),    // rouge
-                    InsightLevel.Yellow => new SolidColorBrush(Color.FromRgb(255, 193, 7)), // jaune
-                    InsightLevel.White => new SolidColorBrush(Color.FromRgb(230, 237, 243)),// blanc
-                    _ => new SolidColorBrush(Color.FromRgb(139, 148, 158))
-                };
-            }
-            return new SolidColorBrush(Color.FromRgb(139, 148, 158));
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    /// <summary>
     /// Retourne 1.0 si le grade actuel correspond au paramètre, sinon 0.45.
     /// Utilisé pour auto-surligner la ligne de légende du grade actif.
     /// Usage XAML : Opacity="{Binding Grade, ConverterParameter=A+, Converter={StaticResource GradeMatchOpacity}}"
