@@ -13,8 +13,8 @@
 
   Nom PC                    : DESKTOP-LAKVT49
   Utilisateur               : rams_
-  Date/heure scan           : 2026-02-10 14:14:16
-  Uptime                    : 2j 19h 12m
+  Date/heure scan           : 2026-02-11 19:18:26
+  Uptime                    : 0j 9h 33m
   Version OS                : Microsoft Windows NT 10.0.26200.0
   Architecture              : 64-bit
   Mode Admin                : OUI
@@ -28,11 +28,11 @@
   ▶ SECTION 4 : PERFORMANCE ACTIVITÉ
 ────────────────────────────────────────────────────────────────────────────────
 
-  Charge CPU                : 0%
-  Utilisation RAM           : 27%
-  Débit réseau (test HTTP)  : 5,3 Mbps
+  Charge CPU                : 7%
+  Utilisation RAM           : 25%
+  Débit réseau (test HTTP)  : 4,5 Mbps
   CPU (moy/pic sur 15 s)    : moy: 0% / pic: 0%
-  RAM dispo (min/moy MB)    : min: 70478 / moy: 70495
+  RAM dispo (min/moy MB)    : min: 71495 / moy: 71515
   Disque R/W (moy B/s)      : R: 0 / W: 0
   File d'attente disque (pic) : 0,0
   Réseau (moy B/s)          : 0
@@ -42,11 +42,11 @@
   ┌────────────────────────────┬──────────┬────────────┐
   │ Processus                  │ CPU %    │ RAM (MB)   │
   ├────────────────────────────┼──────────┼────────────┤
-  │ PCDiagnosticPro            │     2,4% │     307,5 │
-  │ System                     │     1,0% │      33,5 │
-  │ dwm                        │     0,8% │     319,4 │
-  │ Taskmgr                    │     0,3% │     198,6 │
-  │ MsMpEng                    │     0,3% │     305,6 │
+  │ PCDiagnosticPro            │     1,7% │     345,0 │
+  │ dwm                        │     0,9% │     241,1 │
+  │ opera                      │     0,4% │     456,6 │
+  │ System                     │     0,3% │      22,5 │
+  │ PowerToys.FancyZones       │     0,2% │      14,3 │
   └────────────────────────────┴──────────┴────────────┘
 
   Top 5 Processus (RAM):
@@ -54,11 +54,11 @@
   ┌────────────────────────────┬────────────┬──────────┐
   │ Processus                  │ RAM (MB)   │ CPU %    │
   ├────────────────────────────┼────────────┼──────────┤
-  │ Cursor                     │    1896,3 │     0,0% │
-  │ chrome                     │     702,3 │     0,0% │
-  │ explorer                   │     691,9 │     0,0% │
-  │ chrome                     │     603,8 │     0,0% │
-  │ chrome                     │     568,7 │     0,0% │
+  │ Cursor                     │    1288,8 │     0,0% │
+  │ explorer                   │     714,7 │     0,2% │
+  │ chrome                     │     708,7 │     0,0% │
+  │ chrome                     │     557,9 │     0,0% │
+  │ opera                      │     551,9 │     0,0% │
   └────────────────────────────┴────────────┴──────────┘
 
   ▶ SECTION 5 : MÉMOIRE RAM
@@ -68,12 +68,12 @@
   ┌─────────────────────────────┬────────────┬────────────┬──────────┐
   │ Catégorie                   │ Valeur     │ Total      │ %        │
   ├─────────────────────────────┼────────────┼────────────┼──────────┤
-  │ Physique : Utilisée          │    26,11 GB │    95,93 GB │     27% │
-  │ Physique : Disponible        │    69,82 GB │    95,93 GB │     73% │
-  │ Virtuelle : Utilisée         │  2311,30 GB │ 131072,00 GB │      2% │
-  │ Virtuelle : Disponible       │ 128760,70 GB │ 131072,00 GB │     98% │
-  │ Fichier pagination : Utilisé │    32,06 GB │   143,93 GB │     22% │
-  │ Fichier pagination : Libre   │   111,87 GB │   143,93 GB │     78% │
+  │ Physique : Utilisée          │    24,20 GB │    95,93 GB │     25% │
+  │ Physique : Disponible        │    71,73 GB │    95,93 GB │     75% │
+  │ Virtuelle : Utilisée         │  2311,31 GB │ 131072,00 GB │      2% │
+  │ Virtuelle : Disponible       │ 128760,69 GB │ 131072,00 GB │     98% │
+  │ Fichier pagination : Utilisé │    34,76 GB │   143,93 GB │     24% │
+  │ Fichier pagination : Libre   │   109,17 GB │   143,93 GB │     76% │
   └─────────────────────────────┴────────────┴────────────┴──────────┘
 
   Source : C# (GlobalMemoryStatusEx)
@@ -86,16 +86,15 @@
   ┌───────┬────────────┬────────────┬────────────┬───────────┬──────────┐
   │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Utilisé % │ Alerte   │
   ├───────┼────────────┼────────────┼────────────┼───────────┼──────────┤
-  │ C:    │    952,6 GB │    361,6 GB │    591,0 GB │    62,0 %  │ OK       │
+  │ C:    │    952,6 GB │    356,6 GB │    596,0 GB │    62,6 %  │ OK       │
   │ D:    │   1863,0 GB │   1092,2 GB │    770,9 GB │    41,4 %  │ OK       │
   │ E:    │   1862,2 GB │   1460,4 GB │    401,8 GB │    21,6 %  │ OK       │
   │ H:    │   1862,9 GB │    696,0 GB │   1166,9 GB │    62,6 %  │ OK       │
   └───────┴────────────┴────────────┴────────────┴───────────┴──────────┘
 
   Statut SMART:
-  VendorCo ProductCode USB Device : Détecté par capteurs C#
   Micron_2210_MTFDHBA1T0QFD : Détecté par capteurs C#
-  Micron CT2000X9PROSSD9 SCSI Disk Device : Détecté par capteurs C#
+  Micron CT2000X9PROSSD9    : Détecté par capteurs C#
   Samsung SSD 990 PRO with Heatsink 2TB : Détecté par capteurs C#
   TOSHIBA DT01ACA200        : Détecté par capteurs C#
 
@@ -105,30 +104,31 @@
   ├─────────────────────────────────────┼─────────┼───────┼───────┼─────────┼───────────┤
   │ Attribute_1                         │       0 │   100 │   100 │       0 │           │
   │ Attribute_2                         │       0 │   137 │ 19849 │       0 │           │
-  │ Attribute_3                         │       0 │   126 │ 755051902 │    1537 │           │
-  │ Attribute_4                         │       0 │    99 │ 1670243 │       0 │           │
+  │ Attribute_3                         │       0 │   130 │ 755047042 │    1537 │           │
+  │ Attribute_4                         │       0 │    99 │ 1670499 │       0 │           │
   │ Reallocated Sectors Count           │       0 │   100 │   100 │       0 │           │
   │ Attribute_7                         │       0 │   100 │   100 │       0 │           │
   │ Attribute_8                         │       0 │   124 │  8572 │       0 │           │
-  │ Power-On Hours                      │       0 │    97 │ 5922401 │       0 │           │
+  │ Power-On Hours                      │       0 │    97 │ 5927265 │       0 │           │
   │ Attribute_10                        │       0 │   100 │   100 │       0 │           │
-  │ Power Cycle Count                   │       0 │   100 │ 79204 │       0 │           │
-  │ Attribute_192                       │       0 │    95 │ 1745503 │       0 │           │
-  │ Attribute_193                       │       0 │    95 │ 1745503 │       0 │           │
-  │ Temperature                         │       0 │   200 │ 234888904 │   13056 │           │
+  │ Power Cycle Count                   │       0 │   100 │ 79460 │       0 │           │
+  │ Attribute_192                       │       0 │    95 │ 1745759 │       0 │           │
+  │ Attribute_193                       │       0 │    95 │ 1745759 │       0 │           │
+  │ Temperature                         │       0 │   166 │ 234890406 │   13056 │           │
   │ Reallocated Event Count             │       0 │   100 │   100 │       0 │           │
   │ Current Pending Sector              │       0 │   100 │   100 │       0 │           │
   │ Uncorrectable Sector Count          │       0 │   100 │   100 │       0 │           │
   │ Attribute_199                       │       0 │   200 │   200 │       0 │           │
-  │ Attribute_130                       │     100 │    59 │ 219905 │       1 │           │
+  │ Attribute_132                       │     100 │    59 │ 219905 │       1 │           │
   └─────────────────────────────────────┴─────────┴───────┴───────┴─────────┴───────────┘
 
   ▶ SECTION 7 : TEMPÉRATURES ET REFROIDISSEMENT
 ────────────────────────────────────────────────────────────────────────────────
 
-  Temp CPU                  : Non disponible sur ce matériel (capteur non exposé par firmware)
-  Temp GPU                  : 36,0°C
-  Temp max disques          : 30°C
+  Temp CPU                  : 76,3°C
+  Temp GPU                  : 83,0°C
+  Temp max disques          : 62°C
+  ⚠️ Alerte disque          : Température > 60°C - Surchauffe possible
   Statut thermique          : ✅ Normal
 
   ▶ SECTION 8 : BATTERIE ET ALIMENTATION
@@ -142,12 +142,12 @@
   ═ DÉBIT INTERNET (FAI) ═
 
   Latence et qualité :
-    Latence P50    : 2,7 ms
-    Latence P95    : 15,0 ms
+    Latence P50    : 2,3 ms
+    Latence P95    : 5,0 ms
     Perte paquets  : 0,0%
-    Jitter P95     : 4,88 ms
+    Jitter P95     : 1,17 ms
     Gateway        : 192.168.2.1
-    DNS P95        : 8 ms
+    DNS P95        : 27 ms
 
   ═ Réseau local / configuration ═
   Adaptateur actif          : VMware Virtual Ethernet Adapter for VMnet8
@@ -165,13 +165,13 @@
   ▶ SECTION 11 : MISES À JOUR
 ────────────────────────────────────────────────────────────────────────────────
 
-  Updates en attente        : 3
+  Updates en attente        : 1
 
   ▶ SECTION 12 : PILOTES (DRIVERS)
 ────────────────────────────────────────────────────────────────────────────────
 
-  Pilotes détectés (C#)     : 239
-  Signés                    : 239
+  Pilotes détectés (C#)     : 247
+  Signés                    : 247
   Périph. en erreur         : 1
 
   Inventaire pilotes (C# - WMI) :
@@ -258,7 +258,7 @@
 
   ═ Services Windows ═
   Total services            : 310
-  En cours                  : 130
+  En cours                  : 129
 
   ▶ SECTION 14 : SANTÉ SYSTÈME ET ERREURS
 ────────────────────────────────────────────────────────────────────────────────
@@ -266,46 +266,46 @@
   Santé système             : Données non disponibles
 
   ═ Événements détaillés (C#) ═
-  [1] Id=10010 | Microsoft-Windows-DistributedCOM | 2026-02-08T23:12:24.5314493Z
+  [1] Id=10010 | Microsoft-Windows-DistributedCOM | 2026-02-10T23:05:30.7412645Z
       Le serveur Windows.Media.Capture.Internal.AppCaptureShell ne s’est pas enregi...
-  [2] Id=10029 | Microsoft-Windows-DistributedCOM | 2026-02-08T20:57:40.6803597Z
-      L’activation du CLSID Windows.Media.Capture.AppCaptureManager a dépassé le dé...
-  [3] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T19:07:38.4427275Z
+  [2] Id=264 | Microsoft-Windows-Defrag | 2026-02-12T00:09:11.7826034Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [4] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T18:22:31.6039398Z
+  [3] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T23:38:15.3125769Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [5] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T18:03:46.9803162Z
+  [4] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T23:27:41.8490803Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [6] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T17:48:35.5665322Z
+  [5] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T23:00:43.9708495Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [7] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T17:33:52.051833Z
+  [6] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T22:46:03.5731961Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [8] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T17:14:40.2583937Z
+  [7] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T21:59:45.1164666Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [9] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T17:02:36.2326634Z
+  [8] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T21:35:14.5553048Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [10] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T16:51:22.2100487Z
+  [9] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T21:15:08.8691086Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [11] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T16:28:38.3550537Z
+  [10] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T20:58:54.6244686Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [12] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T16:05:19.6136592Z
+  [11] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T20:40:44.4656768Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [13] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T15:40:49.3994967Z
+  [12] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T20:13:23.1663053Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [14] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T15:11:05.6326139Z
+  [13] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T19:37:45.7484416Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [15] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T13:45:34.7621438Z
+  [14] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T19:19:15.5848517Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [16] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T02:13:21.8188641Z
+  [15] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T18:49:10.7291146Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [17] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T02:00:08.4641796Z
+  [16] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T17:36:19.1725064Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [18] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T01:48:54.1827785Z
+  [17] Id=1022 | .NET Runtime | 2026-02-11T16:03:17.3682362Z
+      .NET Runtime version 4.0.30319.0 - Échec de l'initialisation de l'infrastruct...
+  [18] Id=264 | Microsoft-Windows-Defrag | 2026-02-11T15:02:50.2024753Z
       L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [19] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T01:32:46.2988134Z
-      L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
-  [20] Id=264 | Microsoft-Windows-Defrag | 2026-02-10T01:14:13.5336091Z
-      L’optimiseur de stockage n’a pas pu terminer analyse de X9 Pro (H:), car : Le...
+  [19] Id=13 | VSS | 2026-02-11T03:57:44.5023078Z
+      Informations du service de cliché instantané de volumes : impossible de démar...
+  [20] Id=13 | VSS | 2026-02-11T03:55:11.2568Z
+      Informations du service de cliché instantané de volumes : impossible de démar...
 
   ▶ SECTION 15 : PÉRIPHÉRIQUES
 ────────────────────────────────────────────────────────────────────────────────
@@ -329,7 +329,7 @@
 
   [WindowsUpdate]
     cached: false
-    pendingCount: 3
+    pendingCount: 1
 
   [StartupPrograms]
     startupCount: 10
@@ -362,6 +362,6 @@
     ✓ Tests réseau locaux (sans speedtest externe)
     ✓ Processus temps réel (CPU % mesuré sur 750ms)
 
-  Généré le 2026-02-10 à 14:14:18
+  Généré le 2026-02-11 à 19:18:28
   PC Diagnostic PRO — Rapport Unifié v2.0
 ════════════════════════════════════════════════════════════════════════════════

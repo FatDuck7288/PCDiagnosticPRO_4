@@ -162,6 +162,17 @@ namespace PCDiagnosticPro.Models
     }
 
     /// <summary>
+    /// <summary>
+    /// One row for the Performance Capability Matrix / bar chart (main window dashboard).
+    /// </summary>
+    public class PerformanceScenarioRow
+    {
+        public string Name { get; set; } = "";
+        public int Score { get; set; }
+        public string Classification { get; set; } = "";
+    }
+
+    /// <summary>
     /// Section de diagnostic pour un domaine spécifique
     /// </summary>
     public class HealthSection
@@ -189,9 +200,39 @@ namespace PCDiagnosticPro.Models
         
         /// <summary>Données utilisées pour calculer le score</summary>
         public Dictionary<string, string> EvidenceData { get; set; } = new();
-        
+
+        /// <summary>Performance dashboard: category label (Entry / Mid / High / Workstation). Filled by InjectPerformanceScore.</summary>
+        public string PerformanceCategory { get; set; } = "";
+        /// <summary>Performance dashboard: primary bottleneck text. Filled by InjectPerformanceScore.</summary>
+        public string PrimaryBottleneck { get; set; } = "";
+        /// <summary>Performance dashboard: short realistic summary. Filled by InjectPerformanceScore.</summary>
+        public string RealisticSummary { get; set; } = "";
+        /// <summary>Performance dashboard: scenario rows for matrix and bar chart. Filled by InjectPerformanceScore.</summary>
+        public List<PerformanceScenarioRow> PerformanceScenarioRows { get; set; } = new();
+
+        /// <summary>True when Performance evaluation succeeded; false when fallback (données ou erreur). Used to gate score/badge/bars in UI.</summary>
+        public bool IsPerformanceEvaluationAvailable { get; set; } = true;
+
+        /// <summary>Performance UI: CPU spec used (model or tier). "Unknown" when evaluation unavailable.</summary>
+        public string PerformanceCpuDisplay { get; set; } = "";
+        /// <summary>Performance UI: GPU spec used (model or tier). "Unknown" when evaluation unavailable.</summary>
+        public string PerformanceGpuDisplay { get; set; } = "";
+        /// <summary>Performance UI: VRAM dedicated (e.g. "8192 MB"). "Unknown" when evaluation unavailable.</summary>
+        public string PerformanceVramDisplay { get; set; } = "";
+        /// <summary>Performance UI: RAM (e.g. "16 GB"). "Unknown" when evaluation unavailable.</summary>
+        public string PerformanceRamDisplay { get; set; } = "";
+        /// <summary>Performance UI: Storage type (HDD/SATA_SSD/NVMe or "Unknown").</summary>
+        public string PerformanceStorageDisplay { get; set; } = "";
+        /// <summary>True when CPU tier was resolved from a known name pattern; false = Unmatched, reduces confidence.</summary>
+        public bool PerformanceCpuNameMatched { get; set; } = true;
+        /// <summary>True when GPU tier was resolved from a known name pattern; false = Unmatched, reduces confidence.</summary>
+        public bool PerformanceGpuNameMatched { get; set; } = true;
+
         /// <summary>Info-bulles explicatives pour les termes techniques</summary>
         public Dictionary<string, string> EvidenceTooltips { get; set; } = new();
+
+        /// <summary>True when at least one Kernel Power EventID 1 is present (power state change); enables the (i) button that opens KernelPowerInfoWindow.</summary>
+        public bool HasKernelPowerId1 { get; set; }
         
         /// <summary>
         /// Données avec info-bulles pour affichage UI
@@ -234,12 +275,6 @@ namespace PCDiagnosticPro.Models
                     "Importance : Des événements fréquents indiquent un problème d'alimentation ou de stabilité nécessitant une attention immédiate.\n\n" +
                     "Que faire : Vérifiez l'alimentation (onduleur recommandé), contrôlez les températures, mettez à jour les pilotes.",
                     
-                "updatestatus" =>
-                    "UpdateStatus (état des mises à jour Windows)\n\n" +
-                    "Source : Windows Update Agent (collecte C#). Reflète l'état du patching Windows.\n\n" +
-                    "\"À jour\" = aucune mise à jour en attente.\n" +
-                    "\"Obsolète (N)\" = N mises à jour en attente ; un redémarrage peut être requis après installation.\n\n" +
-                    "Interprétation : Neutre. Recommandation : maintenir le système à jour et redémarrer si demandé.",
                 "points de restauration" => 
                     "Points de restauration système\n\n" +
                     "Définition : Sauvegardes automatiques de l'état du système (registre, fichiers système, programmes installés) créées par Windows avant des modifications importantes.\n\n" +
@@ -394,8 +429,6 @@ namespace PCDiagnosticPro.Models
                     
                     // CPU - termes techniques  
                     "Throttling",
-                    // OS - termes techniques
-                    "UpdateStatus",
                     
                     // Pilotes - termes techniques
                     "Non signés",
@@ -444,59 +477,36 @@ namespace PCDiagnosticPro.Models
                     // Stabilité
                     Key.Equals("BSOD", StringComparison.OrdinalIgnoreCase) ||
                     Key.Equals("Erreurs WHEA", StringComparison.OrdinalIgnoreCase) ||
-                    // OS
+                    // OS (Redémarrage requis: pas d'icône; seuls ⚠️ et 🚨 sont utilisés pour avertissement/danger)
                     Key.Equals("Updates Windows", StringComparison.OrdinalIgnoreCase) ||
-                    Key.Equals("Erreurs critiques", StringComparison.OrdinalIgnoreCase))
+                    Key.Equals("Erreurs critiques", StringComparison.OrdinalIgnoreCase) ||
+                    Key.Equals("Redémarrage requis", StringComparison.OrdinalIgnoreCase))
                     return "";
 
                 if (string.IsNullOrEmpty(Value)) return "";
-                // If value indicates data unavailability, show question mark instead of checkmark
                 var vLower = Value.ToLower();
-                if (vLower.Contains("non disponible") || vLower.Contains("unavailable") || 
-                    vLower.Contains("données manquantes") || vLower.Contains("échec") ||
-                    vLower.Contains("echoue") || vLower.Contains("failed"))
-                    return "❓";
                 var v = vLower;
-                
-                // Cas spécial: Redémarrage requis - icône neutre (pas un X qui suggère erreur)
-                if (Key.Equals("Redémarrage requis", StringComparison.OrdinalIgnoreCase))
-                {
-                    return v.StartsWith("oui") ? "↻" : "☑"; // Flèche circulaire si oui, coche si non
-                }
-                
-                // Positif: Throttling "Non détecté" = pas de throttling = vert
-                if (Key.IndexOf("Throttling", StringComparison.OrdinalIgnoreCase) >= 0 && (v.Contains("non détecté") || v.Contains("non détect")))
-                    return "☑";
-                // Positif: TDR "Aucun" = pas de crash GPU = vert
-                if (Key.IndexOf("TDR", StringComparison.OrdinalIgnoreCase) >= 0 && v.Contains("aucun"))
-                    return "☑";
-                // Positif: Stabilité (BSOD, WHEA, Kernel-Power) "Aucun/Aucune" = vert
-                if ((Key.IndexOf("BSOD", StringComparison.OrdinalIgnoreCase) >= 0 || Key.IndexOf("WHEA", StringComparison.OrdinalIgnoreCase) >= 0 || Key.IndexOf("Kernel-Power", StringComparison.OrdinalIgnoreCase) >= 0) &&
-                    (v == "aucun" || v == "aucune"))
-                    return "☑";
-                // Avertissement: Stabilité avec erreurs (crash, événement, 30 jours)
+                // Données indisponibles / inconnu : pas d'emoji
+                if (vLower.Contains("non disponible") || vLower.Contains("unavailable") ||
+                    vLower.Contains("données manquantes") || vLower.Contains("échec") ||
+                    vLower.Contains("echoue") || vLower.Contains("failed") ||
+                    v.Contains("inconnu") || v.Contains("unknown") || v.Contains("non détect"))
+                    return "";
+
+                // Avertissement (⚠️ uniquement)
+                if (Key.IndexOf("Throttling", StringComparison.OrdinalIgnoreCase) >= 0 && (v.Contains("détecté") || v.Contains("détect")))
+                    return ""; // positif = pas d'icône
                 if ((Key.IndexOf("BSOD", StringComparison.OrdinalIgnoreCase) >= 0 || Key.IndexOf("WHEA", StringComparison.OrdinalIgnoreCase) >= 0 || Key.IndexOf("Kernel-Power", StringComparison.OrdinalIgnoreCase) >= 0) &&
                     (v.Contains("crash") || v.Contains("événement") || v.Contains("jours")))
                     return "⚠";
-                
-                // États positifs (avec ou sans émoji)
-                if (v.Contains("✅") || v.StartsWith("oui") || v == "actif" || v.Contains("activé (tous")) 
-                    return "☑";
-                if (v == "aucune détectée" || v.Contains("système à jour") || v == "ok" || v.Contains("capteurs c# détectés"))
-                    return "☑";
-                
-                // États négatifs
-                if (v.Contains("❌") || v.StartsWith("non") && !v.Contains("non détect") || v.Contains("désactivé"))
-                    return "☒";
-                
-                // États d'avertissement
                 if (v.Contains("⚠️"))
                     return "⚠";
-                
-                // Inconnu
-                if (v.Contains("inconnu") || v.Contains("unknown") || v.Contains("non détect"))
-                    return "❓";
-                
+
+                // Danger (🚨 uniquement) : états négatifs / critiques
+                if (v.Contains("❌") || (v.StartsWith("non") && !v.Contains("non détect")) || v.Contains("désactivé"))
+                    return "🚨";
+
+                // Tous les autres états (positifs, neutres) : pas d'emoji
                 return "";
             }
         }

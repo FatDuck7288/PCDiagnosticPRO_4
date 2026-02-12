@@ -5,8 +5,11 @@ using System.Runtime.InteropServices;
 namespace PCDiagnosticPro.Services
 {
     /// <summary>
-    /// Fallback pour température CPU via WMI MSAcpi_ThermalZoneTemperature.
-    /// Utilisé quand LibreHardwareMonitor retourne une sentinelle (0°C).
+    /// Fallback pour température CPU via WMI (aucun pilote tiers, aucun signal sécurité).
+    /// Méthodes utilisées: MSAcpi_ThermalZoneTemperature, Win32_TemperatureProbe,
+    /// Win32_PerfFormattedData_Counters_ThermalZoneInformation, HWiNFO Shared Memory (lecture seule).
+    /// Utilisé quand LibreHardwareMonitor retourne une sentinelle (0°C) ou en mode sécurisé.
+    /// Voir docs/CPU_TEMPERATURE_AND_THROTTLING.md.
     /// </summary>
     public static class WmiThermalZoneFallback
     {
@@ -22,8 +25,14 @@ namespace PCDiagnosticPro.Services
         {
             try
             {
+                // Méthode 0: HWiNFO shared memory EN PREMIER — aucune alerte Defender (lecture seule, pas de pilote chargé par notre app).
+                // Fonctionne si l'utilisateur lance HWiNFO64 (Sensors Only) avec "Shared Memory Support" activé.
+                var result = TryHwInfoSharedMemory(minValidC, maxValidC);
+                if (result.TempC.HasValue)
+                    return result;
+
                 // Méthode 1: MSAcpi_ThermalZoneTemperature (standard ACPI)
-                var result = TryMsAcpiThermalZone(minValidC, maxValidC);
+                result = TryMsAcpiThermalZone(minValidC, maxValidC);
                 if (result.TempC.HasValue)
                     return result;
 
@@ -37,12 +46,7 @@ namespace PCDiagnosticPro.Services
                 if (result.TempC.HasValue)
                     return result;
 
-                // Méthode 4: HWiNFO shared memory (optionnel, si HWiNFO est lancé avec Shared Memory)
-                result = TryHwInfoSharedMemory(minValidC, maxValidC);
-                if (result.TempC.HasValue)
-                    return result;
-
-                return (null, "WMI_ThermalZone", "ACPI ThermalZone vide; TemperatureProbe, ThermalZoneInformation et HWiNFO non disponibles (mode sécurisé)");
+                return (null, "WMI_ThermalZone", "ACPI ThermalZone vide; TemperatureProbe et ThermalZoneInformation non disponibles (mode sécurisé). Astuce: lancer HWiNFO64 (Sensors) avec Shared Memory pour afficher la température sans alerte Defender.");
             }
             catch (Exception ex)
             {
@@ -206,7 +210,9 @@ namespace PCDiagnosticPro.Services
 
         /// <summary>
         /// Tente de lire la température CPU depuis la shared memory HWiNFO (Global\HWiNFO_SENS_SM2).
-        /// Optionnel, best-effort : ne fonctionne que si HWiNFO est lancé avec "Shared Memory" activé.
+        /// Aucun pilote chargé par notre app — pas d'alerte Defender. HWiNFO utilise son propre pilote (signé).
+        /// Layout SM2: HWiNFOHeader (magic SiWH, entry_section_offset 0x20, entry_element_size 0x24, entry_element_count 0x28),
+        /// HWiNFOEntry (type 1=Temperature, name_original 0x0C, value 0x11C). On privilégie Package / Tctl / Tdie / Core.
         /// </summary>
         private static (double? TempC, string Source, string? Reason) TryHwInfoSharedMemory(
             double minValidC, double maxValidC)
@@ -223,26 +229,98 @@ namespace PCDiagnosticPro.Services
                 if (pView == IntPtr.Zero)
                     return (null, "HWiNFO_SM2", "map_failed");
 
-                // HWiNFO SM2 layout (reverse-engineered): header has dwReadingOffset at offset 8
-                if (Marshal.ReadInt32(pView, 8) is int dwReadingOffset && dwReadingOffset >= 16 && dwReadingOffset < 0x10000)
+                const uint HWiNFO_HEADER_MAGIC = 0x43695357; // 'SiWH'
+                if (Marshal.ReadInt32(pView, 0) != (int)HWiNFO_HEADER_MAGIC)
+                    return (null, "HWiNFO_SM2", "invalid_header_magic");
+
+                int sensorSectionOffset = Marshal.ReadInt32(pView, 0x14);
+                int sensorElementSize = Marshal.ReadInt32(pView, 0x18);
+                int entrySectionOffset = Marshal.ReadInt32(pView, 0x20);
+                int entryElementSize = Marshal.ReadInt32(pView, 0x24);
+                int entryElementCount = Marshal.ReadInt32(pView, 0x28);
+                if (entrySectionOffset <= 0 || entryElementSize < 0x124 || entryElementCount <= 0 || entryElementCount > 2000)
+                    return (null, "HWiNFO_SM2", "invalid_header_layout");
+
+                const int SensorTypeTemperature = 1;
+                const int entrySensorIndexOffset = 0x04;
+                const int entryNameOriginalOffset = 0x0C;
+                const int entryValueOffset = 0x11C;
+                const int sensorNameOriginalOffset = 0x08;
+
+                double? cpuPackageTemp = null;
+                string? cpuPackageName = null;
+                double? cpuCoreMaxTemp = null;
+                string? cpuCoreMaxName = null;
+                double? firstValidTemp = null;
+                string? firstValidName = null;
+
+                for (int i = 0; i < entryElementCount; i++)
                 {
-                    // Each sensor reading element: value (double) at offset 0x11C within element; element size ~0x140
-                    const int valueOffsetInElement = 0x11C;
-                    const int elementSize = 0x140;
-                    for (int i = 0; i < 20; i++)
+                    int entryBase = entrySectionOffset + i * entryElementSize;
+                    int type = Marshal.ReadInt32(pView, entryBase + 0);
+                    if (type != SensorTypeTemperature)
+                        continue;
+
+                    try
                     {
-                        int offset = dwReadingOffset + i * elementSize + valueOffsetInElement;
-                        try
+                        int sensorIndex = Marshal.ReadInt32(pView, entryBase + entrySensorIndexOffset);
+                        string sensorName = "";
+                        if (sensorSectionOffset > 0 && sensorElementSize >= 0x88 && sensorIndex >= 0 && sensorIndex < 500)
                         {
-                            double value = Marshal.PtrToStructure<double>(IntPtr.Add(pView, offset));
-                            if (!double.IsNaN(value) && !double.IsInfinity(value) && value >= minValidC && value <= maxValidC)
+                            int sensorBase = sensorSectionOffset + sensorIndex * sensorElementSize;
+                            sensorName = Marshal.PtrToStringAnsi(IntPtr.Add(pView, sensorBase + sensorNameOriginalOffset), 128) ?? "";
+                            sensorName = sensorName.TrimEnd('\0').Trim();
+                        }
+                        bool isCpuSensor = sensorName.IndexOf("CPU", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                          sensorName.IndexOf("Processor", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                          (sensorName.IndexOf("Intel", StringComparison.OrdinalIgnoreCase) >= 0 && sensorName.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0) ||
+                                          (sensorName.IndexOf("AMD", StringComparison.OrdinalIgnoreCase) >= 0 && sensorName.IndexOf("Ryzen", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                        string name = Marshal.PtrToStringAnsi(IntPtr.Add(pView, entryBase + entryNameOriginalOffset), 128) ?? "";
+                        name = (name ?? "").TrimEnd('\0').Trim();
+                        double value = Marshal.PtrToStructure<double>(IntPtr.Add(pView, entryBase + entryValueOffset));
+                        if (double.IsNaN(value) || double.IsInfinity(value) || value < minValidC || value > maxValidC)
+                            continue;
+
+                        if (firstValidTemp == null && isCpuSensor)
+                        {
+                            firstValidTemp = value;
+                            firstValidName = name;
+                        }
+
+                        if (!isCpuSensor)
+                            continue;
+
+                        if (name.IndexOf("Package", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            if (!cpuPackageTemp.HasValue || value > cpuPackageTemp.Value)
                             {
-                                App.LogMessage($"[WMI ThermalZone] HWiNFO shared memory: {value:F1}°C");
-                                return (value, "HWiNFO_SM2", null);
+                                cpuPackageTemp = value;
+                                cpuPackageName = name;
                             }
                         }
-                        catch { /* skip */ }
+                        else if (name.IndexOf("Tctl", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 name.IndexOf("Tdie", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 name.IndexOf("CCD", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            if (!cpuCoreMaxTemp.HasValue || value > cpuCoreMaxTemp.Value)
+                            {
+                                cpuCoreMaxTemp = value;
+                                cpuCoreMaxName = name;
+                            }
+                        }
                     }
+                    catch { /* skip corrupt entry */ }
+                }
+
+                double? chosen = cpuPackageTemp ?? cpuCoreMaxTemp ?? firstValidTemp;
+                string? chosenName = cpuPackageName ?? cpuCoreMaxName ?? firstValidName;
+                if (chosen.HasValue)
+                {
+                    string source = string.IsNullOrEmpty(chosenName) ? "HWiNFO_SM2" : $"HWiNFO_SM2 ({chosenName})";
+                    App.LogMessage($"[WMI ThermalZone] HWiNFO shared memory: {chosen.Value:F1}°C ({source})");
+                    return (chosen.Value, source, null);
                 }
                 return (null, "HWiNFO_SM2", "no_valid_temperature_in_sm2");
             }

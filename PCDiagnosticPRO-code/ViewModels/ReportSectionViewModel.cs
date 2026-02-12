@@ -64,6 +64,26 @@ namespace PCDiagnosticPro.ViewModels
         public ObservableCollection<ReportIssue> Issues { get; } = new();
         public ObservableCollection<ReportTableViewModel> Tables { get; } = new();
 
+        /// <summary>Scenario scores for Performance section (bar chart and capability matrix).</summary>
+        public ObservableCollection<ScenarioScoreViewModel> ScenarioScores { get; } = new();
+
+        /// <summary>Performance section only: system category label (Entry-Level / Mid-Range / High-End / Workstation Grade).</summary>
+        public string PerformanceCategory { get; set; } = "";
+
+        /// <summary>Performance section only: primary limiting factor (CPU / GPU / RAM / Storage / None significant).</summary>
+        public string PrimaryBottleneck { get; set; } = "";
+
+        /// <summary>Performance section only: evidence block – CPU spec (model or tier).</summary>
+        public string PerformanceCpuDisplay { get; set; } = "";
+        /// <summary>Performance section only: evidence block – GPU spec (model or tier).</summary>
+        public string PerformanceGpuDisplay { get; set; } = "";
+        /// <summary>Performance section only: evidence block – VRAM dedicated (e.g. "8192 MB").</summary>
+        public string PerformanceVramDisplay { get; set; } = "";
+        /// <summary>Performance section only: evidence block – RAM (e.g. "16 GB").</summary>
+        public string PerformanceRamDisplay { get; set; } = "";
+        /// <summary>Performance section only: evidence block – storage type (HDD/SATA_SSD/NVMe).</summary>
+        public string PerformanceStorageDisplay { get; set; } = "";
+
         public string EvidenceText
         {
             get => _evidenceText;

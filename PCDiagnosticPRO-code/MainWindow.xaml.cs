@@ -6,7 +6,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using PCDiagnosticPro.Models;
 using PCDiagnosticPro.ViewModels;
+using PCDiagnosticPro.Views;
 
 namespace PCDiagnosticPro
 {
@@ -240,8 +242,31 @@ namespace PCDiagnosticPro
             if (sender is FrameworkElement element && element.ContextMenu != null)
             {
                 element.ContextMenu.PlacementTarget = element;
+                element.ContextMenu.DataContext = element.DataContext;
                 element.ContextMenu.IsOpen = true;
             }
+        }
+
+        /// <summary>
+        /// Opens the Kernel Power (ID 1 vs 41) explanation window (cyberpunk style).
+        /// </summary>
+        private void OpenKernelPowerInfoWindow(object sender, RoutedEventArgs e)
+        {
+            var win = new KernelPowerInfoWindow { Owner = this };
+            win.ShowDialog();
+        }
+
+        /// <summary>
+        /// Opens the cyberpunk-style info window for any (i) row with title = Key and content = Tooltip.
+        /// </summary>
+        private void OpenCyberpunkInfoWindow(object sender, RoutedEventArgs e)
+        {
+            if (sender is not System.Windows.FrameworkElement fe || fe.DataContext is not EvidenceItem ev)
+                return;
+            var title = ev.Key ?? "Info";
+            var content = ev.Tooltip ?? "";
+            var win = new CyberpunkInfoWindow(title, content) { Owner = this };
+            win.ShowDialog();
         }
 
         /// <summary>

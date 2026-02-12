@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:PCDiagnosticPro.ViewModels"
              xmlns:conv="clr-namespace:PCDiagnosticPro.Converters"
+             xmlns:views="clr-namespace:PCDiagnosticPro.Views"
              mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="900"
              Background="#0D1117"
              PreviewMouseWheel="UserControl_PreviewMouseWheel">
@@ -14,6 +15,9 @@
         <conv:IssueLevelToBrushConverter x:Key="IssueLevelToBrush"/>
         <conv:IssueLevelToIconConverter x:Key="IssueLevelToIcon"/>
         <conv:ScoreToBrushConverter x:Key="ScoreToBrush"/>
+        <conv:ScoreToPerformanceBrushConverter x:Key="ScoreToPerformanceBrush"/>
+        <conv:PerformanceScoreToDisplayConverter x:Key="PerformanceScoreToDisplay"/>
+        <conv:CollectionNotEmptyToVisibilityConverter x:Key="CollectionNotEmptyToVisibility"/>
         <SolidColorBrush x:Key="TextPrimary" Color="#E6EDF3"/>
         <SolidColorBrush x:Key="TextSecondary" Color="#8B949E"/>
         <SolidColorBrush x:Key="BorderGlass" Color="#40FFFFFF"/>
@@ -152,6 +156,167 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+
+        <!-- Performance section: Capability Dashboard (Executive card + Matrix + Bar chart). UI-only; consumes existing data. -->
+        <DataTemplate x:Key="PerformanceSectionTemplate" DataType="{x:Type vm:ReportSectionViewModel}">
+            <Border Margin="0,0,0,20" Background="{StaticResource BgCard}" Opacity="0.95"
+                    BorderBrush="{Binding SectionScore, Converter={StaticResource ScoreToPerformanceBrush}}" BorderThickness="2"
+                    CornerRadius="14" Padding="16">
+                <Border.Effect>
+                    <DropShadowEffect Color="#20FFFFFF" BlurRadius="20" ShadowDepth="0" Opacity="0.5"/>
+                </Border.Effect>
+                <StackPanel>
+                    <!-- Section title (minimal) -->
+                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,12"/>
+
+                    <!-- Unavailable state: no scenario data -->
+                    <Border Visibility="{Binding ScenarioScores, Converter={StaticResource CollectionNotEmptyToVisibility}, ConverterParameter=Invert}"
+                            Background="#1A2129" CornerRadius="8" Padding="20" Margin="0,0,0,12">
+                        <TextBlock Text="Performance data unavailable" Foreground="{StaticResource TextSecondary}" FontSize="13" HorizontalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Dashboard content (visible when ScenarioScores has data) -->
+                    <StackPanel Visibility="{Binding ScenarioScores, Converter={StaticResource CollectionNotEmptyToVisibility}}">
+                        <!-- 1) Executive Summary Card -->
+                        <Border Background="#161B22" CornerRadius="10" Padding="14" Margin="0,0,0,14" BorderBrush="#30363D" BorderThickness="1">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="0" Opacity="0.3"/>
+                            </Border.Effect>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock FontSize="28" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"
+                                               Text="{Binding SectionScore, Converter={StaticResource PerformanceScoreToDisplay}, ConverterParameter=WithSuffix}"/>
+                                    <TextBlock Text="{Binding PerformanceCategory}" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding PrimaryBottleneck}" FontSize="11" Foreground="{StaticResource AccentAmber}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Primary bottleneck" FontSize="9" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,6"/>
+                                    <TextBlock Text="{Binding SummaryLine2}" FontSize="11" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" MaxHeight="36" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Evidence: specs used (CPU, GPU, VRAM, RAM, Storage) -->
+                        <TextBlock Text="Spécifications utilisées" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,6"/>
+                        <Border Background="#21262D" CornerRadius="8" Padding="10,8" Margin="0,0,0,14" BorderBrush="#30363D" BorderThickness="1">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="CPU : " FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                                    <TextBlock Text="{Binding PerformanceCpuDisplay}" FontSize="11" Foreground="{StaticResource TextPrimary}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="GPU : " FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                                    <TextBlock Text="{Binding PerformanceGpuDisplay}" FontSize="11" Foreground="{StaticResource TextPrimary}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="VRAM (dédiée) : " FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                                    <TextBlock Text="{Binding PerformanceVramDisplay}" FontSize="11" Foreground="{StaticResource TextPrimary}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="RAM : " FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                                    <TextBlock Text="{Binding PerformanceRamDisplay}" FontSize="11" Foreground="{StaticResource TextPrimary}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Type de stockage : " FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                                    <TextBlock Text="{Binding PerformanceStorageDisplay}" FontSize="11" Foreground="{StaticResource TextPrimary}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 2) Capability Matrix: scenario grid (score + badge; tooltip = classification) -->
+                        <TextBlock Text="Capability Matrix" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,8"/>
+                        <ItemsControl ItemsSource="{Binding ScenarioScores}" Margin="0,0,0,14">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#21262D" CornerRadius="8" Padding="10,8" Margin="0,0,8,8" MinWidth="160"
+                                            BorderBrush="#30363D" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimary}" FontSize="11" TextWrapping="Wrap"/>
+                                            <Grid Margin="0,4,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Height="8" CornerRadius="4" Margin="0,0,6,0" HorizontalAlignment="Stretch"
+                                                        Background="#30363D">
+                                                    <Border HorizontalAlignment="Left" Height="8" CornerRadius="4"
+                                                            Width="{Binding Score, Converter={StaticResource ScoreToBarWidth}, ConverterParameter=100}"
+                                                            Background="{Binding Score, Converter={StaticResource ScoreToPerformanceBrush}}"/>
+                                                </Border>
+                                                <TextBlock Grid.Column="1" Text="{Binding Score, Converter={StaticResource PerformanceScoreToDisplay}}" FontSize="10" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <Border Margin="0,4,0,0" Padding="4,2" CornerRadius="4"
+                                                    Background="{Binding Score, Converter={StaticResource ScoreToPerformanceBrush}}">
+                                                <TextBlock Text="{Binding Classification}" FontSize="9" Foreground="White"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <Border.ToolTip>
+                                            <ToolTip>
+                                                <TextBlock>
+                                                    <Run Text="{Binding Name}" FontWeight="SemiBold"/>
+                                                    <Run Text=" — "/>
+                                                    <Run Text="{Binding Classification}"/>
+                                                    <Run Text=" (score "/>
+                                                    <Run Text="{Binding Score, Converter={StaticResource PerformanceScoreToDisplay}, ConverterParameter=WithSuffix}"/>
+                                                    <Run Text=")"/>
+                                                </TextBlock>
+                                            </ToolTip>
+                                        </Border.ToolTip>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- 3) Visualization: horizontal bar chart (modern, rounded, spacing) -->
+                        <TextBlock Text="Scenario scores" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,8"/>
+                        <Border Background="#161B22" CornerRadius="10" Padding="12" BorderBrush="#30363D" BorderThickness="1">
+                            <ItemsControl ItemsSource="{Binding ScenarioScores}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,4,0,4" Padding="0" ToolTip="{Binding Classification}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="150"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="40"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimary}" FontSize="11" VerticalAlignment="Center"/>
+                                                <Border Grid.Column="1" Height="16" CornerRadius="6" Margin="6,0" Background="#21262D">
+                                                    <Border HorizontalAlignment="Left" Height="16" CornerRadius="6"
+                                                            Width="{Binding Score, Converter={StaticResource ScoreToBarWidth}}"
+                                                            Background="{Binding Score, Converter={StaticResource ScoreToPerformanceBrush}}">
+                                                        <Border.Effect>
+                                                            <DropShadowEffect Color="#40FFFFFF" BlurRadius="4" ShadowDepth="0" Opacity="0.4"/>
+                                                        </Border.Effect>
+                                                    </Border>
+                                                </Border>
+                                                <TextBlock Grid.Column="2" Text="{Binding Classification}" FontSize="9" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Score to bar width: 0-100 -> 0 to 200px (or similar). Need a converter. -->
+        <conv:ScoreToBarWidthConverter x:Key="ScoreToBarWidth"/>
+
+        <views:PerformanceSectionTemplateSelector x:Key="SectionTemplateSelector"
+            DefaultTemplate="{StaticResource SectionDetailTemplate}"
+            PerformanceTemplate="{StaticResource PerformanceSectionTemplate}"/>
     </UserControl.Resources>
 
     <Grid>
@@ -189,7 +354,7 @@
         <ScrollViewer x:Name="ContentScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                       Padding="24,16,24,24" Background="Transparent">
             <ContentControl Content="{Binding SelectedSection}"
-                            ContentTemplate="{StaticResource SectionDetailTemplate}"/>
+                            ContentTemplateSelector="{StaticResource SectionTemplateSelector}"/>
         </ScrollViewer>
     </Grid>
 </UserControl>

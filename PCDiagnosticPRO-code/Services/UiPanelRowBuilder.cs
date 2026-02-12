@@ -492,17 +492,7 @@ namespace PCDiagnosticPro.Services
                     }
                 }
                 
-                // Windows Update status
-                var updateData = GetNestedElement(root, "updates_csharp");
-                if (updateData.HasValue)
-                {
-                    var pending = GetIntValue(updateData, "pendingCount");
-                    if (pending.HasValue)
-                    {
-                        var status = pending.Value > 0 ? $"{pending.Value} en attente" : "À jour";
-                        AddDetail(details, "Mises à jour", status, "updates_csharp.pendingCount");
-                    }
-                }
+                // Windows Update status retiré de la section OS (affiché dans la section Mises à jour dédiée)
             }
             catch (Exception ex)
             {

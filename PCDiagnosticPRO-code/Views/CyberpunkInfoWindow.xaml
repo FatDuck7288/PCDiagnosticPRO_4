@@ -1,0 +1,64 @@
+<Window x:Class="PCDiagnosticPro.Views.CyberpunkInfoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Height="420" Width="520"
+        MinHeight="320" MinWidth="400"
+        ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterOwner"
+        Background="#060A12">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="CyberBg" Color="#060A12"/>
+        <SolidColorBrush x:Key="CyberCardBg" Color="#0B1220"/>
+        <SolidColorBrush x:Key="CyberBorder" Color="#2AA7FF"/>
+        <SolidColorBrush x:Key="CyberText" Color="#E6EDF3"/>
+        <SolidColorBrush x:Key="CyberRed" Color="#FF2B2B"/>
+        <DropShadowEffect x:Key="CyberRedGlow" Color="#FF2B2B" BlurRadius="20" ShadowDepth="0" Opacity="0.7"/>
+        <DropShadowEffect x:Key="CyberShadow" Color="Black" BlurRadius="12" ShadowDepth="2" Opacity="0.4"/>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="TitleBlock" Grid.Row="0" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource CyberText}"
+                   Margin="0,0,0,12" TextWrapping="Wrap"/>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,20">
+            <Border Background="{StaticResource CyberCardBg}" BorderBrush="{StaticResource CyberBorder}"
+                    BorderThickness="1" CornerRadius="8" Padding="16" Effect="{StaticResource CyberShadow}">
+                <TextBlock x:Name="ContentBlock" Foreground="{StaticResource CyberText}" FontSize="13" TextWrapping="Wrap" LineHeight="20"/>
+            </Border>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" Content="Fermer" HorizontalAlignment="Right" Padding="24,10" FontSize="14" FontWeight="SemiBold"
+                Background="{StaticResource CyberCardBg}" Foreground="{StaticResource CyberText}"
+                BorderBrush="{StaticResource CyberBorder}" BorderThickness="1" Cursor="Hand"
+                Click="Close_Click">
+            <Button.Style>
+                <Style TargetType="Button">
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="border" Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="Background" Value="{StaticResource CyberRed}"/>
+                                        <Setter TargetName="border" Property="Effect" Value="{StaticResource CyberRedGlow}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Button.Style>
+        </Button>
+    </Grid>
+</Window>

@@ -31,6 +31,7 @@ namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
 
                 int tdrCount = 0;
                 int kernelPower41Count = 0;
+                int kernelPower1Count = 0;
                 int bugcheckCount = 0;
                 int appCrashGpuRelated = 0;
 
@@ -39,6 +40,9 @@ namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
 
                 // 2. Kernel-Power 41 (unexpected shutdown)
                 kernelPower41Count = QueryKernelPower41(last30Days, events, ct);
+
+                // 2b. Kernel-Power 1 (power state change: sleep/wake, AC/battery — informational)
+                kernelPower1Count = QueryKernelPower1(last30Days, ct);
 
                 // 3. BugCheck events
                 bugcheckCount = QueryBugCheckEvents(last30Days, events, ct);
@@ -50,6 +54,7 @@ namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
                 {
                     TdrCount30d = tdrCount,
                     KernelPower41Count30d = kernelPower41Count,
+                    KernelPower1Count30d = kernelPower1Count,
                     BugcheckCount30d = bugcheckCount,
                     AppCrashGpuRelated = appCrashGpuRelated,
                     LastEvents = events.OrderByDescending(e => e.Time).Take(10).ToList()
@@ -67,7 +72,7 @@ namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
                     Available = true,
                     Source = "EventLog_System+Application",
                     Quality = quality,
-                    Notes = $"TDR={tdrCount}, KP41={kernelPower41Count}, BugCheck={bugcheckCount}",
+                    Notes = $"TDR={tdrCount}, KP41={kernelPower41Count}, KP1={kernelPower1Count}, BugCheck={bugcheckCount}",
                     Timestamp = DateTime.UtcNow
                 };
             }
@@ -149,6 +154,32 @@ namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
             catch (Exception ex)
             {
                 SignalsLogger.LogWarning(Name, $"Kernel-Power query error: {ex.Message}");
+            }
+            return count;
+        }
+
+        private int QueryKernelPower1(DateTime since, CancellationToken ct)
+        {
+            int count = 0;
+            try
+            {
+                string query = "*[System[Provider[@Name='Microsoft-Windows-Kernel-Power'] and EventID=1]]";
+                var logQuery = new EventLogQuery("System", PathType.LogName, query);
+                using var reader = new EventLogReader(logQuery);
+
+                EventRecord evt;
+                while ((evt = reader.ReadEvent()) != null && !ct.IsCancellationRequested)
+                {
+                    using (evt)
+                    {
+                        if (!evt.TimeCreated.HasValue || evt.TimeCreated.Value < since) continue;
+                        count++;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SignalsLogger.LogWarning(Name, $"Kernel-Power ID 1 query error: {ex.Message}");
             }
             return count;
         }
@@ -262,6 +293,7 @@ namespace PCDiagnosticPro.DiagnosticsSignals.Collectors
     {
         public int TdrCount30d { get; set; }
         public int KernelPower41Count30d { get; set; }
+        public int KernelPower1Count30d { get; set; }
         public int BugcheckCount30d { get; set; }
         public int AppCrashGpuRelated { get; set; }
         public List<StabilityEvent> LastEvents { get; set; } = new();

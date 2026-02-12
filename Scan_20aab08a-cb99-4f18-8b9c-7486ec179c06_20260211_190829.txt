@@ -7,9 +7,9 @@ L'analyse et l'interpretation sont effectuees par l'IA externe.
 
 METADATA
 --------------------------------------------------
-Run ID               : 19fe8ec2-ccf0-4a2f-81ec-c2c63edb53a1
+Run ID               : 20aab08a-cb99-4f18-8b9c-7486ec179c06
 Version              : 7.0
-Date                 : 2026-02-10 14:06:52
+Date                 : 2026-02-11 19:08:29
 Machine              : PC-52391b
 Admin                : True
 Redaction            : Full
@@ -34,8 +34,8 @@ Build                    : 26200
 
 UPTIME
 --------------------------------------------------
-Dernier Boot             : 2026-02-07 19:01
-Uptime                   : 2j 19h
+Dernier Boot             : 2026-02-11 09:44
+Uptime                   : 0j 9h
 
 FABRICANT
 --------------------------------------------------
@@ -73,7 +73,7 @@ PROCESSEUR(S)
 CPU: AMD Ryzen 9 5900X 12-Core Processor            
   Cores/Threads          : 12 / 24
   Frequence Max          : 3701 MHz
-  Charge Actuelle        : 18%
+  Charge Actuelle        : 6%
 
 ====================================================================================================
 [4. MEMOIRE]
@@ -81,8 +81,8 @@ CPU: AMD Ryzen 9 5900X 12-Core Processor
 MEMOIRE PHYSIQUE (RAM)
 --------------------------------------------------
 Memoire Totale           : 95.93 GB
-Memoire Libre            : 69.82 GB
-Utilisation              : 27.2%
+Memoire Libre            : 71.73 GB
+Utilisation              : 25.2%
 
 MODULES
 --------------------------------------------------
@@ -109,8 +109,8 @@ Disque: TOSHIBA DT01ACA200
 
 VOLUMES
 --------------------------------------------------
-C: 952.65 GB | Libre: 361.63 GB (62% utilise)
-D: 1863.02 GB | Libre: 1092.16 GB (41.4% utilise)
+C: 952.65 GB | Libre: 356.64 GB (62.6% utilise)
+D: 1863.02 GB | Libre: 1092.15 GB (41.4% utilise)
 E: 1862.17 GB | Libre: 1460.41 GB (21.6% utilise)
 H: 1862.88 GB | Libre: 696.01 GB (62.6% utilise)
 
@@ -153,7 +153,7 @@ Interface: RZ616 Wi-Fi 6E 160MHz
 
 CONNEXIONS
 --------------------------------------------------
-Total connexions: 183 | Ports en ecoute: 39
+Total connexions: 152 | Ports en ecoute: 36
 
 ====================================================================================================
 [8. SECURITE]
@@ -183,13 +183,13 @@ UAC: Active
 ====================================================================================================
 SERVICES CRITIQUES
 --------------------------------------------------
-[OK] Windows Update
+[STOP] Windows Update
 [OK] Service antivirus Microsoft Defender
 [OK] Pare-feu Windows Defender
 [OK] Journal d’événements Windows
 [OK] Services de chiffrement
 
-Total: 310 | Running: 130
+Total: 310 | Running: 129
 
 ====================================================================================================
 [10. DEMARRAGE]
@@ -217,7 +217,7 @@ VERIFICATION SANTE SYSTEME
 
 REDEMARRAGE REQUIS
 --------------------------------------------------
-[ATTENTION] Redemarrage requis: Windows Update, Composants CBS
+[OK] Aucun redemarrage en attente
 
 ====================================================================================================
 [12. JOURNAUX EVENEMENTS]
@@ -240,7 +240,7 @@ BSOD detectes: 0
 ====================================================================================================
 WINDOWS UPDATE
 --------------------------------------------------
-Mises a jour en attente  : 3
+Mises a jour en attente  : 1
 
 ====================================================================================================
 [14. AUDIO]
@@ -271,7 +271,7 @@ Total: 87 applications
 ====================================================================================================
 TACHES PLANIFIEES
 --------------------------------------------------
-Total: 292 | Actives: 235
+Total: 292 | Actives: 234
 
 ====================================================================================================
 [18. PROCESSUS]
@@ -325,9 +325,9 @@ Points disponibles: 4
 ====================================================================================================
 FICHIERS TEMPORAIRES
 --------------------------------------------------
-Temp User : 1,99 GB
-Temp Windows : 133,16 MB
-TOTAL: 2,12 GB
+Temp User : 5,65 GB
+Temp Windows : 129,17 MB
+TOTAL: 5,78 GB
 
 ====================================================================================================
 [25. VARIABLES ENVIRONNEMENT]
@@ -389,7 +389,7 @@ Disques: 5
 ====================================================================================================
 INTEGRITE SYSTEME
 --------------------------------------------------
-[ATTENTION] Composants CBS en attente
+[OK] Aucune operation CBS en attente
 
 Commandes de verification:
   sfc /scannow
@@ -449,8 +449,8 @@ SMART DETAILLE
 Disque: 5&221baba8&0&020000_0
   Prediction defaillance : Non
   Reallocated Sectors    : 0
-  Power-On Hours         : 23134 h
-  Temperature            : 30 C
+  Power-On Hours         : 23152 h
+  Temperature            : 36 C
   Reallocation Events    : 0
   Pending Sectors        : 0
   Uncorrectable Sectors  : 0
@@ -464,12 +464,12 @@ SIGNES DYNAMIQUES (DONNEES BRUTES)
 
 [CONFIG] Duree: 3s | Echantillons: 3
 
-CPU: moyenne 0% | max 0% | min 0% [WMI-Fallback]
-Memoire: 27.76% utilisee | 70957.1 MB libres [WMI-Fallback]
-Disque: utilisation 2% | file 0 [WMI-Fallback]
-Top CPU: System
-Top RAM: Cursor (1952.68 MB)
-Reseau: 26.07 Mbps | erreurs: 0
+CPU: moyenne 7% | max 7% | min 7% [WMI-Fallback]
+Memoire: 25.74% utilisee | 72943.2 MB libres [WMI-Fallback]
+Disque: utilisation 0% | file 0 [WMI-Fallback]
+Top CPU: Cursor
+Top RAM: Cursor (1301.09 MB)
+Reseau: 22.91 Mbps | erreurs: 0
 
 ====================================================================================================
 [37. ANALYSE AVANCEE]
@@ -522,8 +522,8 @@ RESUME DE COLLECTE
 METADATA
 --------------------------------------------------
 Version              : 7.0
-Run ID               : 19fe8ec2-ccf0-4a2f-81ec-c2c63edb53a1
-Date                 : 2026-02-10 14:07:49
+Run ID               : 20aab08a-cb99-4f18-8b9c-7486ec179c06
+Date                 : 2026-02-11 19:09:20
 Admin                : True
 Redaction            : Full
 QuickScan            : False
@@ -575,7 +575,7 @@ ERREURS
 Erreurs de collecte: 1
 
 ####################################################################################################
-Duree collecte       : 57.9 secondes
-Genere le            : 2026-02-10 14:07:49
+Duree collecte       : 51.3 secondes
+Genere le            : 2026-02-11 19:09:20
 
-Hash (SHA256): 84C495677902746078F82981BF02B5FAEF178FCF4A6A1F44738F65611C0F64C7
+Hash (SHA256): F12955F3E692517025019B1DD409AF3B0BF271FC52438BD62D3AE00002A2BAFF

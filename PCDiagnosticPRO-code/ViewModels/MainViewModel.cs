@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Globalization;
 using System.Threading;
@@ -2149,15 +2150,13 @@ namespace PCDiagnosticPro.ViewModels
                     var signalsOrchestrator = new DiagnosticsSignals.SignalsOrchestrator();
                     signalsOrchestrator.SetAllowExternalNetworkTests(_allowExternalNetworkTests);
 
-                    // SECURITY FIX (v2): NEVER use WinRing0. Always SAFE mode (WMI/NVML).
-                    // WinRing0 is a vulnerable kernel driver (VulnerableDriver:WinNT/Winring0)
-                    // that triggers Defender alerts and writes to C:\Windows\SystemTemp.
-                    // SafeHardwareSensorsCollector provides CPU/GPU/disk temps via WMI + NVML
-                    // without any kernel driver, no admin required, no Defender alerts.
-                    _hardwareSensorsCollector.ForceUnsafeMode = false;
+                    // Si l'utilisateur a activé "Surveillance matérielle", utiliser LibreHardwareMonitor (LHM)
+                    // pour lire la température CPU/GPU. Sinon mode SAFE (WMI/NVML, pas de pilote).
+                    // LHM peut déclencher Windows Defender ; l'utilisateur peut ajouter une exclusion.
+                    _hardwareSensorsCollector.ForceUnsafeMode = _enableHardwareMonitoring;
 
-                    App.LogMessage($"[Parallel Collection] Sensor mode: SAFE (WMI/NVML) — WinRing0 eliminated " +
-                                   $"[enableHW={_enableHardwareMonitoring}, skip={_skipHardwareSensors}, admin={IsAdmin}]");
+                    App.LogMessage($"[Parallel Collection] Sensor mode: " + (_enableHardwareMonitoring ? "LHM (LibreHardwareMonitor)" : "SAFE (WMI/NVML)") +
+                                   $" [enableHW={_enableHardwareMonitoring}, skip={_skipHardwareSensors}, admin={IsAdmin}]");
 
                     _scanTimingTracker?.StartPhase("Sensors", "C#");
                     _scanTimingTracker?.StartPhase("Counters", "C#");
@@ -2590,25 +2589,8 @@ namespace PCDiagnosticPro.ViewModels
             return null;
         }
 
-        // #region agent log
-        private const string _debugLogPath = @"d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\.cursor\debug.log";
-        private static void AgentLog(object payload)
-        {
-            try
-            {
-                var line = JsonSerializer.Serialize(payload) + "\n";
-                File.AppendAllText(_debugLogPath, line);
-            }
-            catch { }
-        }
-        // #endregion
-
         private void OnScanPipelineCompleted(ScanResult? result, string resultsMessage, string statusMessage, bool forceCompletedStatus)
         {
-            // #region agent log
-            var isUi = Application.Current?.Dispatcher?.CheckAccess() ?? false;
-            AgentLog(new { id = "log_ospc_entry", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), location = "MainViewModel.OnScanPipelineCompleted", message = "OnScanPipelineCompleted entry", data = new { resultNotNull = result != null, isUiThread = isUi, threadId = Thread.CurrentThread.ManagedThreadId }, hypothesisId = "H1" });
-            // #endregion
             void RunOnUi()
             {
                 App.LogMessage("Attempt build chart: démarrage");
@@ -2624,9 +2606,6 @@ namespace PCDiagnosticPro.ViewModels
                     UpdateScanItemsFromResult(result);
                     UpdateResultSectionsFromResult(result);
                     AddToHistory(result);
-                    // #region agent log
-                    AgentLog(new { id = "log_ospc_after_add", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), location = "MainViewModel.OnScanPipelineCompleted", message = "After AddToHistory", data = new { scanHistoryCount = ScanHistory.Count }, hypothesisId = "H2" });
-                    // #endregion
 
                     var chartReady = TryBuildChartData(result, out var chartFailureReason);
                     if (!chartReady)
@@ -2641,9 +2620,6 @@ namespace PCDiagnosticPro.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    // #region agent log
-                    AgentLog(new { id = "log_ospc_catch", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), location = "MainViewModel.OnScanPipelineCompleted", message = "Chart/update exception", data = new { ex = ex.Message }, hypothesisId = "H4" });
-                    // #endregion
                     ResultsMessage = $"Graphique indisponible: {ex.Message}";
                     App.LogMessage($"Chart build exception: {ex.Message}");
                 }
@@ -2673,9 +2649,6 @@ namespace PCDiagnosticPro.ViewModels
                 CurrentStep = statusMessage;
             }
             NavigateToResults();
-            // #region agent log
-            AgentLog(new { id = "log_ospc_after_nav", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), location = "MainViewModel.OnScanPipelineCompleted", message = "After NavigateToResults", data = new { currentView = CurrentView, scanHistoryCount = ScanHistory.Count, selectedNotNull = SelectedHistoryScan != null }, hypothesisId = "H3" });
-            // #endregion
             AddLiveFeedItem(GetString("LiveFeed_PhaseEnd_Rapport"));
             UpdateProgress(100, GetString("PhaseLabel_Rapport"));
             SetSectionPhase(6, "Done");
@@ -2725,16 +2698,9 @@ namespace PCDiagnosticPro.ViewModels
             {
                 if (string.IsNullOrWhiteSpace(_resultJsonPath))
                 {
-                    // #region agent log
-                    AgentLog(new { id = "log_loadjson_no_path", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), location = "MainViewModel.LoadJsonResultAsync", message = "JSON path empty", data = new { }, hypothesisId = "H6" });
-                    // #endregion
                     throw new FileNotFoundException("Chemin JSON introuvable.");
                 }
 
-                var fileExists = File.Exists(_resultJsonPath);
-                // #region agent log
-                AgentLog(new { id = "log_loadjson_start", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), location = "MainViewModel.LoadJsonResultAsync", message = "LoadJson start", data = new { path = _resultJsonPath, fileExists }, hypothesisId = "H6" });
-                // #endregion
                 App.LogMessage($"Fichier JSON final choisi: {_resultJsonPath}");
                 var jsonContent = await File.ReadAllTextAsync(_resultJsonPath, Encoding.UTF8);
                 App.LogMessage($"Taille du fichier JSON: {jsonContent.Length} caractères");
@@ -2760,8 +2726,27 @@ namespace PCDiagnosticPro.ViewModels
                     else
                     {
                         App.LogMessage("[HealthReport] WARN: JSON combiné non disponible, fallback sur PS brut");
+                        // Injecter event_logs_detailed si on a les données C# pour éviter "Inconnu" sur Erreurs critiques
+                        if (_lastEventLogsDetailed != null && _lastEventLogsDetailed.Count >= 0 &&
+                            !healthReportJsonContent.Contains("\"event_logs_detailed\"", StringComparison.OrdinalIgnoreCase))
+                        {
+                            try
+                            {
+                                var node = JsonNode.Parse(healthReportJsonContent);
+                                if (node is JsonObject obj)
+                                {
+                                    obj["event_logs_detailed"] = JsonSerializer.SerializeToNode(_lastEventLogsDetailed, HardwareSensorsResult.JsonOptions);
+                                    healthReportJsonContent = node.ToJsonString(HardwareSensorsResult.JsonOptions);
+                                    App.LogMessage("[HealthReport] event_logs_detailed injecté dans JSON PS pour section OS");
+                                }
+                            }
+                            catch (Exception injEx)
+                            {
+                                App.LogMessage($"[HealthReport] Injection event_logs_detailed: {injEx.Message}");
+                            }
+                        }
                     }
-                    
+
                     // Passer les capteurs hardware pour injection dans EvidenceData
                     var healthReport = HealthReportBuilder.Build(
                         healthReportJsonContent,
@@ -2879,9 +2864,6 @@ namespace PCDiagnosticPro.ViewModels
             }
             catch (Exception ex)
             {
-                // #region agent log
-                AgentLog(new { id = "log_loadjson_catch", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), location = "MainViewModel.LoadJsonResultAsync", message = "Load report exception", data = new { exType = ex.GetType().FullName, exMessage = ex.Message, inner = ex.InnerException?.Message }, hypothesisId = "H6" });
-                // #endregion
                 var loadFailMsg = $"{GetString("StatusLoadReportError")} {ex.Message}";
                 var loadFailStatus = GetString("StatusLoadReportError");
                 App.LogMessage($"Parse FAIL: {ex.Message}");
@@ -3071,9 +3053,6 @@ namespace PCDiagnosticPro.ViewModels
 
         private void NavigateToResults()
         {
-            // #region agent log
-            AgentLog(new { id = "log_nav_entry", timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), location = "MainViewModel.NavigateToResults", message = "NavigateToResults entry", data = new { scanHistoryCount = ScanHistory.Count }, hypothesisId = "H5" });
-            // #endregion
             CurrentView = "Results";
             IsViewingArchives = false;
             if (ScanHistory.Count > 0)
@@ -3138,7 +3117,7 @@ namespace PCDiagnosticPro.ViewModels
                     UpdatesCsharp = _lastWindowsUpdateResult,
                     SecurityInfoCsharp = _lastSecurityInfo,
                     PerformanceTimeseriesSummary = _lastPerformanceTimeseriesSummary,
-                    EventLogsDetailed = _lastEventLogsDetailed,
+                    EventLogsDetailed = _lastEventLogsDetailed ?? new List<EventLogDetailedEntry>(),
                     SmartAttributes = _lastSmartAttributes,
                     MinidumpsDetailed = _lastMinidumpsDetailed
                 };

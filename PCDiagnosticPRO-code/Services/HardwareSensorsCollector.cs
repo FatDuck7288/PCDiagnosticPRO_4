@@ -33,12 +33,21 @@ namespace PCDiagnosticPro.Services
         /// </summary>
         public bool ForceUnsafeMode { get; set; } = false;
         
+        /// <summary>
+        /// When true, log all hardware and CPU sensors to %TEMP%\PCDiagnosticPro_CPU_Temp_Diagnostic.log
+        /// and App.LogMessage, and print explanation if no temperature is found.
+        /// </summary>
+        public static bool CpuTempDiagnosticMode { get; set; } = false;
+
         public Task<HardwareSensorsResult> CollectAsync(CancellationToken ct)
         {
-            // SECURITY FIX: ALWAYS use safe mode. WinRing0 is eliminated entirely.
-            // The FULL mode code path (CollectInternal with Computer.Open()) is preserved but
-            // never reached. This avoids WinRing0 kernel driver extraction, Defender alerts,
-            // and writes to C:\Windows\SystemTemp.
+            if (ForceUnsafeMode)
+            {
+                if (RequiresAdminForFullSensors())
+                    App.LogMessage("[HardwareSensors] LHM (LibreHardwareMonitor) : exécution sans droits administrateur. Si la température CPU n'apparaît pas, relancez l'application en tant qu'administrateur ou ajoutez une exclusion Defender.");
+                App.LogMessage("[HardwareSensors] Using LHM mode (LibreHardwareMonitor) — ForceUnsafeMode=true");
+                return Task.Run(() => CollectInternal(ct), ct);
+            }
             App.LogMessage("[HardwareSensors] Using SAFE mode (WMI/NVML) — WinRing0 eliminated");
             var safeCollector = new SafeHardwareSensorsCollector();
             return safeCollector.CollectAsync(ct);
@@ -57,6 +66,10 @@ namespace PCDiagnosticPro.Services
                 computer.IsGpuEnabled = true;
                 computer.IsStorageEnabled = true;
                 computer.Open();
+
+                // Update récursif : tous les hardware et subhardware pour que les sensors aient des valeurs
+                foreach (var hw in computer.Hardware)
+                    UpdateHardwareRecursive(hw);
 
                 TryCollectGpuMetrics(computer, result);
                 TryCollectCpuMetrics(computer, result);
@@ -448,6 +461,9 @@ namespace PCDiagnosticPro.Services
         {
             try
             {
+                if (CpuTempDiagnosticMode)
+                    LogCpuTempDiagnostic(computer, step: "before_cpu_lookup");
+
                 IHardware cpu = null;
                 foreach (var hw in computer.Hardware)
                 {
@@ -462,111 +478,34 @@ namespace PCDiagnosticPro.Services
                 {
                     result.Cpu.CpuTempC = UnavailableDouble("CPU introuvable");
                     result.Cpu.CpuTempSource = "N/A";
+                    if (CpuTempDiagnosticMode)
+                        LogCpuTempDiagnostic(computer, step: "cpu_not_found", cpuHardware: null);
                     return;
                 }
 
-                cpu.Update();
-                UpdateSubHardware(cpu);
-
                 var sensors = GetAllSensors(cpu).ToList();
-                
-                // === STRATÉGIE ROBUSTE POUR CPU TEMP (Intel + AMD Ryzen) ===
-                // Priorité 1: CPU Package (Intel standard)
-                // Priorité 2: Tctl (AMD Ryzen - température de contrôle)
-                // Priorité 3: Tdie (AMD Ryzen - température réelle du die)
-                // Priorité 4: Core (CCD) Average ou Max
-                // Priorité 5: Tout capteur température disponible
-                
-                double? cpuTemp = null;
-                string tempSource = "N/A";
-                
-                // Priorité 1: CPU Package (Intel standard, aussi certains AMD)
-                cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Package");
-                if (cpuTemp.HasValue)
-                {
-                    tempSource = "CPU Package";
-                }
-                
-                // Priorité 2: Tctl (AMD Ryzen - température de contrôle, peut être +10°C offset)
-                if (!cpuTemp.HasValue)
-                {
-                    cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Tctl");
-                    if (cpuTemp.HasValue)
-                    {
-                        tempSource = "Tctl (AMD)";
-                        // Note: Tctl peut avoir un offset de +10°C sur certains Ryzen
-                        // On garde la valeur brute et on documente la source
-                    }
-                }
-                
-                // Priorité 3: Tdie (AMD Ryzen - température réelle du die, préférable à Tctl)
-                if (!cpuTemp.HasValue)
-                {
-                    cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Tdie");
-                    if (cpuTemp.HasValue)
-                    {
-                        tempSource = "Tdie (AMD)";
-                    }
-                }
-                
-                // Priorité 4: Core (CCD) - moyenne ou max des cores
-                if (!cpuTemp.HasValue)
-                {
-                    cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "Core (Tctl/Tdie)");
-                    if (cpuTemp.HasValue)
-                    {
-                        tempSource = "Core (Tctl/Tdie)";
-                    }
-                }
-                
-                // Priorité 5: CCD Average
-                if (!cpuTemp.HasValue)
-                {
-                    cpuTemp = FindSensorValueByType(sensors, SensorType.Temperature, "CCD");
-                    if (cpuTemp.HasValue)
-                    {
-                        tempSource = "CCD Average";
-                    }
-                }
-                
-                // Priorité 6: Fallback sur n'importe quel capteur température CPU
-                if (!cpuTemp.HasValue)
-                {
-                    var anyTempSensor = sensors.FirstOrDefault(s => 
-                        s.SensorType == SensorType.Temperature && s.Value.HasValue);
-                    if (anyTempSensor != null)
-                    {
-                        cpuTemp = anyTempSensor.Value.Value;
-                        tempSource = $"Fallback ({anyTempSensor.Name})";
-                    }
-                }
-                
+                if (CpuTempDiagnosticMode)
+                    LogCpuTempDiagnostic(computer, step: "sensors_collected", cpuHardware: cpu, sensors: sensors);
+
+                var (cpuTemp, tempSource) = GetBestCpuTemp(sensors);
+
                 // Validation anti-sentinelle (0°C ou hors plage 5-115°C = invalide)
                 bool lhmValid = cpuTemp.HasValue && cpuTemp.Value > 5.0 && cpuTemp.Value < 115.0;
-                
+
                 if (lhmValid)
                 {
                     result.Cpu.CpuTempC = Available(cpuTemp.Value);
-                    result.Cpu.CpuTempSource = tempSource;
-                    App.LogMessage($"[Sensors→CPU] Température LHM valide: {cpuTemp.Value:F1}°C (source: {tempSource})");
+                    result.Cpu.CpuTempSource = tempSource ?? "LHM";
+                    App.LogMessage($"[Sensors→CPU] Température LHM valide: {cpuTemp.Value:F1}°C (source: {result.Cpu.CpuTempSource})");
                 }
                 else
                 {
-                    // LHM a retourné sentinelle ou aucune valeur → tenter fallback WMI ThermalZone
                     if (cpuTemp.HasValue)
-                    {
                         App.LogMessage($"[Sensors→CPU] LHM sentinelle détectée: {cpuTemp.Value:F1}°C (source: {tempSource}) → fallback WMI");
-                    }
-                    else
-                    {
-                        var tempSensors = sensors.Where(s => s.SensorType == SensorType.Temperature).ToList();
-                        var sensorNames = string.Join(", ", tempSensors.Select(s => $"{s.Name}={s.Value}"));
-                        App.LogMessage($"[Sensors→CPU] AUCUNE température LHM. Capteurs dispo: [{sensorNames}] → fallback WMI");
-                    }
-                    
-                    // === FALLBACK WMI ThermalZone ===
+                    else if (CpuTempDiagnosticMode)
+                        LogCpuTempDiagnosticNoTempFound(computer, cpu, sensors);
+
                     var wmiFallback = WmiThermalZoneFallback.TryGetCpuTemp(minValidC: 5.0, maxValidC: 115.0);
-                    
                     if (wmiFallback.TempC.HasValue)
                     {
                         result.Cpu.CpuTempC = Available(wmiFallback.TempC.Value);
@@ -575,12 +514,10 @@ namespace PCDiagnosticPro.Services
                     }
                     else
                     {
-                        // Aucune source valide
-                        string reason = cpuTemp.HasValue 
-                            ? $"capteur invalide: valeur sentinelle {cpuTemp.Value:F0}" 
-                            : $"aucun capteur compatible";
+                        string reason = cpuTemp.HasValue
+                            ? $"capteur invalide: valeur sentinelle {cpuTemp.Value:F0}"
+                            : "aucun capteur compatible";
                         reason += $"; fallback WMI: {wmiFallback.Reason ?? "unavailable"}";
-                        
                         result.Cpu.CpuTempC = UnavailableDouble(reason);
                         result.Cpu.CpuTempSource = tempSource ?? "N/A";
                         App.LogMessage($"[Sensors→CPU] ÉCHEC total: {reason}");
@@ -593,6 +530,116 @@ namespace PCDiagnosticPro.Services
                 result.Cpu.CpuTempC = UnavailableDouble(string.Format("Erreur CPU: {0}", ex.Message));
                 result.Cpu.CpuTempSource = "Erreur";
                 App.LogMessage($"[Sensors→CPU] ERREUR: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Choisit la meilleure température CPU : AMD (Tctl/Tdie ou Package), Intel (Package puis Core Max puis Core #0), sinon première non nulle.
+        /// </summary>
+        private static (double? TempC, string? Source) GetBestCpuTemp(List<ISensor> sensors)
+        {
+            var tempSensors = sensors.Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value.Value > 0).ToList();
+            if (tempSensors.Count == 0)
+                return (null, null);
+
+            // AMD : Tctl / Tdie en priorité, puis Package
+            var tctl = tempSensors.FirstOrDefault(s => s.Name.IndexOf("Tctl", StringComparison.OrdinalIgnoreCase) >= 0);
+            var tdie = tempSensors.FirstOrDefault(s => s.Name.IndexOf("Tdie", StringComparison.OrdinalIgnoreCase) >= 0);
+            var pkg = tempSensors.FirstOrDefault(s => s.Name.IndexOf("Package", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (tdie?.Value.HasValue == true) return (tdie.Value.Value, $"Tdie (AMD)");
+            if (tctl?.Value.HasValue == true) return (tctl.Value.Value, "Tctl (AMD)");
+            if (pkg?.Value.HasValue == true) return (pkg.Value.Value, "CPU Package");
+
+            // Intel : Core Max puis Core #0 (Package déjà traité ci-dessus)
+            var coreMax = tempSensors.Where(s => s.Name.IndexOf("Core", StringComparison.OrdinalIgnoreCase) >= 0).OrderByDescending(s => s.Value ?? 0).FirstOrDefault();
+            if (coreMax?.Value.HasValue == true) return (coreMax.Value.Value, $"Core ({coreMax.Name})");
+            var core0 = tempSensors.FirstOrDefault(s => s.Name.IndexOf("Core #0", StringComparison.OrdinalIgnoreCase) >= 0 || s.Name.IndexOf("Core 0", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (core0?.Value.HasValue == true) return (core0.Value.Value, core0.Name ?? "Core #0");
+
+            // CCD, Core (Tctl/Tdie), etc.
+            var ccd = tempSensors.FirstOrDefault(s => s.Name.IndexOf("CCD", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (ccd?.Value.HasValue == true) return (ccd.Value.Value, ccd.Name ?? "CCD");
+
+            // Première température non nulle
+            var first = tempSensors.First();
+            return (first.Value.Value, $"Fallback ({first.Name})");
+        }
+
+        private static void LogCpuTempDiagnostic(Computer computer, string step, IHardware? cpuHardware = default, List<ISensor>? sensors = default)
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "PCDiagnosticPro_CPU_Temp_Diagnostic.log");
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"=== LHM CPU Temp Diagnostic - {DateTime.Now:yyyy-MM-dd HH:mm:ss} === step={step}");
+                sb.AppendLine();
+
+                sb.AppendLine("--- Tous les hardware détectés (Name, HardwareType) ---");
+                foreach (var hw in computer.Hardware)
+                {
+                    sb.AppendLine($"  [{hw.HardwareType}] {hw.Name}");
+                    foreach (var sub in hw.SubHardware)
+                        sb.AppendLine($"    Sub: [{sub.HardwareType}] {sub.Name}");
+                }
+                sb.AppendLine();
+
+                if (cpuHardware != null)
+                {
+                    sb.AppendLine($"--- Sensors du CPU: {cpuHardware.Name} ---");
+                    if (sensors != null)
+                    {
+                        var byType = sensors.GroupBy(s => s.SensorType).OrderBy(g => g.Key.ToString());
+                        foreach (var grp in byType)
+                        {
+                            sb.AppendLine($"  SensorType: {grp.Key}");
+                            foreach (var s in grp.OrderBy(s => s.Name))
+                                sb.AppendLine($"    Name=\"{s.Name}\" Value={s.Value?.ToString() ?? "null"} Identifier={s.Identifier}");
+                        }
+                    }
+                    else
+                    {
+                        var list = GetAllSensors(cpuHardware);
+                        foreach (var s in list)
+                            sb.AppendLine($"  [{s.SensorType}] \"{s.Name}\" = {s.Value?.ToString() ?? "null"} Id={s.Identifier}");
+                    }
+                }
+                sb.AppendLine();
+                System.IO.File.AppendAllText(logPath, sb.ToString());
+
+                App.LogMessage($"[LHM Diagnostic] {step} -> {logPath}");
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[LHM Diagnostic] Log error: {ex.Message}");
+            }
+        }
+
+        private static void LogCpuTempDiagnosticNoTempFound(Computer computer, IHardware cpu, List<ISensor> sensors)
+        {
+            try
+            {
+                var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "PCDiagnosticPro_CPU_Temp_Diagnostic.log");
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("--- Aucune température CPU trouvée ---");
+                sb.AppendLine("Explications possibles:");
+                sb.AppendLine("  - Capteur non exposé par le fabricant (laptop OEM, certains BIOS).");
+                sb.AppendLine("  - Droits insuffisants: exécuter l'application en tant qu'administrateur.");
+                sb.AppendLine("  - Windows Defender / antivirus bloque le pilote WinRing0: ajouter une exclusion pour le dossier de l'application.");
+                sb.AppendLine("  - LibreHardwareMonitor nécessite parfois un redémarrage après première installation.");
+                sb.AppendLine("Prochaines actions:");
+                sb.AppendLine("  1) Relancer l'app en tant qu'administrateur (clic droit -> Exécuter en tant qu'administrateur).");
+                sb.AppendLine("  2) Vérifier les exclusions Defender pour le dossier de l'application.");
+                sb.AppendLine("  3) Si aucun sensor Temperature n'apparaît ci-dessus, le matériel/BIOS n'expose pas la température via LHM.");
+                var tempTypes = sensors?.Where(s => s.SensorType == SensorType.Temperature).ToList() ?? new List<ISensor>();
+                var allTypes = sensors?.Select(s => s.SensorType).Distinct().ToList() ?? new List<SensorType>();
+                sb.AppendLine($"  SensorType Temperature count: {tempTypes.Count}. Tous les SensorType présents: {string.Join(", ", allTypes)}");
+                sb.AppendLine();
+                System.IO.File.AppendAllText(logPath, sb.ToString());
+                App.LogMessage($"[LHM Diagnostic] Aucune température -> explication et actions écrites dans " + logPath);
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[LHM Diagnostic] NoTemp log error: {ex.Message}");
             }
         }
 
@@ -659,24 +706,24 @@ namespace PCDiagnosticPro.Services
             result.Gpu.GpuTempC = UnavailableDouble(reason);
         }
 
+        /// <summary>
+        /// Récupère tous les sensors du hardware et de tous les SubHardware (récursif).
+        /// Ne pas se limiter à hw.Sensors : les températures CPU sont souvent dans SubHardware.
+        /// </summary>
         private static List<ISensor> GetAllSensors(IHardware hardware)
         {
             var allSensors = new List<ISensor>();
-            
-            foreach (var sensor in hardware.Sensors)
-            {
-                allSensors.Add(sensor);
-            }
-
-            foreach (var subHardware in hardware.SubHardware)
-            {
-                foreach (var sensor in subHardware.Sensors)
-                {
-                    allSensors.Add(sensor);
-                }
-            }
-            
+            CollectSensorsRecursive(hardware, allSensors);
             return allSensors;
+        }
+
+        private static void CollectSensorsRecursive(IHardware hardware, List<ISensor> list)
+        {
+            if (hardware == null) return;
+            foreach (var sensor in hardware.Sensors)
+                list.Add(sensor);
+            foreach (var sub in hardware.SubHardware)
+                CollectSensorsRecursive(sub, list);
         }
 
         private static void UpdateSubHardware(IHardware hardware)
@@ -685,6 +732,17 @@ namespace PCDiagnosticPro.Services
             {
                 subHardware.Update();
             }
+        }
+
+        /// <summary>
+        /// Update récursif : hardware + tous les SubHardware (nécessaire pour que LHM expose les sensors CPU).
+        /// </summary>
+        private static void UpdateHardwareRecursive(IHardware hardware)
+        {
+            if (hardware == null) return;
+            hardware.Update();
+            foreach (var sub in hardware.SubHardware)
+                UpdateHardwareRecursive(sub);
         }
 
         private static double? FindSensorValue(List<ISensor> sensors, params string[] nameContains)

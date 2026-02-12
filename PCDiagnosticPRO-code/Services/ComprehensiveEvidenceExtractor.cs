@@ -54,6 +54,38 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
+        /// Returns true if at least one Kernel Power EventID 1 is present (power state change).
+        /// Used to show the (i) button that opens KernelPowerInfoWindow in the Stabilité système section.
+        /// </summary>
+        public static bool HasKernelPowerId1Present(JsonElement root)
+        {
+            var signals = GetDiagnosticSignals(root);
+            if (signals.HasValue)
+            {
+                var drvStability = GetSignalResult(signals.Value, "driverStability");
+                if (drvStability.HasValue)
+                {
+                    JsonElement valueContainer = drvStability.Value;
+                    if (drvStability.Value.TryGetProperty("value", out var valueObj) && valueObj.ValueKind == JsonValueKind.Object)
+                        valueContainer = valueObj;
+                    var kp1 = GetInt(valueContainer, "KernelPower1Count30d") ?? GetInt(valueContainer, "kernelPower1Count30d");
+                    if (kp1.HasValue && kp1.Value > 0) return true;
+                }
+            }
+            if (root.TryGetProperty("event_logs_detailed", out var eventLogs) && eventLogs.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in eventLogs.EnumerateArray())
+                {
+                    var provider = GetString(entry, "ProviderName") ?? GetString(entry, "providerName") ?? GetString(entry, "provider_name") ?? "";
+                    var eventId = GetInt(entry, "EventId") ?? GetInt(entry, "eventId") ?? GetInt(entry, "event_id");
+                    if (provider.IndexOf("Kernel-Power", StringComparison.OrdinalIgnoreCase) >= 0 && eventId == 1)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Extrait toutes les données pertinentes pour un domaine de santé AVEC le score de couverture.
         /// Utilisé pour les tests contractuels et le monitoring.
         /// </summary>
@@ -201,30 +233,70 @@ namespace PCDiagnosticPro.Services
             AddYesNo(ev, "Redémarrage requis", rebootRequired, "updates_csharp.rebootRequired");
 
             // 9. Erreurs critiques (WHEA, BSOD, Kernel-Power)
+            // Source 1: diagnostic_signals. Source 2 (fallback): event_logs_detailed (C# EventLogDetailedCollector).
             var signals = GetDiagnosticSignals(root);
             var errorSummary = new List<string>();
-            
+            string? criticalErrorsSource = null;
+
             var wheaCount = GetSignalInt(signals, "whea_errors", "count");
-            if (wheaCount.HasValue && wheaCount > 0) errorSummary.Add($"WHEA: {wheaCount}");
-            
+            if (wheaCount.HasValue && wheaCount > 0) { errorSummary.Add($"WHEA: {wheaCount}"); criticalErrorsSource = "diagnostic_signals.*"; }
+
             var bsodCount = GetSignalInt(signals, "bsod_minidump", "count");
-            if (bsodCount.HasValue && bsodCount > 0) errorSummary.Add($"BSOD: {bsodCount}");
-            
+            if (bsodCount.HasValue && bsodCount > 0) { errorSummary.Add($"BSOD: {bsodCount}"); criticalErrorsSource ??= "diagnostic_signals.*"; }
+
             var kpCount = GetSignalInt(signals, "kernel_power", "count");
-            if (kpCount.HasValue && kpCount > 0) errorSummary.Add($"Kernel-Power: {kpCount}");
-            
+            if (kpCount.HasValue && kpCount > 0) { errorSummary.Add($"Kernel-Power: {kpCount}"); criticalErrorsSource ??= "diagnostic_signals.*"; }
+
+            // Fallback: when diagnostic_signals is absent or empty, use event_logs_detailed (C# EventLogDetailedCollector)
+            bool hasEventLogsDetailed = root.TryGetProperty("event_logs_detailed", out var eventLogsOs) && eventLogsOs.ValueKind == JsonValueKind.Array;
+            if (errorSummary.Count == 0 && hasEventLogsDetailed)
+            {
+                int wheaEv = 0, kpEv = 0, bugEv = 0;
+                foreach (var entry in eventLogsOs.EnumerateArray())
+                {
+                    var provider = GetString(entry, "ProviderName") ?? GetString(entry, "providerName") ?? GetString(entry, "provider_name") ?? "";
+                    var eventId = GetInt(entry, "EventId") ?? GetInt(entry, "eventId") ?? GetInt(entry, "event_id");
+
+                    if (provider.IndexOf("WHEA", StringComparison.OrdinalIgnoreCase) >= 0) wheaEv++;
+                    if (provider.IndexOf("Kernel-Power", StringComparison.OrdinalIgnoreCase) >= 0 && eventId == 41) kpEv++;
+                    if (provider.IndexOf("BugCheck", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        provider.IndexOf("WER-SystemErrorReporting", StringComparison.OrdinalIgnoreCase) >= 0) bugEv++;
+                }
+                if (wheaEv > 0) errorSummary.Add($"WHEA: {wheaEv}");
+                if (bugEv > 0) errorSummary.Add($"BSOD: {bugEv}");
+                if (kpEv > 0) errorSummary.Add($"Kernel-Power: {kpEv}");
+                if (errorSummary.Count > 0)
+                    criticalErrorsSource = "event_logs_detailed";
+            }
+
             if (errorSummary.Count > 0)
             {
-                Add(ev, "Erreurs critiques", string.Join(", ", errorSummary), "diagnostic_signals.*");
+                Add(ev, "Erreurs critiques", string.Join(", ", errorSummary), criticalErrorsSource ?? "diagnostic_signals.*");
             }
-            else if (signals.HasValue)
+            else if (signals.HasValue || hasEventLogsDetailed)
             {
-                // Pas d'emoji blanc pour "Aucune détectée"
-                Add(ev, "Erreurs critiques", "Aucune détectée", "diagnostic_signals.*");
+                Add(ev, "Erreurs critiques", "Aucune détectée", criticalErrorsSource ?? "diagnostic_signals + event_logs_detailed");
             }
             else
             {
-                AddUnknown(ev, "Erreurs critiques", "diagnostic_signals absent");
+                // Dernier recours : lecture synchrone C# du journal des événements (rapports anciens ou JSON sans C#)
+                try
+                {
+                    var counts = CriticalErrorsEventLogReader.GetCounts();
+                    var fallbackSummary = new List<string>();
+                    if (counts.Whea > 0) fallbackSummary.Add($"WHEA: {counts.Whea}");
+                    if (counts.Bsod > 0) fallbackSummary.Add($"BSOD: {counts.Bsod}");
+                    if (counts.KernelPower > 0) fallbackSummary.Add($"Kernel-Power: {counts.KernelPower}");
+                    if (fallbackSummary.Count > 0)
+                        Add(ev, "Erreurs critiques", string.Join(", ", fallbackSummary), "event_log_csharp_fallback");
+                    else
+                        Add(ev, "Erreurs critiques", "Aucune détectée", "event_log_csharp_fallback");
+                }
+                catch (Exception ex)
+                {
+                    App.LogMessage($"[ComprehensiveEvidenceExtractor] Fallback Erreurs critiques: {ex.Message}");
+                    AddUnknown(ev, "Erreurs critiques", "diagnostic_signals et event_logs_detailed absents");
+                }
             }
 
             // NOTE: BitLocker retiré de cette section -> va dans Sécurité
@@ -405,18 +477,18 @@ namespace PCDiagnosticPro.Services
                 }
             }
 
-            // 7. Throttling (Oui/Non + raison)
-            var signals = GetDiagnosticSignals(root);
-            if (signals.HasValue)
+            // 7. Throttling (Oui/Non + raison) — source 1: diagnostic_signals (CpuThrottleCollector), source 2: event_logs_detailed (Kernel-Processor-Power ID 37/34)
+            var signalsCpu = GetDiagnosticSignals(root);
+            bool throttleFromSignals = false;
+            if (signalsCpu.HasValue)
             {
-                // Try multiple naming conventions for throttle signal
-                var throttle = GetSignalResult(signals.Value, "cpu_throttle") 
-                    ?? GetSignalResult(signals.Value, "cpuThrottle")
-                    ?? GetSignalResult(signals.Value, "CpuThrottle");
+                var throttle = GetSignalResult(signalsCpu.Value, "cpu_throttle")
+                    ?? GetSignalResult(signalsCpu.Value, "cpuThrottle")
+                    ?? GetSignalResult(signalsCpu.Value, "CpuThrottle");
                 if (throttle.HasValue)
                 {
-                    var detected = GetBool(throttle, "detected") ?? false;
-                    var reason = GetString(throttle, "reason") ?? "";
+                    var detected = GetBool(throttle, "detected") ?? GetBool(throttle, "ThrottleSuspected") ?? GetBool(throttle, "throttleSuspected") ?? false;
+                    var reason = GetString(throttle, "reason") ?? GetString(throttle, "Reason") ?? "";
                     if (detected)
                     {
                         var reasonStr = !string.IsNullOrEmpty(reason) ? $" ({reason})" : "";
@@ -426,15 +498,29 @@ namespace PCDiagnosticPro.Services
                     {
                         Add(ev, "Throttling", "Non détecté", "diagnostic_signals.cpu_throttle");
                     }
-                }
-                else
-                {
-                    AddUnknown(ev, "Throttling", "signal cpu_throttle absent");
+                    throttleFromSignals = true;
                 }
             }
-            else
+
+            // Fallback: count Kernel-Processor-Power events (ID 37 = firmware limit, ID 34 = thermal) from event_logs_detailed
+            if (!throttleFromSignals && root.TryGetProperty("event_logs_detailed", out var eventLogsCpu) && eventLogsCpu.ValueKind == JsonValueKind.Array)
             {
-                AddUnknown(ev, "Throttling", "diagnostic_signals absent");
+                int throttleEvCount = 0;
+                foreach (var entry in eventLogsCpu.EnumerateArray())
+                {
+                    var provider = GetString(entry, "ProviderName") ?? GetString(entry, "providerName") ?? GetString(entry, "provider_name") ?? "";
+                    var eventId = GetInt(entry, "EventId") ?? GetInt(entry, "eventId") ?? GetInt(entry, "event_id");
+                    if (provider.IndexOf("Kernel-Processor-Power", StringComparison.OrdinalIgnoreCase) >= 0 && (eventId == 37 || eventId == 34))
+                        throttleEvCount++;
+                }
+                if (throttleEvCount > 0)
+                    Add(ev, "Throttling", $"Oui ({throttleEvCount} événement(s) - event_logs)", "event_logs_detailed");
+                else
+                    Add(ev, "Throttling", "Non détecté", "event_logs_detailed");
+            }
+            else if (!throttleFromSignals)
+            {
+                AddUnknown(ev, "Throttling", "diagnostic_signals et event_logs_detailed absents");
             }
 
             return new ExtractionResult { Evidence = ev, ExpectedFields = expected, ActualFields = CountActualFields(ev) };
@@ -1149,8 +1235,6 @@ namespace PCDiagnosticPro.Services
             if (netQuality.HasValue && netQuality.Value.TryGetProperty("value", out var nqv))
                 netQualityValue = nqv;
             
-            bool hasNetDiagData = false;
-            
             if (netDiag.HasValue || netQualityValue.HasValue)
             {
                 // 8. Latence - FIX: try multiple property name variations (PascalCase from C#)
@@ -1165,7 +1249,6 @@ namespace PCDiagnosticPro.Services
                     // Indicateurs uniquement si latence élevée (pas de check blanc)
                     var status = latency > 100 ? " ⚠️ Élevée" : latency > 50 ? " ⚡" : "";
                     Add(ev, "Latence (ping)", $"{latency.Value:F0} ms{status}", "network_diagnostics.LatencyMsP50");
-                    hasNetDiagData = true;
                 }
 
                 // 9. Jitter - FIX: Support PascalCase
@@ -1175,7 +1258,6 @@ namespace PCDiagnosticPro.Services
                 if (jitter.HasValue)
                 {
                     Add(ev, "Gigue", $"{jitter.Value:F1} ms", "network_diagnostics.JitterMsP95");
-                    hasNetDiagData = true;
                 }
 
                 // 10. Perte paquets - FIX: Support PascalCase
@@ -1187,7 +1269,6 @@ namespace PCDiagnosticPro.Services
                 {
                     var status = loss > 1 ? " ⚠️" : "";
                     Add(ev, "Perte paquets", $"{loss.Value:F1}%{status}", "network_diagnostics.PacketLossPercent");
-                    hasNetDiagData = true;
                 }
 
                 // 11. Débit FAI - FIX: Support PascalCase
@@ -1198,7 +1279,6 @@ namespace PCDiagnosticPro.Services
                     var dlStr = download.HasValue ? $"↓{download.Value:F1}" : "?";
                     var ulStr = upload.HasValue ? $"↑{upload.Value:F1}" : "?";
                     Add(ev, "Débit FAI", $"{dlStr} / {ulStr} Mbps", "network_diagnostics.downloadMbps/uploadMbps");
-                    hasNetDiagData = true;
                 }
 
                 // 12. VPN détecté
@@ -1206,7 +1286,6 @@ namespace PCDiagnosticPro.Services
                 if (vpn.HasValue)
                 {
                     AddYesNo(ev, "VPN détecté", vpn, "network_diagnostics.vpnDetected");
-                    hasNetDiagData = true;
                 }
                 
                 // 13. Connection verdict from networkQuality signal
@@ -1223,14 +1302,10 @@ namespace PCDiagnosticPro.Services
                         _ => "⚠️"
                     };
                     Add(ev, "Qualité connexion", string.IsNullOrEmpty(icon) ? verdict : $"{icon} {verdict}", "diagnostic_signals.networkQuality.ConnectionVerdict");
-                    hasNetDiagData = true;
                 }
             }
             
-            if (!hasNetDiagData)
-            {
-                AddUnknown(ev, "Diagnostics réseau", "network_diagnostics absent");
-            }
+            // NOTE: "Diagnostics réseau" retiré du panneau Réseau (affiché uniquement si données disponibles)
 
             return new ExtractionResult { Evidence = ev, ExpectedFields = expected, ActualFields = CountActualFields(ev) };
         }
@@ -1247,9 +1322,12 @@ namespace PCDiagnosticPro.Services
             
             var signals = GetDiagnosticSignals(root);
             
-            // 1. BSOD (count + codes)
+            // === Source 1: diagnostic_signals (primary — 30-day window) ===
+            bool hasBsod = false, hasWhea = false, hasKp = false;
+            
             if (signals.HasValue)
             {
+                // 1. BSOD from driverStability signal
                 var bsodCount = GetSignalInt(signals.Value, "bsod_minidump", "count");
                 var bsodCodes = GetSignalString(signals.Value, "bsod_minidump", "codes");
                 if (bsodCount.HasValue)
@@ -1257,33 +1335,106 @@ namespace PCDiagnosticPro.Services
                     var info = bsodCount == 0 ? "Aucun" : $"{bsodCount} crash(es)";
                     if (bsodCount > 0 && !string.IsNullOrEmpty(bsodCodes) && bsodCodes != "[]")
                         info += $" - Codes: {bsodCodes}";
-                    Add(ev, "BSOD", info, "diagnostic_signals.bsod_minidump");
-                }
-                else
-                {
-                    AddUnknown(ev, "BSOD", "signal bsod_minidump absent");
+                    Add(ev, "BSOD", info, "diagnostic_signals.driverStability");
+                    hasBsod = true;
                 }
 
-                // 2. WHEA
+                // 2. WHEA from whea signal
                 var wheaCount = GetSignalInt(signals.Value, "whea_errors", "count");
                 if (wheaCount.HasValue)
-                    Add(ev, "Erreurs WHEA", wheaCount == 0 ? "Aucune" : $"{wheaCount} (30 jours)", "diagnostic_signals.whea_errors");
-                else
-                    AddUnknown(ev, "Erreurs WHEA", "signal absent");
+                {
+                    Add(ev, "Erreurs WHEA", wheaCount == 0 ? "Aucune" : $"{wheaCount} (30 jours)", "diagnostic_signals.whea");
+                    hasWhea = true;
+                }
 
-                // 3. Kernel-Power
+                // 3. Kernel-Power from driverStability signal
                 var kpCount = GetSignalInt(signals.Value, "kernel_power", "count");
                 if (kpCount.HasValue)
-                    Add(ev, "Kernel-Power", kpCount == 0 ? "Aucun" : $"{kpCount} événement(s)", "diagnostic_signals.kernel_power");
-                else
-                    AddUnknown(ev, "Kernel-Power", "signal absent");
+                {
+                    Add(ev, "Kernel-Power", kpCount == 0 ? "Aucun" : $"{kpCount} événement(s)", "diagnostic_signals.driverStability");
+                    hasKp = true;
+                }
             }
-            else
+            
+            // === Source 2: event_logs_detailed (fallback — counts WHEA/KP/BugCheck from raw event logs) ===
+            if (root.TryGetProperty("event_logs_detailed", out var eventLogs) && eventLogs.ValueKind == JsonValueKind.Array)
             {
-                AddUnknown(ev, "BSOD", "diagnostic_signals absent");
-                AddUnknown(ev, "Erreurs WHEA", "diagnostic_signals absent");
-                AddUnknown(ev, "Kernel-Power", "diagnostic_signals absent");
+                int wheaEv = 0, kpEv = 0, bugEv = 0;
+                string? lastWheaTime = null, lastKpTime = null, lastBugTime = null;
+                
+                foreach (var entry in eventLogs.EnumerateArray())
+                {
+                    var provider = GetString(entry, "ProviderName") ?? GetString(entry, "providerName") ?? GetString(entry, "provider_name") ?? "";
+                    var eventId = GetInt(entry, "EventId") ?? GetInt(entry, "eventId") ?? GetInt(entry, "event_id");
+                    var timeStr = GetString(entry, "TimeCreated") ?? GetString(entry, "timeCreated") ?? GetString(entry, "time_created");
+                    
+                    if (provider.IndexOf("WHEA", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        wheaEv++;
+                        if (lastWheaTime == null) lastWheaTime = timeStr;
+                    }
+                    if (provider.IndexOf("Kernel-Power", StringComparison.OrdinalIgnoreCase) >= 0 && eventId == 41)
+                    {
+                        kpEv++;
+                        if (lastKpTime == null) lastKpTime = timeStr;
+                    }
+                    if (provider.IndexOf("BugCheck", StringComparison.OrdinalIgnoreCase) >= 0 || 
+                        (provider.IndexOf("WER-SystemErrorReporting", StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        bugEv++;
+                        if (lastBugTime == null) lastBugTime = timeStr;
+                    }
+                }
+                
+                // Use event_logs as fallback for missing signals
+                if (!hasWhea && wheaEv > 0)
+                {
+                    Add(ev, "Erreurs WHEA", $"{wheaEv} (event_logs)", "event_logs_detailed");
+                    hasWhea = true;
+                }
+                if (!hasKp && kpEv > 0)
+                {
+                    Add(ev, "Kernel-Power", $"{kpEv} événement(s) (event_logs)", "event_logs_detailed");
+                    hasKp = true;
+                }
+                if (!hasBsod && bugEv > 0)
+                {
+                    Add(ev, "BSOD", $"{bugEv} crash(es) (event_logs)", "event_logs_detailed");
+                    hasBsod = true;
+                }
             }
+            
+            // === Source 3: minidumps_detailed (fallback for BSOD count + BugCheck codes) ===
+            if (root.TryGetProperty("minidumps_detailed", out var minidumps) && minidumps.ValueKind == JsonValueKind.Array)
+            {
+                var dumpCount = minidumps.GetArrayLength();
+                if (!hasBsod && dumpCount > 0)
+                {
+                    // Extract BugCheck codes from dumps
+                    var codes = new List<string>();
+                    foreach (var dump in minidumps.EnumerateArray())
+                    {
+                        var bugCode = GetInt(dump, "BugCheckCode") ?? GetInt(dump, "bugCheckCode");
+                        if (bugCode.HasValue)
+                            codes.Add($"0x{bugCode.Value:X}");
+                    }
+                    var info = $"{dumpCount} minidump(s)";
+                    if (codes.Count > 0)
+                        info += $" - Codes: {string.Join(", ", codes.Distinct().Take(5))}";
+                    Add(ev, "BSOD", info, "minidumps_detailed");
+                    hasBsod = true;
+                }
+                else if (hasBsod && dumpCount > 0)
+                {
+                    // Enrich existing BSOD with minidump count
+                    Add(ev, "Minidumps BSOD", $"{dumpCount} fichier(s)", "minidumps_detailed");
+                }
+            }
+            
+            // Fill with "Aucun" for items that have no data at all (not unknown, just zero)
+            if (!hasBsod) Add(ev, "BSOD", "Aucun", "diagnostic_signals + event_logs + minidumps");
+            if (!hasWhea) Add(ev, "Erreurs WHEA", "Aucune", "diagnostic_signals + event_logs");
+            if (!hasKp) Add(ev, "Kernel-Power", "Aucun", "diagnostic_signals + event_logs");
 
             // 4. Crashes applicatifs (top 5)
             // Pas de check blanc pour "Aucun"

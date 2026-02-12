@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Management;
 using System.Text.Json;
@@ -118,6 +119,13 @@ namespace PCDiagnosticPro.Services
             { HealthDomain.Power, "Alimentation" }
         };
 
+        /// <summary>Scenario names for Performance placeholder list when evaluation unavailable (matches UsageScenarioScorer order).</summary>
+        private static readonly string[] PerformancePlaceholderScenarioNames =
+        {
+            "Office / Browsing", "Multitasking", "Gaming (1080p)", "Gaming (1440p)",
+            "4K Video Editing", "Streaming + Gaming", "Virtual Machines", "AI (basic inference)"
+        };
+
         /// <summary>
         /// Construit un HealthReport depuis le JSON brut du PowerShell (sans capteurs)
         /// </summary>
@@ -185,8 +193,8 @@ namespace PCDiagnosticPro.Services
                 
                 App.LogMessage($"COLLECTOR_ERRORS_LOGICAL={report.CollectorErrorsLogical} (from errors[]={report.Errors.Count})");
                 
-                // 4. Sections par domaine (BuildHealthSections résout déjà scan_powershell en interne si besoin)
-                report.Sections = BuildHealthSections(psRoot, report.ScoreV2, sensors);
+                // 4. Sections par domaine (passer root complet pour diagnostic_signals + event_logs_detailed ; BuildHealthSections résout scan_powershell.sections en interne)
+                report.Sections = BuildHealthSections(root, report.ScoreV2, sensors);
                 
                 // 4b. Neutralisation des valeurs sentinelles / impossibles
                 try { NeutralizeSentinelValues(report, sensors); }
@@ -203,7 +211,21 @@ namespace PCDiagnosticPro.Services
                 catch (Exception ex5) { App.LogMessage($"[HealthReportBuilder] InjectHardwareSensors failed (non-fatal): {ex5.Message}"); }
 
                 // 5b. Score performance heuristique (Bureautique / Création / Jeux)
-                try { InjectPerformanceScore(report, root, sensors); }
+                try
+                {
+                    // #region agent log
+                    try
+                    {
+                        var hasSp = root.ValueKind == JsonValueKind.Object && (root.TryGetProperty("scan_powershell", out _) || root.TryGetProperty("scanPowershell", out _));
+                        var hasSnap = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("diagnostic_snapshot", out _);
+                        var logData = new Dictionary<string, object> { ["hasScanPowershell"] = hasSp, ["hasDiagnosticSnapshot"] = hasSnap, ["sensorsNull"] = sensors == null, ["rootValueKind"] = root.ValueKind.ToString() };
+                        var logLine = JsonSerializer.Serialize(new { hypothesisId = "H3", location = "HealthReportBuilder.Build", message = "Before InjectPerformanceScore", data = logData, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n";
+                        File.AppendAllText(@"d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\.cursor\debug.log", logLine);
+                    }
+                    catch { }
+                    // #endregion
+                    InjectPerformanceScore(report, root, sensors);
+                }
                 catch (Exception ex5b) { App.LogMessage($"[HealthReportBuilder] InjectPerformanceScore failed (non-fatal): {ex5b.Message}"); }
                 
                 // 6. Modèle de confiance
@@ -513,9 +535,6 @@ namespace PCDiagnosticPro.Services
             osSection.HasData = true;
 
             osSection.EvidenceData["Updates en attente"] = updatesCsharp.PendingCount.ToString();
-            osSection.EvidenceData["UpdateStatus"] = updatesCsharp.PendingCount > 0
-                ? $"Obsolète ({updatesCsharp.PendingCount})"
-                : "À jour";
 
             if (updatesCsharp.RebootRequired.HasValue)
                 osSection.EvidenceData["Redémarrage requis"] = updatesCsharp.RebootRequired.Value ? "Oui" : "Non";
@@ -529,92 +548,138 @@ namespace PCDiagnosticPro.Services
         }
 
         /// <summary>
-        /// Injecte le score performance heuristique (0-100) et les bullets Capable de / Limites dans la section Performance.
-        /// Données extraites du JSON (machine, CPU, GPU, stockage) et des capteurs C#.
+        /// Injects Performance Evaluation Engine result: Performance Analysis, Capability Matrix, Upgrade Impact.
+        /// Data from JSON (scan_powershell, diagnostic_snapshot) and sensors. No external API.
+        /// On exception or empty scenario list, fills a fallback so the dashboard never shows "non disponibles" with a score.
         /// </summary>
         private static void InjectPerformanceScore(HealthReport report, JsonElement root, HardwareSensorsResult? sensors)
         {
             var section = report.Sections.FirstOrDefault(s => s.Domain == HealthDomain.Performance);
+            // #region agent log
+            try
+            {
+                var entryData = new Dictionary<string, object> { ["sectionNotNull"] = section != null };
+                File.AppendAllText(@"d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\.cursor\debug.log", JsonSerializer.Serialize(new { hypothesisId = "H1", location = "HealthReportBuilder.InjectPerformanceScore", message = "Entry", data = entryData, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n");
+            }
+            catch { }
+            // #endregion
             if (section == null) return;
 
-            string? cpuName = null;
-            int cpuCores = 0, cpuThreads = 0;
-            double ramGb = 0;
-            string? gpuName = null;
-            double gpuVramMb = 0;
-            bool hasSsd = true;
-
-            // diagnostic_snapshot
-            if (root.TryGetProperty("diagnostic_snapshot", out var snap) && snap.ValueKind == JsonValueKind.Object)
+            PerformanceEvaluationResult eval;
+            try
             {
-                if (snap.TryGetProperty("machine", out var machine))
-                {
-                    if (machine.TryGetProperty("totalRamGB", out var r) && r.ValueKind == JsonValueKind.Number && r.TryGetDouble(out var rg)) ramGb = rg;
-                    if (machine.TryGetProperty("cpuName", out var cn)) cpuName = cn.GetString();
-                }
-                if (snap.TryGetProperty("metrics", out var metrics) && metrics.ValueKind == JsonValueKind.Object)
-                {
-                    if (metrics.TryGetProperty("cpu", out var cpuM) && cpuM.ValueKind == JsonValueKind.Object)
-                    {
-                        foreach (var kv in cpuM.EnumerateObject())
-                        {
-                            if (kv.Name.Equals("model", StringComparison.OrdinalIgnoreCase) && kv.Value.ValueKind == JsonValueKind.String) cpuName = kv.Value.GetString();
-                            if (kv.Name.Equals("cores", StringComparison.OrdinalIgnoreCase) && kv.Value.TryGetInt32(out var c)) cpuCores = c;
-                            if (kv.Name.Equals("threads", StringComparison.OrdinalIgnoreCase) && kv.Value.TryGetInt32(out var t)) cpuThreads = t;
-                        }
-                    }
-                    if (metrics.TryGetProperty("gpu", out var gpuM) && gpuM.ValueKind == JsonValueKind.Object)
-                    {
-                        foreach (var kv in gpuM.EnumerateObject())
-                        {
-                            if (kv.Name.Equals("model", StringComparison.OrdinalIgnoreCase) && kv.Value.ValueKind == JsonValueKind.String) gpuName = kv.Value.GetString();
-                            if (kv.Name.Equals("vramTotalMB", StringComparison.OrdinalIgnoreCase) && kv.Value.TryGetDouble(out var v)) gpuVramMb = v;
-                        }
-                    }
-                }
+                eval = PerformanceEvaluationEngine.Evaluate(root, null, sensors);
             }
-            // scan_powershell.sections
-            if (root.TryGetProperty("scan_powershell", out var ps) && ps.TryGetProperty("sections", out var sections))
+            catch (Exception ex)
             {
-                if (sections.TryGetProperty("CPU", out var cpuSec) && cpuSec.TryGetProperty("data", out var cpuData))
+                // #region agent log
+                try
                 {
-                    if (cpuData.TryGetProperty("cpus", out var cpus) && cpus.GetArrayLength() > 0)
-                    {
-                        var c0 = cpus[0];
-                        if (cpuName == null && c0.TryGetProperty("name", out var n)) cpuName = n.GetString();
-                        if (cpuCores == 0 && c0.TryGetProperty("cores", out var co) && co.TryGetInt32(out var cc)) cpuCores = cc;
-                        if (cpuThreads == 0 && c0.TryGetProperty("threads", out var th) && th.TryGetInt32(out var tt)) cpuThreads = tt;
-                    }
-                    if (ramGb == 0 && cpuData.TryGetProperty("totalRamGB", out var tr) && tr.TryGetDouble(out var rg2)) ramGb = rg2;
+                    var catchData = new Dictionary<string, object> { ["exception"] = ex.Message, ["fallback"] = true };
+                    File.AppendAllText(@"d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\.cursor\debug.log", JsonSerializer.Serialize(new { hypothesisId = "H1", location = "HealthReportBuilder.InjectPerformanceScore", message = "Evaluate threw", data = catchData, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n");
                 }
-                if (sections.TryGetProperty("GPU", out var gpuSec) && gpuSec.TryGetProperty("data", out var gpuData))
-                {
-                    if (gpuData.TryGetProperty("gpuList", out var gl) && gl.GetArrayLength() > 0)
-                    {
-                        var g0 = gl[0];
-                        if (gpuName == null && g0.TryGetProperty("name", out var gn)) gpuName = gn.GetString();
-                        if (gpuVramMb == 0 && g0.TryGetProperty("vramTotalMB", out var vm) && vm.TryGetDouble(out var v2)) gpuVramMb = v2;
-                    }
-                }
-            }
-            // Capteurs C#
-            if (sensors != null)
-            {
-                if (gpuName == null && sensors.Gpu?.Name?.Available == true) gpuName = sensors.Gpu.Name.Value;
-                if (gpuVramMb == 0 && sensors.Gpu?.VramTotalMB?.Available == true) gpuVramMb = sensors.Gpu.VramTotalMB.Value;
+                catch { }
+                // #endregion
+                App.LogMessage($"[HealthReportBuilder] InjectPerformanceScore Evaluate failed: {ex.Message}");
+                ApplyPerformanceFallback(section, "Évaluation non disponible (données ou erreur).");
+                return;
             }
 
-            var result = PerformanceScoreCalculator.Calculate(cpuName, cpuCores, cpuThreads, gpuName, gpuVramMb, ramGb, hasSsd);
+            // #region agent log
+            try
+            {
+                var profileForLog = eval.Profile;
+                var successData = new Dictionary<string, object> { ["CpuModel"] = profileForLog?.CpuModel ?? "(null)", ["GpuModel"] = profileForLog?.GpuModel ?? "(null)", ["GpuVramMb"] = profileForLog?.GpuVramMb ?? 0, ["RamGb"] = profileForLog?.RamGb ?? 0, ["StorageKind"] = profileForLog?.StorageKind ?? "(null)", ["ScenarioCount"] = eval.ScenarioScores?.Count ?? 0 };
+                File.AppendAllText(@"d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\.cursor\debug.log", JsonSerializer.Serialize(new { hypothesisId = "H2", location = "HealthReportBuilder.InjectPerformanceScore", message = "After Evaluate success", data = successData, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n");
+            }
+            catch { }
+            // #endregion
             section.HasData = true;
-            section.EvidenceData["Score performance"] = $"{result.Score}/100";
-            section.EvidenceData["Catégories"] = result.Categories.Count > 0 ? string.Join(", ", result.Categories) : "—";
-            for (int i = 0; i < result.CapableDe.Count; i++)
-                section.EvidenceData[$"Capable de ({i + 1})"] = result.CapableDe[i];
-            for (int i = 0; i < result.Limites.Count; i++)
-                section.EvidenceData[$"Limite ({i + 1})"] = result.Limites[i];
-            section.Score = result.Score;
-            section.Severity = HealthReport.ScoreToSeverity(result.Score);
-            section.StatusMessage = result.Score >= 60 ? "Bon potentiel" : (result.Score >= 40 ? "Potentiel modéré" : "Potentiel limité");
+            section.IsPerformanceEvaluationAvailable = true;
+            section.Score = eval.Score;
+            section.Severity = HealthReport.ScoreToSeverity(eval.Score);
+            section.StatusMessage = eval.Score >= 60 ? "Bon potentiel" : (eval.Score >= 40 ? "Potentiel modéré" : "Potentiel limité");
+
+            // Dashboard-only fields for main window Capability Dashboard template
+            section.PerformanceCategory = eval.Verdict?.Category ?? "";
+            section.PrimaryBottleneck = eval.Bottleneck?.PrimaryLimitingFactor ?? "";
+            section.RealisticSummary = eval.Verdict?.RealisticExpectationSummary ?? "";
+
+            // Evidence block: specs used (existing profile data only)
+            var p = eval.Profile;
+            section.PerformanceCpuDisplay = !string.IsNullOrEmpty(p?.CpuModel) ? p.CpuModel : (p?.CpuTier ?? "Unknown");
+            section.PerformanceGpuDisplay = !string.IsNullOrEmpty(p?.GpuModel) ? p.GpuModel : (p?.GpuTier ?? "Unknown");
+            section.PerformanceVramDisplay = (p != null && p.GpuVramMb > 0) ? $"{p.GpuVramMb / 1024.0:F1} GB" : "Unknown";
+            section.PerformanceCpuNameMatched = p?.CpuNameMatched ?? true;
+            section.PerformanceGpuNameMatched = p?.GpuNameMatched ?? true;
+            section.PerformanceRamDisplay = (p != null && p.RamGb > 0) ? $"{p.RamGb:F0} GB" : "Unknown";
+            section.PerformanceStorageDisplay = !string.IsNullOrEmpty(p?.StorageKind) && p.StorageKind != "Unknown" ? p.StorageKind : "Unknown";
+            var rows = (eval.ScenarioScores != null && eval.ScenarioScores.Count > 0)
+                ? eval.ScenarioScores.Select(s => new PerformanceScenarioRow { Name = s.Name, Score = s.Score, Classification = s.Classification ?? "" }).ToList()
+                : new List<PerformanceScenarioRow>();
+            if (rows.Count == 0)
+            {
+                App.LogMessage("[HealthReportBuilder] InjectPerformanceScore: ScenarioScores empty, using fallback row.");
+                rows = new List<PerformanceScenarioRow>
+                {
+                    new PerformanceScenarioRow
+                    {
+                        Name = "Évaluation globale",
+                        Score = eval.Score,
+                        Classification = eval.Score >= 70 ? "Excellent" : eval.Score >= 40 ? "Acceptable" : "Limitée"
+                    }
+                };
+            }
+            section.PerformanceScenarioRows = rows;
+
+            // Replace EvidenceData with dashboard keys only (so "Données analysées" shows dashboard content, not raw GPU/CPU)
+            section.EvidenceData = new Dictionary<string, string>
+            {
+                ["Score performance"] = $"{eval.Score}/100",
+                ["Version table"] = PerformanceEvaluationEngine.TableVersion,
+                ["Performance Analysis"] = $"CPU: {eval.Profile?.CpuTier ?? "?"} | GPU: {eval.Profile?.GpuTier ?? "?"} | RAM: {eval.Profile?.RamTier ?? "?"} | Storage: {eval.Profile?.StorageTier ?? "?"}. System: {eval.Verdict?.Category ?? "?"}.",
+                ["Realistic summary"] = eval.Verdict?.RealisticExpectationSummary ?? "",
+                ["Primary limiting factor"] = eval.Bottleneck?.PrimaryLimitingFactor ?? ""
+            };
+            foreach (var s in rows)
+                section.EvidenceData[$"Capability Matrix ({s.Name})"] = $"{s.Score}/100 — {s.Classification}";
+            if (eval.Bottleneck?.UpgradePriorityRank != null)
+            {
+                for (int i = 0; i < eval.Bottleneck.UpgradePriorityRank.Count && i < 3; i++)
+                {
+                    var u = eval.Bottleneck.UpgradePriorityRank[i];
+                    section.EvidenceData[$"Upgrade Impact ({u.Rank})"] = $"{u.Component}: {u.Reason}";
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fills Performance section when evaluation is unavailable: N/A score, Indisponible, placeholder scenario rows (N/A), no fake scores.
+        /// </summary>
+        private static void ApplyPerformanceFallback(HealthSection section, string summary)
+        {
+            section.HasData = true;
+            section.IsPerformanceEvaluationAvailable = false;
+            section.Score = -1;
+            section.Severity = HealthSeverity.Unknown;
+            section.StatusMessage = "Indisponible";
+            section.PerformanceCategory = "";
+            section.PrimaryBottleneck = "Non déterminé";
+            section.RealisticSummary = summary;
+            section.PerformanceCpuDisplay = "Unknown";
+            section.PerformanceGpuDisplay = "Unknown";
+            section.PerformanceVramDisplay = "Unknown";
+            section.PerformanceRamDisplay = "Unknown";
+            section.PerformanceStorageDisplay = "Unknown";
+            section.PerformanceScenarioRows = PerformancePlaceholderScenarioNames
+                .Select(name => new PerformanceScenarioRow { Name = name, Score = -1, Classification = "N/A" })
+                .ToList();
+            section.EvidenceData = new Dictionary<string, string>
+            {
+                ["Score performance"] = "N/A",
+                ["Realistic summary"] = summary,
+                ["Primary limiting factor"] = "Non déterminé"
+            };
         }
 
         /// <summary>
@@ -733,6 +798,14 @@ namespace PCDiagnosticPro.Services
                 model.Warnings.Add($"Données PS manquantes: {report.MissingData.Count} éléments");
             }
             
+            // Performance: Unmatched CPU/GPU name → reduce confidence (tier from heuristic)
+            var perfSection = report.Sections?.FirstOrDefault(s => s.Domain == HealthDomain.Performance);
+            if (perfSection != null && (perfSection.IsPerformanceEvaluationAvailable))
+            {
+                if (!perfSection.PerformanceCpuNameMatched) { model.ConfidenceScore -= 5; model.Warnings.Add("CPU non reconnu dans la table de performance (tier déduit)"); }
+                if (!perfSection.PerformanceGpuNameMatched) { model.ConfidenceScore -= 5; model.Warnings.Add("GPU non reconnu dans la table de performance (tier déduit)"); }
+            }
+
             // Erreurs explicites dans le rapport
             var criticalErrors = report.Errors.Count(e => 
                 e.Code.Contains("WMI", StringComparison.OrdinalIgnoreCase) ||
@@ -1050,8 +1123,8 @@ namespace PCDiagnosticPro.Services
                     }
                 }
                 
-                // Calculer le score de la section depuis les pénalités associées
-                if (section.HasData || domain == HealthDomain.Performance || domain == HealthDomain.Security)
+                // Calculer le score de la section depuis les pénalités associées (CPU/GPU toujours extraits pour Température/Throttling même sans section PS)
+                if (section.HasData || domain == HealthDomain.Performance || domain == HealthDomain.Security || domain == HealthDomain.CPU || domain == HealthDomain.GPU)
                 {
                     section.Score = CalculateSectionScore(domain, scoreV2, domainData[domain]);
                     section.Severity = HealthReport.ScoreToSeverity(section.Score);
@@ -1073,6 +1146,9 @@ namespace PCDiagnosticPro.Services
                             // Fallback sur l'ancienne méthode si le nouvel extracteur n'a rien trouvé
                             section.EvidenceData = ExtractEvidenceData(domain, domainData[domain]);
                         }
+
+                        if (domain == HealthDomain.SystemStability)
+                            section.HasKernelPowerId1 = ComprehensiveEvidenceExtractor.HasKernelPowerId1Present(root);
                     }
                     catch (Exception exEvidence)
                     {
@@ -1112,6 +1188,14 @@ namespace PCDiagnosticPro.Services
                 }
                 
                 sections.Add(section);
+            }
+
+            // Performance first, then OS (Système d'exploitation), then rest
+            var perf = sections.FirstOrDefault(s => s.Domain == HealthDomain.Performance);
+            if (perf != null)
+            {
+                sections.Remove(perf);
+                sections.Insert(0, perf);
             }
             
             return sections;

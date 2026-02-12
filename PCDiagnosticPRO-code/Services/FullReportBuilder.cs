@@ -69,6 +69,7 @@ namespace PCDiagnosticPro.Services
 
             var sections = new List<ReportSectionViewModel>
             {
+                BuildPerformanceSection(snapshot, combined),
                 BuildSystemSection(snapshot, metadata),
                 BuildCpuSection(snapshot, combined.SensorsCsharp, combined),
                 BuildGpuSection(snapshot, combined.SensorsCsharp),
@@ -76,7 +77,6 @@ namespace PCDiagnosticPro.Services
                 BuildStorageSection(snapshot, combined.SensorsCsharp),
                 BuildNetworkSection(snapshot, combined.NetworkDiagnostics),
                 BuildStabilitySection(snapshot, combined),
-                BuildPerformanceSection(snapshot, combined),
                 BuildSecuritySection(snapshot, combined.SecurityInfoCsharp),
                 BuildUpdatesSection(snapshot, combined.UpdatesCsharp),
                 BuildDevicesSection(snapshot, combined.DriverInventory),
@@ -521,10 +521,13 @@ namespace PCDiagnosticPro.Services
                 : (sensors?.Cpu?.CpuTempC?.Reason ?? "Non disponible");
             AddKVIfNew(section, "Source température", tempSource, "", IssueLevel.Info, "C#");
 
-            // Throttling from diagnostic signals (cpuThrottle)
-            var throttleDisplay = GetCpuThrottleDisplay(combined.DiagnosticSignals);
-            if (throttleDisplay != null)
-                AddKVIfNew(section, "Throttling", throttleDisplay, "", IssueLevel.Info, "diagnostic_signals");
+            // Documentation : méthodes passives (aucun stress test, aucun signal)
+            AddKVIfNew(section, "Méthodes de collecte température",
+                "Lecture passive (capteurs LibreHardwareMonitor ou WMI Thermal Zone). Aucun stress test, aucun benchmark. Aucun code ne provoque de charge CPU pour révéler la température.",
+                "", IssueLevel.Info, "C#");
+
+            // Throttling from diagnostic signals (cpuThrottle) — detailed display
+            AddCpuThrottleDetails(section, combined.DiagnosticSignals);
 
             // PS metrics (inventory); exclude "temperature" so we keep C# value and avoid duplicate/NA
             var cpuExclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "temperature" };
@@ -887,51 +890,41 @@ namespace PCDiagnosticPro.Services
         {
             var section = new ReportSectionViewModel { Id = "Performance", Title = "Performance", Level = IssueLevel.Info };
 
-            string? cpuName = null;
-            int cpuCores = 0, cpuThreads = 0;
-            double ramGb = 0;
-            string? gpuName = null;
-            double gpuVramMb = 0;
-            bool hasSsd = true;
+            var eval = PerformanceEvaluationEngine.Evaluate(combined.ScanPowershell, snapshot, combined.SensorsCsharp);
 
-            if (snapshot?.Machine != null)
+            section.SectionScore = eval.Score;
+            section.SummaryLine1 = $"Score: {eval.Score}/100 — {eval.Verdict.Category}";
+            section.SummaryLine2 = eval.Verdict.RealisticExpectationSummary.Length > 120 ? eval.Verdict.RealisticExpectationSummary.Substring(0, 117) + "..." : eval.Verdict.RealisticExpectationSummary;
+            section.PerformanceCategory = eval.Verdict.Category;
+            section.PrimaryBottleneck = string.IsNullOrEmpty(eval.Bottleneck.PrimaryLimitingFactor) ? "Non déterminé" : eval.Bottleneck.PrimaryLimitingFactor;
+            section.EvidenceText = BuildEvidenceText(snapshot?.GeneratedAt, null, "PerformanceEvaluationEngine (table " + PerformanceEvaluationEngine.TableVersion + ", deterministic tier + scenario scoring)");
+
+            var p = eval.Profile;
+            section.PerformanceCpuDisplay = !string.IsNullOrEmpty(p?.CpuModel) ? p.CpuModel : (p?.CpuTier ?? "Unknown");
+            section.PerformanceGpuDisplay = !string.IsNullOrEmpty(p?.GpuModel) ? p.GpuModel : (p?.GpuTier ?? "Unknown");
+            section.PerformanceVramDisplay = (p != null && p.GpuVramMb > 0) ? $"{p.GpuVramMb:F0} MB" : "Unknown";
+            section.PerformanceRamDisplay = (p != null && p.RamGb > 0) ? $"{p.RamGb:F0} GB" : "Unknown";
+            section.PerformanceStorageDisplay = !string.IsNullOrEmpty(p?.StorageKind) && p.StorageKind != "Unknown" ? p.StorageKind : "Unknown";
+
+            AddKV(section, "Score performance", $"{eval.Score}/100", "", IssueLevel.Info, "PerformanceEvaluationEngine");
+            AddKV(section, "Version table", PerformanceEvaluationEngine.TableVersion, "", IssueLevel.Info, "locale");
+
+            AddKV(section, "Performance Analysis", $"CPU: {eval.Profile.CpuTier} | GPU: {eval.Profile.GpuTier} | RAM: {eval.Profile.RamTier} | Storage: {eval.Profile.StorageTier}. System: {eval.Verdict.Category}.", "", IssueLevel.Info, "");
+            AddKV(section, "Realistic summary", eval.Verdict.RealisticExpectationSummary, "", IssueLevel.Info, "");
+
+            foreach (var s in eval.ScenarioScores)
+                AddKV(section, $"Capability Matrix — {s.Name}", $"{s.Score}/100 — {s.Classification}", "", IssueLevel.Info, "");
+
+            AddKV(section, "Primary limiting factor", eval.Bottleneck.PrimaryLimitingFactor, "", IssueLevel.Info, "");
+            for (int i = 0; i < eval.Bottleneck.UpgradePriorityRank.Count && i < 3; i++)
             {
-                ramGb = snapshot.Machine.TotalRamGB ?? 0;
-                cpuName = snapshot.Machine.CpuName;
-            }
-            var cpuMetrics = snapshot?.Metrics?.GetValueOrDefault("cpu");
-            if (cpuMetrics != null)
-            {
-                if (cpuMetrics.TryGetValue("model", out var m) && m.Available && m.Value != null) cpuName = m.Value.ToString();
-                if (cpuMetrics.TryGetValue("cores", out var c) && c.Available && c.Value is double cd) cpuCores = (int)cd;
-                if (cpuMetrics.TryGetValue("threads", out var t) && t.Available && t.Value is double td) cpuThreads = (int)td;
-            }
-            var gpuMetrics = snapshot?.Metrics?.GetValueOrDefault("gpu");
-            if (gpuMetrics != null)
-            {
-                if (gpuMetrics.TryGetValue("model", out var gm) && gm.Available && gm.Value != null) gpuName = gm.Value.ToString();
-                if (gpuMetrics.TryGetValue("vramTotalMB", out var v) && v.Available && v.Value is double vd) gpuVramMb = vd;
-            }
-            if (combined.SensorsCsharp?.Gpu != null)
-            {
-                if (gpuName == null && combined.SensorsCsharp.Gpu.Name?.Available == true) gpuName = combined.SensorsCsharp.Gpu.Name.Value;
-                if (gpuVramMb == 0 && combined.SensorsCsharp.Gpu.VramTotalMB?.Available == true) gpuVramMb = combined.SensorsCsharp.Gpu.VramTotalMB.Value;
+                var u = eval.Bottleneck.UpgradePriorityRank[i];
+                AddKV(section, $"Upgrade Impact ({u.Rank})", $"{u.Component}: {u.Reason}", "", IssueLevel.Info, "");
             }
 
-            var result = PerformanceScoreCalculator.Calculate(cpuName, cpuCores, cpuThreads, gpuName, gpuVramMb, ramGb, hasSsd);
+            foreach (var s in eval.ScenarioScores)
+                section.ScenarioScores.Add(new ViewModels.ScenarioScoreViewModel { Name = s.Name, Score = s.Score, Classification = s.Classification });
 
-            AddKV(section, "Score performance", $"{result.Score}/100", "", IssueLevel.Info, "PerformanceScoreCalculator");
-            AddKV(section, "Version table", PerformanceScoreCalculator.TableVersion, "", IssueLevel.Info, "locale");
-            AddKV(section, "Catégories", result.Categories.Count > 0 ? string.Join(", ", result.Categories) : "—", "", IssueLevel.Info, "");
-            for (int i = 0; i < result.CapableDe.Count; i++)
-                AddKV(section, $"Capable de ({i + 1})", result.CapableDe[i], "", IssueLevel.Info, "");
-            for (int i = 0; i < result.Limites.Count; i++)
-                AddKV(section, $"Limite ({i + 1})", result.Limites[i], "", IssueLevel.Info, "");
-
-            section.SectionScore = result.Score;
-            section.SummaryLine1 = $"Score: {result.Score}/100 — {string.Join(", ", result.Categories)}";
-            section.SummaryLine2 = result.Limites.Count > 0 ? result.Limites[0] : "Détails ci-dessous.";
-            section.EvidenceText = BuildEvidenceText(snapshot?.GeneratedAt, null, "PerformanceScoreCalculator (table " + PerformanceScoreCalculator.TableVersion + ", règles heuristiques locales)");
             return section;
         }
 
@@ -1209,32 +1202,110 @@ namespace PCDiagnosticPro.Services
             return sentinels;
         }
 
-        /// <summary>Extract CPU throttle display string from DiagnosticSignals (cpuThrottle / cpu_throttle / CpuThrottle).</summary>
-        private static string? GetCpuThrottleDisplay(Dictionary<string, SignalResult>? signals)
+        /// <summary>
+        /// Adds detailed CPU throttle information from DiagnosticSignals to the CPU section.
+        /// Extracts: throttle suspected, event counts (7d/30d), thermal vs power, frequency %, etc.
+        /// </summary>
+        private static void AddCpuThrottleDetails(ReportSectionViewModel section, Dictionary<string, SignalResult>? signals)
         {
-            if (signals == null) return null;
+            if (signals == null) return;
+
+            SignalResult? sig = null;
             foreach (var key in new[] { "cpuThrottle", "cpu_throttle", "CpuThrottle" })
             {
-                if (!signals.TryGetValue(key, out var sig)) continue;
-                if (!sig.Available)
-                    return sig.Reason ?? Na;
-                try
+                if (signals.TryGetValue(key, out var s)) { sig = s; break; }
+            }
+            if (sig == null) return;
+
+            if (!sig.Available)
+            {
+                AddKVIfNew(section, "Throttling détecté", "Non disponible", "", IssueLevel.Info, "diagnostic_signals");
+                AddKVIfNew(section, "Throttling", sig.Reason ?? Na, "", IssueLevel.Info, "diagnostic_signals");
+                return;
+            }
+
+            try
+            {
+                // Handle both JsonElement (from JSON deserialization) and CpuThrottleResult (in-memory)
+                if (sig.Value is JsonElement je && je.ValueKind == JsonValueKind.Object)
                 {
-                    if (sig.Value is JsonElement je)
-                    {
-                        if (je.TryGetProperty("throttleSuspected", out var p))
-                            return p.ValueKind == JsonValueKind.True ? "Oui (thermal/power)" : "Non détecté";
-                        if (je.TryGetProperty("detected", out var p2))
-                            return p2.ValueKind == JsonValueKind.True ? "Oui" : "Non détecté";
-                    }
-                    return sig.Notes ?? "—";
+                    // Throttle suspected
+                    var suspected = false;
+                    if (je.TryGetProperty("ThrottleSuspected", out var ts) || je.TryGetProperty("throttleSuspected", out ts))
+                        suspected = ts.ValueKind == JsonValueKind.True;
+
+                    var level = suspected ? IssueLevel.Warning : IssueLevel.Info;
+                    AddKVIfNew(section, "Throttling détecté", suspected ? "Oui" : "Non", "", level, "diagnostic_signals");
+                    AddKVIfNew(section, "Throttling", suspected ? "Oui (suspecté)" : "Non détecté", "", level, "diagnostic_signals");
+
+                    // Type : Thermique / Power limit / Current limit / Indéterminé
+                    var thermal = GetIntFromJe(je, "ThermalThrottleCount", "thermalThrottleCount");
+                    var powerLimit = GetIntFromJe(je, "PowerLimitCount", "powerLimitCount");
+                    var typeStr = "Indéterminé";
+                    if (thermal.HasValue && thermal > 0 && powerLimit.HasValue && powerLimit > 0)
+                        typeStr = "Thermique, Power limit";
+                    else if (thermal.HasValue && thermal > 0)
+                        typeStr = "Thermique";
+                    else if (powerLimit.HasValue && powerLimit > 0)
+                        typeStr = "Power limit";
+                    AddKVIfNew(section, "Type", typeStr, "", IssueLevel.Info, "diagnostic_signals");
+
+                    // Preuves : résumé (événements, fréquence vs max)
+                    var ev7 = GetIntFromJe(je, "ThrottlingEventCount7d", "throttlingEventCount7d");
+                    var ev30 = GetIntFromJe(je, "ThrottlingEventCount30d", "throttlingEventCount30d");
+                    var preuves = new List<string>();
+                    if (ev7.HasValue && ev7.Value > 0) preuves.Add($"{ev7.Value} événement(s) throttle (7j)");
+                    if (ev30.HasValue && ev30.Value > 0) preuves.Add($"{ev30.Value} événement(s) throttle (30j)");
+                    if (thermal.HasValue && thermal > 0) preuves.Add($"Kernel-Processor-Power thermique (ID 34): {thermal.Value}");
+                    if (powerLimit.HasValue && powerLimit > 0) preuves.Add($"Kernel-Processor-Power power limit (ID 37): {powerLimit.Value}");
+                    double? freqAvg = null;
+                    if (je.TryGetProperty("PercentOfMaxFreqAvg", out var fa) && fa.ValueKind == JsonValueKind.Number) freqAvg = fa.GetDouble();
+                    if (freqAvg == null && je.TryGetProperty("percentOfMaxFreqAvg", out var fa2) && fa2.ValueKind == JsonValueKind.Number) freqAvg = fa2.GetDouble();
+                    if (freqAvg.HasValue && freqAvg > 0 && freqAvg < 100)
+                        preuves.Add($"Fréquence moy. {freqAvg.Value:F1}% du max");
+                    var freqMhz = GetIntFromJe(je, "FreqMhzAvg", "freqMhzAvg");
+                    if (freqMhz.HasValue && freqMhz > 0)
+                        preuves.Add($"Fréquence actuelle {freqMhz.Value} MHz");
+                    AddKVIfNew(section, "Preuves", preuves.Count > 0 ? string.Join(" ; ", preuves) : "Aucun événement throttle récent", "", IssueLevel.Info, "diagnostic_signals");
+
+                    // Event counts 7d/30d
+                    if (ev7.HasValue)
+                        AddKVIfNew(section, "Événements throttle (7j)", ev7.Value, "count", ev7 > 0 ? IssueLevel.Warning : IssueLevel.Info, "diagnostic_signals");
+                    if (ev30.HasValue)
+                        AddKVIfNew(section, "Événements throttle (30j)", ev30.Value, "count", ev30 > 5 ? IssueLevel.Warning : IssueLevel.Info, "diagnostic_signals");
+
+                    // Thermal vs power breakdown
+                    if (thermal.HasValue && thermal > 0)
+                        AddKVIfNew(section, "Throttle thermique", thermal.Value, "count", IssueLevel.Warning, "diagnostic_signals");
+                    if (powerLimit.HasValue && powerLimit > 0)
+                        AddKVIfNew(section, "Throttle alimentation", powerLimit.Value, "count", IssueLevel.Warning, "diagnostic_signals");
+
+                    // Frequency % of max
+                    double? freqMin = null;
+                    if (je.TryGetProperty("PercentOfMaxFreqMin", out var fm) && fm.ValueKind == JsonValueKind.Number) freqMin = fm.GetDouble();
+                    if (freqMin == null && je.TryGetProperty("percentOfMaxFreqMin", out var fm2) && fm2.ValueKind == JsonValueKind.Number) freqMin = fm2.GetDouble();
+
+                    if (freqAvg.HasValue && freqAvg > 0)
+                        AddKVIfNew(section, "Fréquence moy. (% max)", freqAvg.Value, "%", freqAvg < 85 ? IssueLevel.Warning : IssueLevel.Info, "diagnostic_signals");
+                    if (freqMin.HasValue && freqMin > 0)
+                        AddKVIfNew(section, "Fréquence min. (% max)", freqMin.Value, "%", freqMin < 70 ? IssueLevel.Warning : IssueLevel.Info, "diagnostic_signals");
+
+                    // Actual frequency MHz
+                    if (freqMhz.HasValue && freqMhz > 0)
+                        AddKVIfNew(section, "Fréquence actuelle", freqMhz.Value, "MHz", IssueLevel.Info, "diagnostic_signals");
                 }
-                catch
+                else
                 {
-                    return sig.Notes ?? "—";
+                    // Fallback: use Notes field
+                    AddKVIfNew(section, "Throttling détecté", "Non disponible", "", IssueLevel.Info, "diagnostic_signals");
+                    AddKVIfNew(section, "Throttling", sig.Notes ?? "—", "", IssueLevel.Info, "diagnostic_signals");
                 }
             }
-            return null;
+            catch
+            {
+                AddKVIfNew(section, "Throttling détecté", "Non disponible", "", IssueLevel.Info, "diagnostic_signals");
+                AddKVIfNew(section, "Throttling", sig.Notes ?? "—", "", IssueLevel.Info, "diagnostic_signals");
+            }
         }
 
         private static IssueLevel SeverityToLevel(string? severity)

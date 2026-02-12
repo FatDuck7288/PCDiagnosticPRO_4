@@ -14,8 +14,10 @@ namespace PCDiagnosticPro.Services
     /// Safe hardware sensors collector that does NOT use WinRing0 or any kernel drivers.
     /// Uses only Windows-native APIs: WMI, Performance Counters, and vendor-specific usermode APIs.
     /// This avoids triggering Windows Defender alerts for vulnerable drivers.
-    /// CPU temp: WMI only (MSAcpi_ThermalZoneTemperature, TemperatureProbe, etc.) — often "Non disponible"
-    /// on desktops; no PerfCounter for CPU temp (Windows does not expose it); no LHM in safe mode.
+    /// CPU temp: WMI only (MSAcpi_ThermalZoneTemperature, TemperatureProbe, ThermalZoneInformation)
+    /// — these methods do NOT trigger any security signal; often "Non disponible" on gaming desktops
+    /// where ACPI Thermal Zone is empty. No PerfCounter for CPU temp (Windows does not expose it); no LHM in safe mode.
+    /// See docs/CPU_TEMPERATURE_AND_THROTTLING.md for all CPU temperature methods and "no signal" options.
     /// GPU load: Performance Counter "GPU Engine" with engtype_3D only (aligned with Task Manager "GPU 3D").
     /// </summary>
     public class SafeHardwareSensorsCollector
