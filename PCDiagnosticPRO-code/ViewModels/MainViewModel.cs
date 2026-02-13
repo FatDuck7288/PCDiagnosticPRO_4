@@ -3758,52 +3758,54 @@ namespace PCDiagnosticPro.ViewModels
                     return;
                 }
 
-                // Parse the JSON to extract InstalledApplications and StartupPrograms sections
-                JsonElement? appsData = null;
-                JsonElement? startupData = null;
-                
-                try
+                // Parse the JSON to extract InstalledApplications and StartupPrograms sections.
+                // Keep doc alive for the whole dialog: JsonElement references the document buffer.
+                using (var doc = JsonDocument.Parse(_lastCombinedJsonContent))
                 {
-                    using var doc = JsonDocument.Parse(_lastCombinedJsonContent);
                     var root = doc.RootElement;
-                    
-                    // Try scan_powershell.sections first
-                    if (root.TryGetProperty("scan_powershell", out var ps) &&
-                        ps.TryGetProperty("sections", out var sections))
-                    {
-                        if (sections.TryGetProperty("InstalledApplications", out var apps))
-                        {
-                            appsData = apps.TryGetProperty("data", out var appsDataEl) ? appsDataEl : apps;
-                        }
-                        if (sections.TryGetProperty("StartupPrograms", out var startup))
-                        {
-                            startupData = startup.TryGetProperty("data", out var startupDataEl) ? startupDataEl : startup;
-                        }
-                    }
-                    
-                    // Fallback to direct sections
-                    if (!appsData.HasValue && root.TryGetProperty("sections", out var directSections))
-                    {
-                        if (directSections.TryGetProperty("InstalledApplications", out var apps))
-                        {
-                            appsData = apps.TryGetProperty("data", out var appsDataEl) ? appsDataEl : apps;
-                        }
-                        if (directSections.TryGetProperty("StartupPrograms", out var startup))
-                        {
-                            startupData = startup.TryGetProperty("data", out var startupDataEl) ? startupDataEl : startup;
-                        }
-                    }
-                }
-                catch (JsonException ex)
-                {
-                    App.LogMessage($"[AppsDetails] JSON parse error: {ex.Message}");
-                }
+                    JsonElement? appsData = null;
+                    JsonElement? startupData = null;
 
-                var window = new AppsDetailsWindow(appsData, startupData)
-                {
-                    Owner = Application.Current.MainWindow
-                };
-                window.ShowDialog();
+                    try
+                    {
+                        // Try scan_powershell.sections first
+                        if (root.TryGetProperty("scan_powershell", out var ps) &&
+                            ps.TryGetProperty("sections", out var sections))
+                        {
+                            if (sections.TryGetProperty("InstalledApplications", out var apps))
+                            {
+                                appsData = apps.TryGetProperty("data", out var appsDataEl) ? appsDataEl : apps;
+                            }
+                            if (sections.TryGetProperty("StartupPrograms", out var startup))
+                            {
+                                startupData = startup.TryGetProperty("data", out var startupDataEl) ? startupDataEl : startup;
+                            }
+                        }
+
+                        // Fallback to direct sections
+                        if (!appsData.HasValue && root.TryGetProperty("sections", out var directSections))
+                        {
+                            if (directSections.TryGetProperty("InstalledApplications", out var apps))
+                            {
+                                appsData = apps.TryGetProperty("data", out var appsDataEl) ? appsDataEl : apps;
+                            }
+                            if (directSections.TryGetProperty("StartupPrograms", out var startup))
+                            {
+                                startupData = startup.TryGetProperty("data", out var startupDataEl) ? startupDataEl : startup;
+                            }
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        App.LogMessage($"[AppsDetails] JSON parse error: {ex.Message}");
+                    }
+
+                    var window = new AppsDetailsWindow(appsData, startupData)
+                    {
+                        Owner = Application.Current.MainWindow
+                    };
+                    window.ShowDialog();
+                }
                 
                 App.LogMessage("[AppsDetails] Fenêtre ouverte");
             }

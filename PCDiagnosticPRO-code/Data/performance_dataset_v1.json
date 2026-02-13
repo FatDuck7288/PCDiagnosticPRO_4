@@ -1,0 +1,461 @@
+{
+  "DatasetVersion": "2.2.0",
+  "PublishedAt": "2026-02-13T00:00:00Z",
+
+  "CpuPatterns": [
+    { "Pattern": "ryzen 9", "TierOrder": 4 },
+    { "Pattern": "core i9", "TierOrder": 4 },
+    { "Pattern": "xeon", "TierOrder": 4 },
+    { "Pattern": "ryzen 7", "TierOrder": 3 },
+    { "Pattern": "core i7", "TierOrder": 3 },
+    { "Pattern": "ryzen 5", "TierOrder": 2 },
+    { "Pattern": "core i5", "TierOrder": 2 },
+    { "Pattern": "ryzen 3", "TierOrder": 1 },
+    { "Pattern": "core i3", "TierOrder": 1 },
+    { "Pattern": "pentium", "TierOrder": 1 }
+  ],
+
+  "GpuPatterns": [
+    { "Pattern": "4090", "TierOrder": 5 },
+    { "Pattern": "4080", "TierOrder": 4 },
+    { "Pattern": "3090", "TierOrder": 4 },
+    { "Pattern": "rtx 40", "TierOrder": 4 },
+    { "Pattern": "rx 7", "TierOrder": 4 },
+    { "Pattern": "rtx 30", "TierOrder": 3 },
+    { "Pattern": "rx 6", "TierOrder": 3 },
+    { "Pattern": "gtx 16", "TierOrder": 2 },
+    { "Pattern": "rx 5", "TierOrder": 2 },
+    { "Pattern": "uhd", "TierOrder": 1 },
+    { "Pattern": "iris", "TierOrder": 1 },
+    { "Pattern": "vega", "TierOrder": 1 }
+  ],
+
+  "CpuHeuristicRules": {
+    "HighEndMinCores": 12,
+    "HighEndMinThreads": 24,
+    "UpperMidMinCores": 10,
+    "UpperMidMinThreads": 16,
+    "MidRangeMinCores": 6,
+    "MidRangeMaxCores": 8,
+    "EntryMinCores": 4,
+    "EntryMinThreads": 4
+  },
+
+  "GpuVramThresholds": {
+    "HighEndMinMb": 8192,
+    "UpperMidMinMb": 4096,
+    "MidRangeMinMb": 2048,
+    "EntryMinMb": 1024
+  },
+
+  "RamTierRules": {
+    "HighEndMinGb": 32,
+    "MidRangeMinGb": 16,
+    "EntryMinGb": 8,
+    "EntryFloorGb": 4
+  },
+
+  "StorageTierRules": {
+    "NvmeTier": 4,
+    "SataSsdTier": 2,
+    "HddTier": 1
+  },
+
+  "MarketBenchmarks": {
+    "_comment": "Per-scenario hardware requirements based on 2025-2026 market. Min=minimum to run (60%), Recommended=comfortable (80%), Ultra=optimal, no problem (100%). Below min=0-60 proportional, at min=60, at recommended=80, at/above ultra=100. Any PC meeting or exceeding Ultra for each component gets 100% for that component.",
+    "office": {
+      "Label": "Bureau / Navigation",
+      "Description": "Office 365, navigateur 20+ onglets, vidéo conférence",
+      "_semantic": "Ultra = tout site web + 50 onglets sans limite. Un PC 4 cœurs+ avec 8+ Go RAM et SSD atteint 100. Tâche bureautique non exigeante.",
+      "Requirements": {
+        "MinCpuCores": 2,
+        "MinCpuThreads": 2,
+        "MinRamGb": 4,
+        "MinGpuVramMb": 0,
+        "MinGpuTierOrder": 0,
+        "MinStorageTier": 1,
+        "RecommendedCpuCores": 4,
+        "RecommendedCpuThreads": 4,
+        "RecommendedRamGb": 8,
+        "RecommendedGpuVramMb": 0,
+        "RecommendedGpuTierOrder": 0,
+        "RecommendedStorageTier": 2,
+        "UltraCpuCores": 4,
+        "UltraCpuThreads": 8,
+        "UltraRamGb": 8,
+        "UltraGpuVramMb": 0,
+        "UltraGpuTierOrder": 0,
+        "UltraStorageTier": 2,
+        "MinCpuGhz": 1.5,
+        "RecommendedCpuGhz": 2.5,
+        "UltraCpuGhz": 3.0,
+        "RequiresVideoAcceleration": true,
+        "MinRamGbForLLM": 0,
+        "WeightCpu": 0.20,
+        "WeightGpu": 0.00,
+        "WeightRam": 0.50,
+        "WeightStorage": 0.30
+      }
+    },
+    "multitasking": {
+      "Label": "Multitâche",
+      "Description": "IDE + navigateur + Slack + Excel + Docker simultanément",
+      "_semantic": "Ultra = productivité intensive sans ralentissement (8+ cores, 32GB+ RAM, NVMe). Développeur professionnel multitâche.",
+      "Requirements": {
+        "MinCpuCores": 4,
+        "MinCpuThreads": 4,
+        "MinRamGb": 8,
+        "MinGpuVramMb": 0,
+        "MinGpuTierOrder": 0,
+        "MinStorageTier": 1,
+        "RecommendedCpuCores": 6,
+        "RecommendedCpuThreads": 12,
+        "RecommendedRamGb": 16,
+        "RecommendedGpuVramMb": 0,
+        "RecommendedGpuTierOrder": 0,
+        "RecommendedStorageTier": 2,
+        "UltraCpuCores": 8,
+        "UltraCpuThreads": 16,
+        "UltraRamGb": 32,
+        "UltraGpuVramMb": 0,
+        "UltraGpuTierOrder": 0,
+        "UltraStorageTier": 4,
+        "MinCpuGhz": 2.0,
+        "RecommendedCpuGhz": 3.0,
+        "UltraCpuGhz": 3.5,
+        "RequiresVideoAcceleration": false,
+        "MinRamGbForLLM": 0,
+        "WeightCpu": 0.35,
+        "WeightGpu": 0.00,
+        "WeightRam": 0.50,
+        "WeightStorage": 0.15
+      }
+    },
+    "gaming_1080p": {
+      "Label": "Jeu 1080p",
+      "Description": "Jeux AAA récents (2024-2026) en 1080p 60 FPS, paramètres élevés",
+      "_semantic": "Ultra = capable de faire tourner N'IMPORTE QUEL jeu actuel en 1080p (RTX 3060+ ou équivalent, 6+ cores, 16GB RAM, SSD). Si aucun jeu ne bloque → 100.",
+      "Requirements": {
+        "MinCpuCores": 4,
+        "MinCpuThreads": 4,
+        "MinRamGb": 8,
+        "MinGpuVramMb": 4096,
+        "MinGpuTierOrder": 1,
+        "MinStorageTier": 1,
+        "RecommendedCpuCores": 6,
+        "RecommendedCpuThreads": 8,
+        "RecommendedRamGb": 16,
+        "RecommendedGpuVramMb": 6144,
+        "RecommendedGpuTierOrder": 2,
+        "RecommendedStorageTier": 2,
+        "UltraCpuCores": 6,
+        "UltraCpuThreads": 12,
+        "UltraRamGb": 16,
+        "UltraGpuVramMb": 8192,
+        "UltraGpuTierOrder": 3,
+        "UltraStorageTier": 4,
+        "WeightCpu": 0.20,
+        "WeightGpu": 0.55,
+        "WeightRam": 0.15,
+        "WeightStorage": 0.10
+      }
+    },
+    "gaming_1440p": {
+      "Label": "Jeu 1440p",
+      "Description": "Jeux AAA récents en 1440p 60 FPS, paramètres élevés à ultra",
+      "_semantic": "Ultra = tous les jeux AAA en 1440p fluides (RTX 3070+ ou équivalent, 8+ cores, 32GB RAM). Plus exigeant que 1080p.",
+      "Requirements": {
+        "MinCpuCores": 4,
+        "MinCpuThreads": 8,
+        "MinRamGb": 16,
+        "MinGpuVramMb": 6144,
+        "MinGpuTierOrder": 2,
+        "MinStorageTier": 2,
+        "RecommendedCpuCores": 6,
+        "RecommendedCpuThreads": 12,
+        "RecommendedRamGb": 16,
+        "RecommendedGpuVramMb": 8192,
+        "RecommendedGpuTierOrder": 3,
+        "RecommendedStorageTier": 4,
+        "UltraCpuCores": 8,
+        "UltraCpuThreads": 16,
+        "UltraRamGb": 32,
+        "UltraGpuVramMb": 10240,
+        "UltraGpuTierOrder": 4,
+        "UltraStorageTier": 4,
+        "WeightCpu": 0.18,
+        "WeightGpu": 0.60,
+        "WeightRam": 0.14,
+        "WeightStorage": 0.08
+      }
+    },
+    "gaming_4k": {
+      "Label": "Jeu 4K",
+      "Description": "Jeux AAA récents en 4K UHD 60 FPS, paramètres ultra (le plus exigeant)",
+      "_semantic": "Ultra = tous les jeux AAA en 4K natif fluides (RTX 4080/4090, 12+ cores, 64GB RAM). Seules les configs très haut de gamme atteignent 100.",
+      "Requirements": {
+        "MinCpuCores": 6,
+        "MinCpuThreads": 12,
+        "MinRamGb": 16,
+        "MinGpuVramMb": 8192,
+        "MinGpuTierOrder": 3,
+        "MinStorageTier": 2,
+        "RecommendedCpuCores": 8,
+        "RecommendedCpuThreads": 16,
+        "RecommendedRamGb": 32,
+        "RecommendedGpuVramMb": 12288,
+        "RecommendedGpuTierOrder": 4,
+        "RecommendedStorageTier": 4,
+        "UltraCpuCores": 12,
+        "UltraCpuThreads": 24,
+        "UltraRamGb": 64,
+        "UltraGpuVramMb": 16384,
+        "UltraGpuTierOrder": 5,
+        "UltraStorageTier": 4,
+        "WeightCpu": 0.12,
+        "WeightGpu": 0.70,
+        "WeightRam": 0.12,
+        "WeightStorage": 0.06
+      }
+    },
+    "4k_editing": {
+      "Label": "Montage vidéo 4K",
+      "Description": "DaVinci Resolve / Premiere Pro, timeline 4K multicouche, rendu GPU",
+      "Requirements": {
+        "MinCpuCores": 4,
+        "MinCpuThreads": 8,
+        "MinRamGb": 16,
+        "MinGpuVramMb": 4096,
+        "MinGpuTierOrder": 2,
+        "MinStorageTier": 2,
+        "RecommendedCpuCores": 8,
+        "RecommendedCpuThreads": 16,
+        "RecommendedRamGb": 32,
+        "RecommendedGpuVramMb": 8192,
+        "RecommendedGpuTierOrder": 3,
+        "RecommendedStorageTier": 4,
+        "UltraCpuCores": 16,
+        "UltraCpuThreads": 32,
+        "UltraRamGb": 128,
+        "UltraGpuVramMb": 16384,
+        "UltraGpuTierOrder": 4,
+        "UltraStorageTier": 4,
+        "WeightCpu": 0.35,
+        "WeightGpu": 0.30,
+        "WeightRam": 0.25,
+        "WeightStorage": 0.10
+      }
+    },
+    "streaming_gaming": {
+      "Label": "Streaming + Jeu",
+      "Description": "Streaming OBS 1080p60 + jeu AAA simultané",
+      "Requirements": {
+        "MinCpuCores": 4,
+        "MinCpuThreads": 8,
+        "MinRamGb": 16,
+        "MinGpuVramMb": 4096,
+        "MinGpuTierOrder": 2,
+        "MinStorageTier": 2,
+        "RecommendedCpuCores": 8,
+        "RecommendedCpuThreads": 16,
+        "RecommendedRamGb": 16,
+        "RecommendedGpuVramMb": 8192,
+        "RecommendedGpuTierOrder": 3,
+        "RecommendedStorageTier": 4,
+        "UltraCpuCores": 12,
+        "UltraCpuThreads": 24,
+        "UltraRamGb": 32,
+        "UltraGpuVramMb": 12288,
+        "UltraGpuTierOrder": 4,
+        "UltraStorageTier": 4,
+        "WeightCpu": 0.40,
+        "WeightGpu": 0.35,
+        "WeightRam": 0.15,
+        "WeightStorage": 0.10
+      }
+    },
+    "vms": {
+      "Label": "Machines virtuelles",
+      "Description": "2-3 VMs simultanées (dev, test, serveur) avec ressources dédiées",
+      "Requirements": {
+        "MinCpuCores": 4,
+        "MinCpuThreads": 8,
+        "MinRamGb": 16,
+        "MinGpuVramMb": 0,
+        "MinGpuTierOrder": 0,
+        "MinStorageTier": 2,
+        "RecommendedCpuCores": 8,
+        "RecommendedCpuThreads": 16,
+        "RecommendedRamGb": 32,
+        "RecommendedGpuVramMb": 0,
+        "RecommendedGpuTierOrder": 0,
+        "RecommendedStorageTier": 4,
+        "UltraCpuCores": 16,
+        "UltraCpuThreads": 32,
+        "UltraRamGb": 128,
+        "UltraGpuVramMb": 0,
+        "UltraGpuTierOrder": 0,
+        "UltraStorageTier": 4,
+        "WeightCpu": 0.40,
+        "WeightGpu": 0.00,
+        "WeightRam": 0.50,
+        "WeightStorage": 0.10
+      }
+    },
+    "ai_inference": {
+      "Label": "IA (inférence)",
+      "Description": "LLM locaux (Llama 7-13B), Stable Diffusion, inférence ML en local",
+      "Requirements": {
+        "MinCpuCores": 4,
+        "MinCpuThreads": 8,
+        "MinRamGb": 16,
+        "MinGpuVramMb": 6144,
+        "MinGpuTierOrder": 2,
+        "MinStorageTier": 2,
+        "RecommendedCpuCores": 8,
+        "RecommendedCpuThreads": 16,
+        "RecommendedRamGb": 32,
+        "RecommendedGpuVramMb": 12288,
+        "RecommendedGpuTierOrder": 4,
+        "RecommendedStorageTier": 4,
+        "UltraCpuCores": 16,
+        "UltraCpuThreads": 32,
+        "UltraRamGb": 128,
+        "UltraGpuVramMb": 48000,
+        "UltraGpuTierOrder": 5,
+        "UltraStorageTier": 4,
+        "MinCpuGhz": 0,
+        "RecommendedCpuGhz": 0,
+        "UltraCpuGhz": 0,
+        "RequiresVideoAcceleration": false,
+        "MinRamGbForLLM": 16,
+        "WeightCpu": 0.08,
+        "WeightGpu": 0.72,
+        "WeightRam": 0.15,
+        "WeightStorage": 0.05
+      }
+    }
+  },
+
+  "ScenarioRules": {
+    "office": {
+      "Base": 50,
+      "Bonuses": [
+        { "Condition": "CpuTierOrder>=1", "Points": 25, "ElseIf": false },
+        { "Condition": "RamGb>=8", "Points": 15, "ElseIf": false },
+        { "Condition": "RamGb>=16", "Points": 5, "ElseIf": false },
+        { "Condition": "StorageKind==HDD", "Points": -15, "ElseIf": false },
+        { "Condition": "StorageKind==NVMe", "Points": 5, "ElseIf": true }
+      ]
+    },
+    "multitasking": {
+      "Base": 30,
+      "Bonuses": [
+        { "Condition": "CpuTierOrder>=2", "Points": 25, "ElseIf": false },
+        { "Condition": "CpuTierOrder>=3", "Points": 15, "ElseIf": false },
+        { "Condition": "RamGb>=16", "Points": 25, "ElseIf": false },
+        { "Condition": "RamGb>=32", "Points": 5, "ElseIf": false }
+      ]
+    },
+    "gaming_1080p": {
+      "Base": 40,
+      "Bonuses": [
+        { "Condition": "GpuTierOrder>=2", "Points": 30, "ElseIf": false },
+        { "Condition": "GpuTierOrder>=1", "Points": 15, "ElseIf": true },
+        { "Condition": "GpuVramMb>=6144", "Points": 20, "ElseIf": false },
+        { "Condition": "GpuVramMb>=4096", "Points": 10, "ElseIf": true },
+        { "Condition": "RamGb>=16", "Points": 10, "ElseIf": false },
+        { "Condition": "RamGb>=8", "Points": 5, "ElseIf": true }
+      ]
+    },
+    "gaming_1440p": {
+      "Base": 20,
+      "Bonuses": [
+        { "Condition": "GpuTierOrder>=4", "Points": 40, "ElseIf": false },
+        { "Condition": "GpuTierOrder>=3", "Points": 30, "ElseIf": true },
+        { "Condition": "GpuTierOrder>=2", "Points": 15, "ElseIf": true },
+        { "Condition": "GpuVramMb>=8192", "Points": 25, "ElseIf": false },
+        { "Condition": "GpuVramMb>=6144", "Points": 15, "ElseIf": true },
+        { "Condition": "RamGb>=16", "Points": 15, "ElseIf": false }
+      ]
+    },
+    "gaming_4k": {
+      "Base": 10,
+      "Bonuses": [
+        { "Condition": "GpuTierOrder>=5", "Points": 50, "ElseIf": false },
+        { "Condition": "GpuTierOrder>=4", "Points": 35, "ElseIf": true },
+        { "Condition": "GpuTierOrder>=3", "Points": 15, "ElseIf": true },
+        { "Condition": "GpuVramMb>=24576", "Points": 25, "ElseIf": false },
+        { "Condition": "GpuVramMb>=16384", "Points": 15, "ElseIf": true },
+        { "Condition": "GpuVramMb>=10240", "Points": 10, "ElseIf": true },
+        { "Condition": "RamGb>=32", "Points": 10, "ElseIf": false },
+        { "Condition": "RamGb>=16", "Points": 5, "ElseIf": true }
+      ]
+    },
+    "4k_editing": {
+      "Base": 0,
+      "Bonuses": [
+        { "Condition": "CpuTierOrder>=4", "Points": 30, "ElseIf": false },
+        { "Condition": "CpuTierOrder>=3", "Points": 20, "ElseIf": true },
+        { "Condition": "RamGb>=32", "Points": 30, "ElseIf": false },
+        { "Condition": "RamGb>=16", "Points": 15, "ElseIf": true },
+        { "Condition": "GpuTierOrder>=2", "Points": 20, "ElseIf": false },
+        { "Condition": "StorageKind==NVMe", "Points": 20, "ElseIf": false },
+        { "Condition": "StorageKind==SATA_SSD", "Points": 10, "ElseIf": true }
+      ]
+    },
+    "streaming_gaming": {
+      "Base": 25,
+      "Bonuses": [
+        { "Condition": "CpuTierOrder>=3", "Points": 25, "ElseIf": false },
+        { "Condition": "CpuTierOrder>=2", "Points": 15, "ElseIf": true },
+        { "Condition": "GpuTierOrder>=3", "Points": 25, "ElseIf": false },
+        { "Condition": "GpuTierOrder>=2", "Points": 15, "ElseIf": true },
+        { "Condition": "RamGb>=16", "Points": 25, "ElseIf": false }
+      ]
+    },
+    "vms": {
+      "Base": 20,
+      "Bonuses": [
+        { "Condition": "CpuThreads>=16", "Points": 35, "ElseIf": false },
+        { "Condition": "CpuThreads>=8", "Points": 25, "ElseIf": true },
+        { "Condition": "CpuThreads>=4", "Points": 15, "ElseIf": true },
+        { "Condition": "RamGb>=32", "Points": 35, "ElseIf": false },
+        { "Condition": "RamGb>=16", "Points": 25, "ElseIf": true },
+        { "Condition": "RamGb>=8", "Points": 10, "ElseIf": true }
+      ]
+    },
+    "ai_inference": {
+      "Base": 20,
+      "Bonuses": [
+        { "Condition": "GpuVramMb>=8192", "Points": 40, "ElseIf": false },
+        { "Condition": "GpuVramMb>=6144", "Points": 30, "ElseIf": true },
+        { "Condition": "GpuVramMb>=4096", "Points": 20, "ElseIf": true },
+        { "Condition": "RamGb>=32", "Points": 20, "ElseIf": false },
+        { "Condition": "RamGb>=16", "Points": 15, "ElseIf": true }
+      ]
+    }
+  },
+
+  "ClassificationThresholds": {
+    "NotRecommendedBelow": 40,
+    "AcceptableBelow": 55,
+    "GoodBelow": 70
+  },
+
+  "Floors": {
+    "HighEndCondition": {
+      "GpuPatterns": ["3090", "4090", "4080"],
+      "MinVramMb": 16384,
+      "MinCores": 8,
+      "MinRamGb": 32
+    },
+    "ScenarioFloors": {
+      "gaming_1440p": 80,
+      "gaming_4k": 75,
+      "4k_editing": 75,
+      "streaming_gaming": 75,
+      "ai_inference": 70
+    }
+  }
+}

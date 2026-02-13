@@ -1,0 +1,366 @@
+﻿════════════════════════════════════════════════════════════════════════════════
+                    PC DIAGNOSTIC PRO — RAPPORT UNIFIÉ
+════════════════════════════════════════════════════════════════════════════════
+
+  ▶ SECTION 1 : RÉSUMÉ GLOBAL
+────────────────────────────────────────────────────────────────────────────────
+
+  Score santé global        : Non calculé
+  Statut                    : Données insuffisantes
+
+  ▶ SECTION 2 : INFOS GÉNÉRALES
+────────────────────────────────────────────────────────────────────────────────
+
+  Nom PC                    : DESKTOP-LAKVT49
+  Utilisateur               : rams_
+  Date/heure scan           : 2026-02-13 13:15:08
+  Uptime                    : 1j 5h 16m
+  Version OS                : Microsoft Windows NT 10.0.26200.0
+  Architecture              : 64-bit
+  Mode Admin                : OUI
+
+  ▶ SECTION 3 : MATÉRIEL PRINCIPAL (HARDWARE)
+────────────────────────────────────────────────────────────────────────────────
+
+  GPU                       : NVIDIA GeForce RTX 3090
+  VRAM totale               : 24576 MB
+
+  ▶ SECTION 4 : PERFORMANCE ACTIVITÉ
+────────────────────────────────────────────────────────────────────────────────
+
+  Charge CPU                : 7%
+  Utilisation RAM           : 23%
+  Débit réseau (test HTTP)  : 5,3 Mbps
+  CPU (moy/pic sur 15 s)    : moy: 0% / pic: 0%
+  RAM dispo (min/moy MB)    : min: 73963 / moy: 73996
+  Disque R/W (moy B/s)      : R: 0 / W: 0
+  File d'attente disque (pic) : 0,0
+  Réseau (moy B/s)          : 0
+
+  Top 5 Processus (CPU):
+  (source : collecte C# fallback)
+  ┌────────────────────────────┬──────────┬────────────┐
+  │ Processus                  │ CPU %    │ RAM (MB)   │
+  ├────────────────────────────┼──────────┼────────────┤
+  │ System                     │     6,2% │      36,2 │
+  │ chrome                     │     4,3% │     924,3 │
+  │ opera                      │     3,3% │     264,6 │
+  │ PCDiagnosticPro            │     2,2% │     358,1 │
+  │ dwm                        │     0,8% │     221,3 │
+  └────────────────────────────┴──────────┴────────────┘
+
+  Top 5 Processus (RAM):
+  (source : collecte C# fallback)
+  ┌────────────────────────────┬────────────┬──────────┐
+  │ Processus                  │ RAM (MB)   │ CPU %    │
+  ├────────────────────────────┼────────────┼──────────┤
+  │ Cursor                     │    1422,9 │     0,0% │
+  │ chrome                     │     924,3 │     4,3% │
+  │ chrome                     │     702,1 │     0,0% │
+  │ Memory Compression         │     686,3 │     0,0% │
+  │ explorer                   │     488,8 │     0,0% │
+  └────────────────────────────┴────────────┴──────────┘
+
+  ▶ SECTION 5 : MÉMOIRE RAM
+────────────────────────────────────────────────────────────────────────────────
+
+  Répartition mémoire (instantanée) :
+  ┌─────────────────────────────┬────────────┬────────────┬──────────┐
+  │ Catégorie                   │ Valeur     │ Total      │ %        │
+  ├─────────────────────────────┼────────────┼────────────┼──────────┤
+  │ Physique : Utilisée          │    22,14 GB │    95,93 GB │     23% │
+  │ Physique : Disponible        │    73,79 GB │    95,93 GB │     77% │
+  │ Virtuelle : Utilisée         │  2311,25 GB │ 131072,00 GB │      2% │
+  │ Virtuelle : Disponible       │ 128760,75 GB │ 131072,00 GB │     98% │
+  │ Fichier pagination : Utilisé │    37,99 GB │   143,93 GB │     26% │
+  │ Fichier pagination : Libre   │   105,94 GB │   143,93 GB │     74% │
+  └─────────────────────────────┴────────────┴────────────┴──────────┘
+
+  Source : C# (GlobalMemoryStatusEx)
+
+
+  ▶ SECTION 6 : STOCKAGE ET DISQUES
+────────────────────────────────────────────────────────────────────────────────
+
+  Partitions:
+  ┌───────┬────────────┬────────────┬────────────┬───────────┬──────────┐
+  │ Lettre│ Capacité   │ Libre      │ Utilisé    │ Utilisé % │ Alerte   │
+  ├───────┼────────────┼────────────┼────────────┼───────────┼──────────┤
+  │ C:    │    952,6 GB │    250,5 GB │    702,1 GB │    73,7 %  │ OK       │
+  │ D:    │   1863,0 GB │   1092,2 GB │    770,8 GB │    41,4 %  │ OK       │
+  │ E:    │   1862,2 GB │   1453,1 GB │    409,0 GB │    22,0 %  │ OK       │
+  │ H:    │   1862,9 GB │    696,0 GB │   1166,9 GB │    62,6 %  │ OK       │
+  └───────┴────────────┴────────────┴────────────┴───────────┴──────────┘
+
+  Statut SMART:
+  Micron_2210_MTFDHBA1T0QFD : Détecté par capteurs C#
+  Micron CT2000X9PROSSD9    : Détecté par capteurs C#
+  Samsung SSD 990 PRO with Heatsink 2TB : Détecté par capteurs C#
+  TOSHIBA DT01ACA200        : Détecté par capteurs C#
+
+  SMART — SCSI\Disk&Ven_TOSHIBA&Prod_DT01ACA200\5&221baba8&0&020000_0: PredictFailure = Non
+  ┌─────────────────────────────────────┬─────────┬───────┬───────┬─────────┬───────────┐
+  │ Attribut                            │ Current │ Worst │ Raw   │ Seuil   │           │
+  ├─────────────────────────────────────┼─────────┼───────┼───────┼─────────┼───────────┤
+  │ Attribute_1                         │       0 │   100 │   100 │       0 │           │
+  │ Attribute_2                         │       0 │   137 │ 19849 │       0 │           │
+  │ Attribute_3                         │       0 │   130 │ 755047042 │    1537 │           │
+  │ Attribute_4                         │       0 │    99 │ 1670755 │       0 │           │
+  │ Reallocated Sectors Count           │       0 │   100 │   100 │       0 │           │
+  │ Attribute_7                         │       0 │   100 │   100 │       0 │           │
+  │ Attribute_8                         │       0 │   124 │  8572 │       0 │           │
+  │ Power-On Hours                      │       0 │    97 │ 5935713 │       0 │           │
+  │ Attribute_10                        │       0 │   100 │   100 │       0 │           │
+  │ Power Cycle Count                   │       0 │   100 │ 79716 │       0 │           │
+  │ Attribute_192                       │       0 │    95 │ 1746015 │       0 │           │
+  │ Attribute_193                       │       0 │    95 │ 1746015 │       0 │           │
+  │ Temperature                         │       0 │   176 │ 234889904 │   13056 │           │
+  │ Reallocated Event Count             │       0 │   100 │   100 │       0 │           │
+  │ Current Pending Sector              │       0 │   100 │   100 │       0 │           │
+  │ Uncorrectable Sector Count          │       0 │   100 │   100 │       0 │           │
+  │ Attribute_199                       │       0 │   200 │   200 │       0 │           │
+  │ Attribute_132                       │     100 │    59 │ 219905 │       1 │           │
+  └─────────────────────────────────────┴─────────┴───────┴───────┴─────────┴───────────┘
+
+  ▶ SECTION 7 : TEMPÉRATURES ET REFROIDISSEMENT
+────────────────────────────────────────────────────────────────────────────────
+
+  Temp CPU                  : 70,8°C
+  Temp GPU                  : 79,0°C
+  Temp max disques          : 50°C
+  Statut thermique          : ✅ Normal
+
+  ▶ SECTION 8 : BATTERIE ET ALIMENTATION
+────────────────────────────────────────────────────────────────────────────────
+
+  Batterie                  : Pas de batterie détectée
+
+  ▶ SECTION 9 : RÉSEAU ET INTERNET
+────────────────────────────────────────────────────────────────────────────────
+
+  ═ DÉBIT INTERNET (FAI) ═
+
+  Latence et qualité :
+    Latence P50    : 2,3 ms
+    Latence P95    : 6,0 ms
+    Perte paquets  : 0,0%
+    Jitter P95     : 1,12 ms
+    Gateway        : 192.168.2.1
+    DNS P95        : 19 ms
+
+  ═ Réseau local / configuration ═
+  Adaptateur actif          : VMware Virtual Ethernet Adapter for VMnet8
+  IP locale                 : 192.168.x.x
+
+  ═ Test qualité local ═
+  Perte paquets             : 0,0%
+
+  ▶ SECTION 10 : SÉCURITÉ
+────────────────────────────────────────────────────────────────────────────────
+
+  Windows Defender          : ✅ Actif
+  UAC                       : ✅ Actif
+
+  ▶ SECTION 11 : MISES À JOUR
+────────────────────────────────────────────────────────────────────────────────
+
+  Updates en attente        : 0
+
+  ▶ SECTION 12 : PILOTES (DRIVERS)
+────────────────────────────────────────────────────────────────────────────────
+
+  Pilotes détectés (C#)     : 247
+  Signés                    : 247
+  Périph. en erreur         : 1
+
+  Inventaire pilotes (C# - WMI) :
+  ┌──────────────┬──────────────────────────────────────┬────────────┬────────────┐
+  │ Classe       │ Périphérique                         │ Version    │ Date       │
+  ├──────────────┼──────────────────────────────────────┼────────────┼────────────┤
+  │ DISPLAY      │ NVIDIA GeForce RTX 3090 (NVIDIA)     │ 32.0.15... │ 2025-12-30 │
+      INF: oem1.inf | Statut: Unknown
+  │ MEDIA        │ NVIDIA High Definition Audio (NVI... │ 1.4.5.6    │ 2025-10-25 │
+      INF: oem64.inf | Statut: Unknown
+  │ MEDIA        │ NVIDIA Virtual Audio Device (Wave... │ 4.65.0.12  │ 2025-05-13 │
+      INF: oem13.inf | Statut: Unknown
+  │ MEDIA        │ Realtek High Definition Audio (Re... │ 6.0.9857.1 │ 2025-01-07 │
+      INF: oem79.inf | Statut: Unknown
+  │ MEDIA        │ USB Audio Device (Microsoft)         │ 10.0.26... │ 2026-01-26 │
+      INF: wdma_usb.inf | Statut: Unknown
+  │ NET          │ Bluetooth Device (Personal Area N... │ 10.0.26... │ 2006-06-21 │
+      INF: bthpan.inf | Statut: Unknown
+  │ NET          │ Microsoft Kernel Debug Network Ad... │ 10.0.26... │ 2006-06-21 │
+      INF: kdnic.inf | Statut: Unknown
+  │ NET          │ Microsoft Wi-Fi Direct Virtual Ad... │ 10.0.26... │ 2006-06-21 │
+      INF: netvwifimp.inf | Statut: Unknown
+  │ NET          │ Microsoft Wi-Fi Direct Virtual Ad... │ 10.0.26... │ 2006-06-21 │
+      INF: netvwifimp.inf | Statut: Unknown
+  │ NET          │ Realtek PCIe GbE Family Controlle... │ 1168.28... │ 2025-12-24 │
+      INF: oem16.inf | Statut: Unknown
+  │ NET          │ RZ616 Wi-Fi 6E 160MHz (MediaTek, ... │ 25.40.2... │ 2025-05-12 │
+      INF: oem58.inf | Statut: Unknown
+  │ NET          │ VirtualBox Host-Only Ethernet Ada... │ 7.0.22.... │ 2024-10-14 │
+      INF: oem23.inf | Statut: Unknown
+  │ NET          │ VMware Virtual Ethernet Adapter f... │ 14.0.0.8   │ 2023-11-02 │
+      INF: oem57.inf | Statut: Unknown
+  │ NET          │ VMware Virtual Ethernet Adapter f... │ 14.0.0.8   │ 2023-11-02 │
+      INF: oem57.inf | Statut: Unknown
+  │ NET          │ VMware Virtual Ethernet Adapter f... │ 14.0.0.8   │ 2023-11-02 │
+      INF: oem57.inf | Statut: Unknown
+  └──────────────┴──────────────────────────────────────┴────────────┴────────────┘
+
+  Pilotes essentiels installés :
+  ┌────────────────────┬──────────────────────────────────────────┬─────────────┬────────────┐
+  │ Classe             │ Périphérique                              │ Version     │ Date       │
+  ├────────────────────┼──────────────────────────────────────────┼─────────────┼────────────┤
+  │ BLUETOOTH          │ Bluetooth Device (RFCOMM Protocol TDI)   │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Bluetooth LE Device                      │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Bluetooth LE Generic Attribute Service   │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Device Information Service               │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Generic Access Profile                   │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Generic Attribute Profile                │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Microsoft Bluetooth Enumerator           │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ Microsoft Bluetooth LE Enumerator        │ 10.0.261... │ 2006-06-21 │
+  │ BLUETOOTH          │ RZ616 Bluetooth(R) Adapter               │ 1.1038.0... │ 2024-06-28 │
+  │ DISPLAY            │ NVIDIA GeForce RTX 3090                  │ 32.0.15.... │ 2025-12-30 │
+  │ HDC                │ Standard SATA AHCI Controller            │ 10.0.261... │ 2006-06-21 │
+  │ MEDIA              │ NVIDIA High Definition Audio             │ 1.4.5.6     │ 2025-10-25 │
+  │ MEDIA              │ NVIDIA Virtual Audio Device (Wave E...   │ 4.65.0.12   │ 2025-05-13 │
+  │ MEDIA              │ Realtek High Definition Audio            │ 6.0.9857.1  │ 2025-01-07 │
+  │ MEDIA              │ USB Audio Device                         │ 10.0.261... │ 2026-01-26 │
+  └────────────────────┴──────────────────────────────────────────┴─────────────┴────────────┘
+
+  Périph. en erreur         : 0 (OK)
+
+  ▶ SECTION 13 : DÉMARRAGE ET APPLICATIONS
+────────────────────────────────────────────────────────────────────────────────
+
+  Total programmes démarrage : 11
+
+  Programmes au démarrage (extrait):
+  ┌────────────────────────────────────────┐
+  │ Programme                              │
+  ├────────────────────────────────────────┤
+  │ SecurityHealth                         │
+  │ RtkAudUService                         │
+  │ iTunesHelper                           │
+  │ RazerAppEngine                         │
+  │ OneDrive                               │
+  │ Microsoft.Lists                        │
+  │ Opera Stable                           │
+  │ MicrosoftEdgeAutoLaunch_D801085E5D6... │
+  │ Teams                                  │
+  │ ut                                     │
+  └────────────────────────────────────────┘
+  Total applications installées : 90
+
+
+  ═ Services Windows ═
+  Total services            : 310
+  En cours                  : 135
+
+  ▶ SECTION 14 : SANTÉ SYSTÈME ET ERREURS
+────────────────────────────────────────────────────────────────────────────────
+
+  Santé système             : Données non disponibles
+
+  ═ Événements détaillés (C#) ═
+  [1] Id=20 | Microsoft-Windows-WindowsUpdateClient | 2026-02-13T05:49:55.7681099Z
+      Échec de l’installation : l’installation de la mise à jour suivante a échoue ...
+  [2] Id=13 | nvlddmkm | 2026-02-12T21:37:34.550215Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [3] Id=13 | nvlddmkm | 2026-02-12T21:37:33.120354Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [4] Id=13 | nvlddmkm | 2026-02-12T21:37:31.6885609Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [5] Id=13 | nvlddmkm | 2026-02-12T21:37:24.9596507Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [6] Id=13 | nvlddmkm | 2026-02-12T21:37:24.5884978Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [7] Id=13 | nvlddmkm | 2026-02-12T21:37:23.945223Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [8] Id=13 | nvlddmkm | 2026-02-12T21:37:23.553374Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [9] Id=13 | nvlddmkm | 2026-02-12T21:37:22.9967423Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [10] Id=13 | nvlddmkm | 2026-02-12T21:37:22.6252366Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [11] Id=13 | nvlddmkm | 2026-02-12T21:37:21.1265558Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [12] Id=13 | nvlddmkm | 2026-02-12T21:37:20.7536237Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [13] Id=13 | nvlddmkm | 2026-02-12T21:37:20.3829192Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [14] Id=13 | nvlddmkm | 2026-02-12T21:37:19.2641618Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [15] Id=13 | nvlddmkm | 2026-02-12T21:37:17.6851801Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [16] Id=13 | nvlddmkm | 2026-02-12T21:36:56.7959689Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [17] Id=13 | nvlddmkm | 2026-02-12T21:35:37.7176332Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [18] Id=13 | nvlddmkm | 2026-02-12T21:32:23.6186013Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [19] Id=13 | nvlddmkm | 2026-02-12T21:32:23.0072127Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+  [20] Id=13 | nvlddmkm | 2026-02-12T21:32:22.667483Z
+      <Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>...
+
+  ▶ SECTION 15 : PÉRIPHÉRIQUES
+────────────────────────────────────────────────────────────────────────────────
+
+  Périphériques audio       : 4
+  Imprimantes               : 4
+  Périph. en erreur         : 0 ✅
+
+  ▶ SECTION 16 : VIRTUALISATION
+────────────────────────────────────────────────────────────────────────────────
+
+  Machine virtuelle         : ❌ Non (machine physique)
+
+  ▶ SECTION 17 : LIMITATIONS ET DONNÉES MANQUANTES
+────────────────────────────────────────────────────────────────────────────────
+
+  Rapport de santé non disponible.
+
+  ▶ DONNÉES POWERSHELL (BRUT)
+────────────────────────────────────────────────────────────────────────────────
+
+  [WindowsUpdate]
+    cached: false
+    pendingCount: 0
+
+  [StartupPrograms]
+    startupCount: 11
+    startupItems: [Array 11]
+
+  [InstalledApplications]
+    totalCount: 90
+    source: Registry
+
+  [DevicesDrivers]
+    problemDeviceCount: 0
+    problemDevices: {object 0 keys}
+
+  [Printers]
+    printerCount: 4
+    printers: [Array 4]
+
+  [Audio]
+    deviceCount: 4
+    devices: [Array 4]
+
+════════════════════════════════════════════════════════════════════════════════
+
+  RAPPORT UNIFIÉ GÉNÉRÉ PAR PC DIAGNOSTIC PRO
+
+  Ce rapport combine:
+    ✓ Données système PowerShell (structure, config, events)
+    ✓ Données capteurs hardware C# (températures, charges, VRAM)
+    ✓ UDIS — Unified Diagnostic Intelligence Scoring
+    ✓ Tests réseau locaux (sans speedtest externe)
+    ✓ Processus temps réel (CPU % mesuré sur 750ms)
+
+  Généré le 2026-02-13 à 13:15:10
+  PC Diagnostic PRO — Rapport Unifié v2.0
+════════════════════════════════════════════════════════════════════════════════

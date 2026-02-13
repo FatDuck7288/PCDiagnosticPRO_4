@@ -26,8 +26,9 @@ namespace PCDiagnosticPro.Services
             var runUnifiedReport = args.Any(arg => string.Equals(arg, "--selftest-unified-report", StringComparison.OrdinalIgnoreCase));
             var runElevation = args.Any(arg => string.Equals(arg, "--diag-elevation", StringComparison.OrdinalIgnoreCase));
             var runDiagQuality = args.Any(arg => string.Equals(arg, "--diag-quality", StringComparison.OrdinalIgnoreCase));
+            var runPerfScoring = args.Any(arg => string.Equals(arg, "--selftest-perf-scoring", StringComparison.OrdinalIgnoreCase));
 
-            if (!runSensors && !runPowerShell && !runUnifiedReport && !runElevation && !runDiagQuality)
+            if (!runSensors && !runPowerShell && !runUnifiedReport && !runElevation && !runDiagQuality && !runPerfScoring)
             {
                 return false;
             }
@@ -55,6 +56,11 @@ namespace PCDiagnosticPro.Services
             if (runDiagQuality)
             {
                 exitCode = Math.Max(exitCode, RunDiagQualityMode());
+            }
+
+            if (runPerfScoring)
+            {
+                exitCode = Math.Max(exitCode, RunPerformanceScoringTests());
             }
 
             return true;
@@ -501,6 +507,114 @@ namespace PCDiagnosticPro.Services
                 JsonValueKind.False => true,
                 _ => false
             };
+        }
+
+        /// <summary>
+        /// Performance Scoring selftest: runs all scoring unit tests + prints detailed score reports.
+        /// Usage: --selftest-perf-scoring
+        /// </summary>
+        private static int RunPerformanceScoringTests()
+        {
+            var logBuilder = new StringBuilder();
+            var logPath = Path.Combine(Path.GetTempPath(), "PCDiagnosticPro_perf_scoring_selftest.log");
+
+            try
+            {
+                logBuilder.AppendLine($"Performance Scoring Selftest démarré: {DateTimeOffset.Now:O}");
+                logBuilder.AppendLine($"Engine Version: {PerformanceEvaluationEngine.TableVersion}");
+                logBuilder.AppendLine($"Dataset Version: {PerformanceEvaluationEngine.GetEffectiveVersion()}");
+                logBuilder.AppendLine();
+
+                // Run all unit tests
+                var (passed, failed, failures) = Tests.PerformanceScoringTests.RunAllTests();
+                logBuilder.AppendLine($"═══ UNIT TEST RESULTS ═══");
+                logBuilder.AppendLine($"  Passed: {passed}");
+                logBuilder.AppendLine($"  Failed: {failed}");
+                if (failures.Count > 0)
+                {
+                    logBuilder.AppendLine($"  ─── FAILURES ───");
+                    foreach (var f in failures)
+                        logBuilder.AppendLine($"    FAIL: {f}");
+                }
+                logBuilder.AppendLine();
+
+                // Run dataset validation tests
+                var (dsPassed, dsFailed, dsFailures) = Tests.DatasetValidationTests.RunAllTests();
+                logBuilder.AppendLine($"═══ DATASET VALIDATION TESTS ═══");
+                logBuilder.AppendLine($"  Passed: {dsPassed}");
+                logBuilder.AppendLine($"  Failed: {dsFailed}");
+                if (dsFailures.Count > 0)
+                {
+                    logBuilder.AppendLine($"  ─── FAILURES ───");
+                    foreach (var f in dsFailures)
+                        logBuilder.AppendLine($"    FAIL: {f}");
+                }
+                logBuilder.AppendLine();
+                failed += dsFailed;
+                passed += dsPassed;
+                failures.AddRange(dsFailures);
+
+                // Generate detailed score reports for the 6 representative profiles
+                logBuilder.AppendLine("═══ DETAILED SCORE REPORTS (6 representative profiles) ═══");
+                logBuilder.AppendLine();
+
+                var profiles = new (string label, HardwareProfile p)[]
+                {
+                    ("1. Office Low-End", MakeTestProfile("Intel Core i3-10100", 4, 8, "Intel UHD Graphics 630", 0, 8, "HDD")),
+                    ("2. Midrange Gaming", MakeTestProfile("Intel Core i5-12400F", 6, 12, "NVIDIA GeForce RTX 3060", 12288, 16, "SATA_SSD")),
+                    ("3. High-End Gaming", MakeTestProfile("AMD Ryzen 9 5900X", 12, 24, "NVIDIA GeForce RTX 3090", 24576, 64, "NVMe")),
+                    ("4. Workstation Editing", MakeTestProfile("AMD Ryzen 9 7950X", 16, 32, "NVIDIA GeForce RTX 4090", 24576, 128, "NVMe")),
+                    ("5. Unmatched GPU Name", MakeTestProfile("Intel Core i5-12400F", 6, 12, "SuperUnknownGPU 2025", 12288, 16, "NVMe")),
+                    ("6. Missing VRAM", MakeTestProfile("Intel Core i5-12400F", 6, 12, "NVIDIA GeForce RTX 3060", 0, 16, "NVMe")),
+                };
+
+                foreach (var (label, p) in profiles)
+                    logBuilder.AppendLine(Tests.PerformanceScoringTests.GenerateScoreReport(label, p));
+
+                // Write dissonance analysis
+                logBuilder.AppendLine("═══ DISSONANCE ANALYSIS ═══");
+                foreach (var (label, p) in profiles)
+                {
+                    var scores = UsageScenarioScorer.Score(p);
+                    var office = scores.First(s => s.ScenarioId == "office");
+                    var g1440 = scores.First(s => s.ScenarioId == "gaming_1440p");
+                    var g1080 = scores.First(s => s.ScenarioId == "gaming_1080p");
+                    bool dissonant = g1440.Score > office.Score;
+                    logBuilder.AppendLine($"  {label}: Office={office.Score}, Gaming1080p={g1080.Score}, Gaming1440p={g1440.Score} {(dissonant ? "*** DISSONANT ***" : "OK")}");
+                }
+                logBuilder.AppendLine();
+
+                logBuilder.AppendLine(failed > 0 ? $"RESULT: {failed} FAILURES" : "RESULT: ALL TESTS PASSED");
+                File.WriteAllText(logPath, logBuilder.ToString(), Encoding.UTF8);
+                Console.WriteLine(logBuilder.ToString());
+                return failed > 0 ? 1 : 0;
+            }
+            catch (Exception ex)
+            {
+                logBuilder.AppendLine($"EXCEPTION: {ex}");
+                File.WriteAllText(logPath, logBuilder.ToString(), Encoding.UTF8);
+                Console.WriteLine(logBuilder.ToString());
+                return 2;
+            }
+        }
+
+        /// <summary>Helper for building test profiles with resolved tiers.</summary>
+        private static HardwareProfile MakeTestProfile(
+            string? cpuModel, int cpuCores, int cpuThreads,
+            string? gpuModel, double gpuVramMb, double ramGb, string storageKind)
+        {
+            var p = new HardwareProfile
+            {
+                CpuModel = cpuModel, CpuCores = cpuCores, CpuThreads = cpuThreads,
+                GpuModel = gpuModel, GpuVramMb = gpuVramMb, RamGb = ramGb, StorageKind = storageKind
+            };
+            var (cpuTier, cpuMatched) = PerformanceTierTable.ResolveCpuTier(cpuModel, cpuCores, cpuThreads);
+            var (gpuTier, gpuMatched) = PerformanceTierTable.ResolveGpuTier(gpuModel, gpuVramMb);
+            p.CpuTier = cpuTier; p.GpuTier = gpuTier;
+            p.CpuNameMatched = cpuMatched; p.GpuNameMatched = gpuMatched;
+            p.RamTier = PerformanceTierTable.ResolveRamTier(ramGb);
+            p.StorageTier = PerformanceTierTable.ResolveStorageTier(storageKind);
+            return p;
         }
 
         #region Non-blocking validation and missing data report

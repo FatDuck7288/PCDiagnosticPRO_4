@@ -173,6 +173,20 @@ namespace PCDiagnosticPro.Models
     }
 
     /// <summary>
+    /// One row for the "Score sur le marché" table on the main performance dashboard.
+    /// </summary>
+    public class PerformanceMarketRow
+    {
+        public string Component { get; set; } = "";
+        public string DetectedModel { get; set; } = "";
+        public string BenchmarkScoreDisplay { get; set; } = "";
+        public string PercentileDisplay { get; set; } = "";
+        public string RankDisplay { get; set; } = "";
+        public string Source { get; set; } = "";
+        public string ConfidenceDisplay { get; set; } = "";
+    }
+
+    /// <summary>
     /// Section de diagnostic pour un domaine spécifique
     /// </summary>
     public class HealthSection
@@ -209,6 +223,8 @@ namespace PCDiagnosticPro.Models
         public string RealisticSummary { get; set; } = "";
         /// <summary>Performance dashboard: scenario rows for matrix and bar chart. Filled by InjectPerformanceScore.</summary>
         public List<PerformanceScenarioRow> PerformanceScenarioRows { get; set; } = new();
+        /// <summary>Performance dashboard: market rank rows (CPU/GPU/RAM/Storage/Global).</summary>
+        public List<PerformanceMarketRow> PerformanceMarketRows { get; set; } = new();
 
         /// <summary>True when Performance evaluation succeeded; false when fallback (données ou erreur). Used to gate score/badge/bars in UI.</summary>
         public bool IsPerformanceEvaluationAvailable { get; set; } = true;

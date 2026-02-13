@@ -56,3 +56,8 @@ The 0–100 “Score performance” is the **average of the eight scenario score
 - **RAM speed / dual channel**: from `Memory.data.modules[]` (speedMHz, count ≥ 2).  
 
 All of this is read in `HardwareProfileBuilder.Build(...)`.
+
+## 7. External dataset as single source of requirements
+
+- **Scenario requirements** (min / recommended / ultra per component) are **never hardcoded** when a dataset is loaded. When `PerformanceDataset.MarketBenchmarks` is present and non-empty, `UsageScenarioScorer` uses only `ScoreFromMarketBenchmarks`, which reads all thresholds from the dataset. The hardcoded formulas in `ScoreHardcoded` are used only when no dataset is available (no URL, no cache, no embedded fallback).
+- **Evolution without recompilation**: The app loads the dataset from a configurable HTTPS URL (see `docs/PERFORMANCE_DATASET_SCHEMA.md`). When you update the JSON (or the API that serves it) on the server, the app retrieves the new version on the next load (after cache TTL or manual refresh). No app recompile is required.

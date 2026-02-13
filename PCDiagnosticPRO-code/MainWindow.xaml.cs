@@ -4,6 +4,8 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PCDiagnosticPro.Models;
@@ -331,6 +333,26 @@ namespace PCDiagnosticPro
                     e.Handled = true;
                 }
             }
+        }
+
+        /// <summary>
+        /// Forces mouse wheel events to always scroll the main DetailScrollViewer,
+        /// preventing nested ScrollViewers (e.g. horizontal scroll in Performance bar chart)
+        /// from capturing vertical wheel events and creating a "dead zone".
+        /// </summary>
+        private void DetailScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Handled) return;
+
+            var sv = DetailScrollViewer;
+            if (sv == null) return;
+
+            // Compute new offset
+            double step = e.Delta > 0 ? -48 : 48;
+            double newOffset = sv.VerticalOffset + step;
+            newOffset = Math.Max(0, Math.Min(sv.ScrollableHeight, newOffset));
+            sv.ScrollToVerticalOffset(newOffset);
+            e.Handled = true;
         }
     }
 }

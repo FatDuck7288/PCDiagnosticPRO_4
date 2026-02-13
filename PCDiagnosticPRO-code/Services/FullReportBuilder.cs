@@ -891,13 +891,78 @@ namespace PCDiagnosticPro.Services
             var section = new ReportSectionViewModel { Id = "Performance", Title = "Performance", Level = IssueLevel.Info };
 
             var eval = PerformanceEvaluationEngine.Evaluate(combined.ScanPowershell, snapshot, combined.SensorsCsharp);
+            var si = eval.SourceInfo;
 
+            // ── Populate traceability properties (Requirement 3) ──
+            section.PerformanceDataSource = si.DisplayLabel;
+            section.PerformanceDatasetVersionDisplay = si.VersionDisplay;
+            section.PerformancePublishedAt = si.PublishedAt ?? "";
+            section.PerformanceUrlHost = si.UrlHost ?? "";
+            section.PerformanceLastRefresh = si.LastRefresh ?? "";
+            section.PerformanceIsUnavailable = eval.IsUnavailable;
+            section.PerformanceUnavailableReason = eval.UnavailableReason ?? "";
+
+            // Cache info line
+            if (si.CacheHit)
+            {
+                var ageStr = si.CacheAgeDays.HasValue ? $"{si.CacheAgeDays.Value:F1}j" : "?";
+                var stateStr = si.CacheExpired
+                    ? (si.CacheInGracePeriod ? $"expiré (grace {ageStr}/30j)" : $"expiré ({ageStr})")
+                    : $"frais ({ageStr})";
+                section.PerformanceCacheInfo = $"Cache: {stateStr}";
+            }
+            else
+            {
+                section.PerformanceCacheInfo = si.RemoteFetchAttempted && si.RemoteFetchStatus == 200
+                    ? "Cache: mis à jour (remote)"
+                    : "Pas de cache";
+            }
+
+            // Fallback warning
+            if (si.SourceKind == DatasetSourceKind.EmbeddedFallback)
+                section.PerformanceFallbackWarning = $"Mode secours : règles internes — embedded ({PerformanceEvaluationEngine.TableVersion}). Raison : {si.FallbackReason ?? "inconnue"}";
+            else if (si.SourceKind == DatasetSourceKind.Unavailable)
+                section.PerformanceFallbackWarning = "";
+            else if (si.CacheExpired && si.CacheInGracePeriod)
+                section.PerformanceFallbackWarning = $"Dataset expiré — cache en période de grâce ({si.CacheAgeDays:F0}j/30j)";
+            else
+                section.PerformanceFallbackWarning = "";
+
+            // ── Handle Unavailable state (Requirement 2A) ──
+            if (eval.IsUnavailable)
+            {
+                section.SectionScore = -1;
+                section.SummaryLine1 = "Évaluation indisponible (dataset externe requis)";
+                section.SummaryLine2 = eval.UnavailableReason ?? "Le dataset externe n'a pas pu être chargé/validé.";
+                section.PerformanceCategory = "Indisponible";
+                section.PrimaryBottleneck = "N/A";
+                section.Level = IssueLevel.Warning;
+
+                section.EvidenceText = BuildEvidenceText(snapshot?.GeneratedAt, null,
+                    si.SourceLine,
+                    $"Mode: {si.Mode}",
+                    $"Raison: {si.FallbackReason ?? "inconnue"}");
+
+                AddKV(section, "Source", si.DisplayLabel, "", IssueLevel.Warning, "PerformanceEvaluationEngine");
+                AddKV(section, "Mode", si.Mode.ToString(), "", IssueLevel.Info, "config");
+                if (!string.IsNullOrEmpty(si.FallbackReason))
+                    AddKV(section, "Raison indisponibilité", si.FallbackReason, "", IssueLevel.Warning, "");
+
+                return section;
+            }
+
+            // ── Normal scoring display ──
             section.SectionScore = eval.Score;
             section.SummaryLine1 = $"Score: {eval.Score}/100 — {eval.Verdict.Category}";
             section.SummaryLine2 = eval.Verdict.RealisticExpectationSummary.Length > 120 ? eval.Verdict.RealisticExpectationSummary.Substring(0, 117) + "..." : eval.Verdict.RealisticExpectationSummary;
             section.PerformanceCategory = eval.Verdict.Category;
             section.PrimaryBottleneck = string.IsNullOrEmpty(eval.Bottleneck.PrimaryLimitingFactor) ? "Non déterminé" : eval.Bottleneck.PrimaryLimitingFactor;
-            section.EvidenceText = BuildEvidenceText(snapshot?.GeneratedAt, null, "PerformanceEvaluationEngine (table " + PerformanceEvaluationEngine.TableVersion + ", deterministic tier + scenario scoring)");
+
+            // Evidence text with source traceability
+            section.EvidenceText = BuildEvidenceText(snapshot?.GeneratedAt, null,
+                si.SourceLine,
+                $"Mode: {si.Mode}",
+                section.PerformanceCacheInfo);
 
             var p = eval.Profile;
             section.PerformanceCpuDisplay = !string.IsNullOrEmpty(p?.CpuModel) ? p.CpuModel : (p?.CpuTier ?? "Unknown");
@@ -906,8 +971,14 @@ namespace PCDiagnosticPro.Services
             section.PerformanceRamDisplay = (p != null && p.RamGb > 0) ? $"{p.RamGb:F0} GB" : "Unknown";
             section.PerformanceStorageDisplay = !string.IsNullOrEmpty(p?.StorageKind) && p.StorageKind != "Unknown" ? p.StorageKind : "Unknown";
 
+            // KV rows: source traceability first
+            AddKV(section, "Source", si.DisplayLabel, "", IssueLevel.Info, "PerformanceEvaluationEngine");
+            AddKV(section, "Version dataset", si.VersionDisplay, "", IssueLevel.Info, si.SourceKind == DatasetSourceKind.External ? si.UrlHost ?? "" : "embedded");
+            if (!string.IsNullOrEmpty(si.PublishedAt))
+                AddKV(section, "Dataset publié", si.PublishedAt, "", IssueLevel.Info, "");
+            AddKV(section, "Mode", si.Mode.ToString(), "", IssueLevel.Info, "config");
+
             AddKV(section, "Score performance", $"{eval.Score}/100", "", IssueLevel.Info, "PerformanceEvaluationEngine");
-            AddKV(section, "Version table", PerformanceEvaluationEngine.TableVersion, "", IssueLevel.Info, "locale");
 
             AddKV(section, "Performance Analysis", $"CPU: {eval.Profile.CpuTier} | GPU: {eval.Profile.GpuTier} | RAM: {eval.Profile.RamTier} | Storage: {eval.Profile.StorageTier}. System: {eval.Verdict.Category}.", "", IssueLevel.Info, "");
             AddKV(section, "Realistic summary", eval.Verdict.RealisticExpectationSummary, "", IssueLevel.Info, "");
@@ -923,9 +994,354 @@ namespace PCDiagnosticPro.Services
             }
 
             foreach (var s in eval.ScenarioScores)
-                section.ScenarioScores.Add(new ViewModels.ScenarioScoreViewModel { Name = s.Name, Score = s.Score, Classification = s.Classification });
+            {
+                section.ScenarioScores.Add(new ViewModels.ScenarioScoreViewModel 
+                { 
+                    Name = s.Name, 
+                    Score = s.PreciseScore, // Use precise decimal score
+                    Classification = s.Classification,
+                    Explanation = s.Explanation
+                });
+            }
+            #region agent log
+            AgentDebugLog(
+                runId: "initial",
+                hypothesisId: "H5",
+                location: "FullReportBuilder.BuildPerformanceSection:1006",
+                message: "ScenarioScores prepared for FullReportView",
+                data: section.ScenarioScores.Select(s => new { s.Name, s.Score, s.Classification }).ToList());
+            #endregion
+
+            // ── Populate Task Capability Scores (Table A) ──
+            foreach (var s in eval.ScenarioScores)
+            {
+                section.TaskCapabilityScores.Add(TaskCapabilityRow.Create(
+                    scenarioId: s.ScenarioId,
+                    taskName: s.Name,
+                    score: s.Score,
+                    limitingFactor: eval.Bottleneck?.PrimaryLimitingFactor
+                ));
+            }
+
+            // ── Populate Market Position Scores (Table B) ──
+            // Always populate this table, using profile data if available, snapshot fallback otherwise
+            PopulateMarketPositionScores(section, p, snapshot);
+            #region agent log
+            AgentDebugLog(
+                runId: "initial",
+                hypothesisId: "H5",
+                location: "FullReportBuilder.BuildPerformanceSection:1021",
+                message: "MarketPositionScores count after population",
+                data: section.MarketPositionScores.Select(m => new { m.Component, m.DetectedModel, m.BenchmarkScore, m.PercentileDisplay, m.RankDisplay, m.Source, m.ConfidenceDisplay }).ToList());
+            #endregion
 
             return section;
+        }
+
+        /// <summary>
+        /// Populates the Market Position table with component percentiles and tiers.
+        /// Uses external benchmark data when available for precise percentiles and ranks.
+        /// Falls back to tier-based estimates if benchmark data is unavailable.
+        /// </summary>
+        private static void PopulateMarketPositionScores(ReportSectionViewModel section, HardwareProfile? p, DiagnosticSnapshot? snapshot)
+        {
+            // Fetch benchmark dataset
+            var benchmarkProvider = new GitHubBenchmarkDataProvider();
+            var benchmarkResult = benchmarkProvider.GetDatasetAsync().GetAwaiter().GetResult();
+            var benchmarkDs = benchmarkResult.Dataset;
+            
+            // FIXED: Consider benchmark data usable even if from embedded fallback (Error set but Dataset not null)
+            bool hasUsableBenchmarkData = benchmarkDs != null &&
+                ((benchmarkDs.CpuEntries?.Count ?? 0) > 0 || (benchmarkDs.GpuEntries?.Count ?? 0) > 0);
+            
+            // Build source display string from actual dataset source name (even for embedded)
+            string sourceDisplay;
+            if (hasUsableBenchmarkData)
+            {
+                var sourceName = !string.IsNullOrWhiteSpace(benchmarkDs!.SourceName) ? benchmarkDs.SourceName : "PCDiagnosticPRO";
+                var version = !string.IsNullOrWhiteSpace(benchmarkDs.DatasetVersion) ? $" v{benchmarkDs.DatasetVersion}" : "";
+                var date = !string.IsNullOrWhiteSpace(benchmarkDs.PublishedAt) && benchmarkDs.PublishedAt.Length >= 10
+                    ? $" ({benchmarkDs.PublishedAt.Substring(0, 10)})"
+                    : "";
+                sourceDisplay = $"{sourceName}{version}{date}";
+            }
+            else
+            {
+                sourceDisplay = "Estimation interne (tier-based)";
+            }
+            
+            // Try to get data from profile first, then from snapshot
+            int cpuCores = p?.CpuCores ?? 0;
+            int cpuThreads = p?.CpuThreads ?? 0;
+            string cpuModel = p?.CpuModel ?? "";
+            string cpuTier = p?.CpuTier ?? "";
+
+            double gpuVramMb = p?.GpuVramMb ?? 0;
+            string gpuModel = p?.GpuModel ?? "";
+            string gpuTier = p?.GpuTier ?? "";
+
+            double ramGb = p?.RamGb ?? 0;
+            string storageKind = p?.StorageKind ?? "";
+
+            // Try to extract from snapshot if profile data is incomplete
+            if (cpuCores == 0 && snapshot?.Machine != null)
+            {
+                var cpuName = snapshot.Machine.CpuName ?? "";
+                cpuModel = cpuName;
+                if (cpuName.Contains("i9") || cpuName.Contains("Ryzen 9"))
+                    cpuCores = 12;
+                else if (cpuName.Contains("i7") || cpuName.Contains("Ryzen 7"))
+                    cpuCores = 8;
+                else if (cpuName.Contains("i5") || cpuName.Contains("Ryzen 5"))
+                    cpuCores = 6;
+                else
+                    cpuCores = 4;
+                cpuThreads = cpuCores * 2;
+            }
+
+            if (ramGb == 0 && snapshot?.Machine?.TotalRamGB != null && snapshot.Machine.TotalRamGB.Value > 0)
+            {
+                ramGb = snapshot.Machine.TotalRamGB.Value;
+            }
+
+            // ══ CPU Position ══
+            MarketPositionScore cpuScore;
+            if (hasUsableBenchmarkData && !string.IsNullOrEmpty(cpuModel))
+            {
+                var cpuMatch = BenchmarkMatcher.MatchCpu(cpuModel, benchmarkDs!.CpuEntries);
+                if (cpuMatch.Entry != null)
+                {
+                    cpuScore = MarketPositionScore.CreateFromBenchmark(
+                        component: "CPU",
+                        detectedModel: cpuModel,
+                        benchmarkScore: cpuMatch.Entry.RawScore,
+                        percentile: cpuMatch.Entry.Percentile,
+                        rank: cpuMatch.Entry.Rank,
+                        totalInMarket: benchmarkDs.TotalCpusInMarket,
+                        source: sourceDisplay,
+                        confidence: cpuMatch.Confidence
+                    );
+                }
+                else
+                {
+                    // No match - fall back to tier-based with low confidence
+                    int cpuTierOrder = GetTierOrder(cpuTier);
+                    if (cpuTierOrder == 0 && cpuCores > 0)
+                        cpuTierOrder = cpuCores >= 12 ? 4 : (cpuCores >= 8 ? 3 : (cpuCores >= 6 ? 2 : 1));
+                    
+                    var cpuRawValue = !string.IsNullOrEmpty(cpuModel)
+                        ? (cpuCores > 0 ? $"{cpuModel} ({cpuCores}c/{cpuThreads}t)" : cpuModel)
+                        : (cpuCores > 0 ? $"{cpuCores} cœurs / {cpuThreads} threads" : "Non disponible");
+                    
+                    cpuScore = MarketPositionScore.CreateWithValue("CPU", Math.Max(cpuTierOrder, 1), cpuRawValue, cpuCores, 24);
+                    cpuScore.DetectedModel = cpuModel;
+                    cpuScore.Source = sourceDisplay + " (non trouvé)";
+                    cpuScore.Confidence = MatchConfidence.Low;
+                    cpuScore.TotalInMarket = benchmarkDs.TotalCpusInMarket;
+                    cpuScore.Rank = MarketPositionScore.CalculateRankFromPercentile(cpuScore.Percentile, benchmarkDs.TotalCpusInMarket);
+                    cpuScore.RankDisplay = MarketPositionScore.GetRankDisplay(cpuScore.Rank, benchmarkDs.TotalCpusInMarket);
+                }
+            }
+            else
+            {
+                // No benchmark data - pure tier-based
+                int cpuTierOrder = GetTierOrder(cpuTier);
+                if (cpuTierOrder == 0 && cpuCores > 0)
+                    cpuTierOrder = cpuCores >= 12 ? 4 : (cpuCores >= 8 ? 3 : (cpuCores >= 6 ? 2 : 1));
+                
+                var cpuRawValue = !string.IsNullOrEmpty(cpuModel)
+                    ? (cpuCores > 0 ? $"{cpuModel} ({cpuCores}c/{cpuThreads}t)" : cpuModel)
+                    : (cpuCores > 0 ? $"{cpuCores} cœurs / {cpuThreads} threads" : "Non disponible");
+                
+                cpuScore = MarketPositionScore.CreateWithValue("CPU", Math.Max(cpuTierOrder, 1), cpuRawValue, cpuCores, 24);
+                cpuScore.DetectedModel = cpuModel;
+                cpuScore.Source = "Estimation interne (tier-based)";
+            }
+            section.MarketPositionScores.Add(cpuScore);
+
+            // ══ GPU Position ══
+            MarketPositionScore gpuScore;
+            if (hasUsableBenchmarkData && !string.IsNullOrEmpty(gpuModel))
+            {
+                var gpuMatch = BenchmarkMatcher.MatchGpu(gpuModel, benchmarkDs!.GpuEntries);
+                if (gpuMatch.Entry != null)
+                {
+                    gpuScore = MarketPositionScore.CreateFromBenchmark(
+                        component: "GPU",
+                        detectedModel: gpuModel,
+                        benchmarkScore: gpuMatch.Entry.RawScore,
+                        percentile: gpuMatch.Entry.Percentile,
+                        rank: gpuMatch.Entry.Rank,
+                        totalInMarket: benchmarkDs.TotalGpusInMarket,
+                        source: sourceDisplay,
+                        confidence: gpuMatch.Confidence
+                    );
+                }
+                else
+                {
+                    // No match - fall back to tier-based
+                    int gpuTierOrder = GetTierOrder(gpuTier);
+                    if (gpuTierOrder == 0 && gpuVramMb > 0)
+                        gpuTierOrder = gpuVramMb >= 16384 ? 4 : (gpuVramMb >= 8192 ? 3 : (gpuVramMb >= 4096 ? 2 : 1));
+                    
+                    var gpuRawValue = !string.IsNullOrEmpty(gpuModel)
+                        ? (gpuVramMb > 0 ? $"{gpuModel} ({gpuVramMb:F0} Mo)" : gpuModel)
+                        : (gpuVramMb > 0 ? $"{gpuVramMb:F0} Mo VRAM" : "Non disponible");
+                    
+                    gpuScore = MarketPositionScore.CreateWithValue("GPU", Math.Max(gpuTierOrder, 1), gpuRawValue, gpuVramMb, 24576);
+                    gpuScore.DetectedModel = gpuModel;
+                    gpuScore.Source = sourceDisplay + " (non trouvé)";
+                    gpuScore.Confidence = MatchConfidence.Low;
+                    gpuScore.TotalInMarket = benchmarkDs.TotalGpusInMarket;
+                    gpuScore.Rank = MarketPositionScore.CalculateRankFromPercentile(gpuScore.Percentile, benchmarkDs.TotalGpusInMarket);
+                    gpuScore.RankDisplay = MarketPositionScore.GetRankDisplay(gpuScore.Rank, benchmarkDs.TotalGpusInMarket);
+                }
+            }
+            else
+            {
+                int gpuTierOrder = GetTierOrder(gpuTier);
+                if (gpuTierOrder == 0 && gpuVramMb > 0)
+                    gpuTierOrder = gpuVramMb >= 16384 ? 4 : (gpuVramMb >= 8192 ? 3 : (gpuVramMb >= 4096 ? 2 : 1));
+                
+                var gpuRawValue = !string.IsNullOrEmpty(gpuModel)
+                    ? (gpuVramMb > 0 ? $"{gpuModel} ({gpuVramMb:F0} Mo)" : gpuModel)
+                    : (gpuVramMb > 0 ? $"{gpuVramMb:F0} Mo VRAM" : "Non disponible");
+                
+                gpuScore = MarketPositionScore.CreateWithValue("GPU", Math.Max(gpuTierOrder, 1), gpuRawValue, gpuVramMb, 24576);
+                gpuScore.DetectedModel = gpuModel;
+                gpuScore.Source = "Estimation interne (tier-based)";
+            }
+            section.MarketPositionScores.Add(gpuScore);
+
+            // ══ RAM Position ══
+            MarketPositionScore ramScore;
+            if (hasUsableBenchmarkData && ramGb > 0)
+            {
+                var (ramPercentile, ramConfidence) = BenchmarkMatcher.CalculateRamPercentile(ramGb, benchmarkDs!.RamBaseline);
+                int ramTierOrder = ramGb >= 64 ? 5 : (ramGb >= 32 ? 4 : (ramGb >= 16 ? 3 : (ramGb >= 8 ? 2 : 1)));
+                int ramRank = MarketPositionScore.CalculateRankFromPercentile(ramPercentile, 10000);
+                
+                ramScore = MarketPositionScore.CreateFromBenchmark(
+                    component: "RAM",
+                    detectedModel: $"{ramGb:F0} Go",
+                    benchmarkScore: ramGb,
+                    percentile: ramPercentile,
+                    rank: ramRank,
+                    totalInMarket: 10000,
+                    source: sourceDisplay,
+                    confidence: ramConfidence
+                );
+            }
+            else
+            {
+                int ramTierOrder = GetRamTierOrder(ramGb);
+                var ramRawValue = ramGb > 0 ? $"{ramGb:F0} Go" : "Non disponible";
+                ramScore = MarketPositionScore.CreateWithValue("RAM", Math.Max(ramTierOrder, 1), ramRawValue, ramGb, 128);
+                ramScore.DetectedModel = ramRawValue;
+                ramScore.Source = "Estimation interne (tier-based)";
+            }
+            section.MarketPositionScores.Add(ramScore);
+
+            // ══ Storage Position ══
+            MarketPositionScore storageScore;
+            if (hasUsableBenchmarkData && !string.IsNullOrEmpty(storageKind))
+            {
+                var (storagePercentile, storageConfidence) = BenchmarkMatcher.CalculateStoragePercentile(storageKind, benchmarkDs!.StorageBaseline);
+                int storageRank = MarketPositionScore.CalculateRankFromPercentile(storagePercentile, 5000);
+                
+                storageScore = MarketPositionScore.CreateFromBenchmark(
+                    component: "Stockage",
+                    detectedModel: storageKind,
+                    benchmarkScore: storagePercentile,
+                    percentile: storagePercentile,
+                    rank: storageRank,
+                    totalInMarket: 5000,
+                    source: sourceDisplay,
+                    confidence: storageConfidence
+                );
+            }
+            else
+            {
+                int storageTierOrder = GetStorageTierOrder(storageKind);
+                var storageRawValue = !string.IsNullOrEmpty(storageKind) && storageKind != "Unknown" 
+                    ? storageKind 
+                    : "Non disponible";
+                storageScore = MarketPositionScore.Create("Stockage", Math.Max(storageTierOrder, 1), storageRawValue);
+                storageScore.DetectedModel = storageRawValue;
+                storageScore.Source = "Estimation interne (tier-based)";
+            }
+            section.MarketPositionScores.Add(storageScore);
+
+            // ══ Global Position ══
+            double avgPercentile = section.MarketPositionScores.Count > 0
+                ? section.MarketPositionScores.Average(m => m.Percentile)
+                : 50.0;
+            
+            // Weighted average for overall score
+            double weightedPercentile = (cpuScore.Percentile * 0.25 + gpuScore.Percentile * 0.35 + 
+                                         ramScore.Percentile * 0.25 + storageScore.Percentile * 0.15);
+            
+            int globalRank = MarketPositionScore.CalculateRankFromPercentile(weightedPercentile, 10000);
+            var globalConfidence = (cpuScore.Confidence == MatchConfidence.High && gpuScore.Confidence == MatchConfidence.High)
+                ? MatchConfidence.High
+                : (cpuScore.Confidence == MatchConfidence.Low && gpuScore.Confidence == MatchConfidence.Low)
+                    ? MatchConfidence.Low
+                    : MatchConfidence.Medium;
+            
+            var globalScore = MarketPositionScore.CreateFromBenchmark(
+                component: "Global",
+                detectedModel: $"Score pondéré",
+                benchmarkScore: weightedPercentile,
+                percentile: weightedPercentile,
+                rank: globalRank,
+                totalInMarket: 10000,
+                source: sourceDisplay,
+                confidence: globalConfidence
+            );
+            globalScore.RawValue = $"Score global: {weightedPercentile:F1}%";
+            section.MarketPositionScores.Add(globalScore);
+        }
+
+        /// <summary>Convert tier string to tier order (0-5). Returns 0 for unknown/empty to allow fallback logic.</summary>
+        private static int GetTierOrder(string? tier)
+        {
+            if (string.IsNullOrEmpty(tier)) return 0;
+            return tier.ToLowerInvariant() switch
+            {
+                "workstation" => 5,
+                "high-end" => 4,
+                "upper-mid" => 3,
+                "mid-range" => 2,
+                "entry-level" => 1,
+                _ => 0 // Unknown - allow fallback logic
+            };
+        }
+
+        /// <summary>Get RAM tier order based on GB.</summary>
+        private static int GetRamTierOrder(double ramGb)
+        {
+            return ramGb switch
+            {
+                >= 64 => 5,  // Workstation
+                >= 32 => 4,  // High-end
+                >= 16 => 3,  // Upper-mid
+                >= 8 => 2,   // Mid-range
+                _ => 1       // Entry
+            };
+        }
+
+        /// <summary>Get storage tier order based on type.</summary>
+        private static int GetStorageTierOrder(string? storageKind)
+        {
+            if (string.IsNullOrEmpty(storageKind)) return 1;
+            return storageKind.ToUpperInvariant() switch
+            {
+                "NVME" => 4,
+                "SATA_SSD" => 3,
+                "SSD" => 3,
+                "HDD" => 1,
+                _ => 2
+            };
         }
 
         private static ReportSectionViewModel BuildSecuritySection(DiagnosticSnapshot? snapshot, SecurityInfoCollector.SecurityInfoResult? secInfo)
@@ -1319,6 +1735,27 @@ namespace PCDiagnosticPro.Services
                 "low" => IssueLevel.Info,
                 _ => IssueLevel.Info
             };
+        }
+
+        private static void AgentDebugLog(string runId, string hypothesisId, string location, string message, object? data)
+        {
+            try
+            {
+                var payload = new Dictionary<string, object?>
+                {
+                    ["id"] = $"log_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid():N}",
+                    ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    ["runId"] = runId,
+                    ["hypothesisId"] = hypothesisId,
+                    ["location"] = location,
+                    ["message"] = message,
+                    ["data"] = data
+                };
+                File.AppendAllText(
+                    @"d:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\.cursor\debug.log",
+                    JsonSerializer.Serialize(payload) + Environment.NewLine);
+            }
+            catch { }
         }
     }
 }

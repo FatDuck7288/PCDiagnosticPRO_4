@@ -149,7 +149,7 @@ namespace PCDiagnosticPro.Services
                 App.LogMessage($"[UnifiedReport] TXT unifié généré: {outputPath}");
 
                 // === VALIDATION: Vérifier que le rapport unifié est un SUPERSET du PS brut ===
-                await ValidateReportCompletenessAsync(sb.ToString(), originalTxtPath, combinedJsonPath);
+                await ValidateReportCompletenessAsync(sb.ToString(), originalTxtPath, combinedRoot, combinedJsonPath);
 
                 return true;
             }
@@ -164,18 +164,18 @@ namespace PCDiagnosticPro.Services
         /// Valide que le rapport unifié contient au moins autant d'info que le PS brut.
         /// Loggue une erreur si des données PS sont manquantes.
         /// </summary>
-        private static async Task ValidateReportCompletenessAsync(string unifiedContent, string? psTxtPath, string combinedJsonPath)
+        /// <param name="combinedRoot">Root du JSON combiné déjà lu (évite une seconde lecture disque).</param>
+        /// <param name="combinedJsonPath">Chemin du JSON (pour ValidateUnifiedReportNonBlocking).</param>
+        private static Task ValidateReportCompletenessAsync(string unifiedContent, string? psTxtPath, JsonElement? combinedRoot, string combinedJsonPath)
         {
             try
             {
                 var missingCategories = new List<string>();
                 
-                // 1. Vérifier les catégories clés présentes dans PS JSON
-                if (File.Exists(combinedJsonPath))
+                // 1. Vérifier les catégories clés présentes dans PS JSON (utilise le root déjà chargé)
+                if (combinedRoot.HasValue)
                 {
-                    var jsonContent = await File.ReadAllTextAsync(combinedJsonPath, Encoding.UTF8);
-                    using var doc = JsonDocument.Parse(jsonContent);
-                    var root = doc.RootElement;
+                    var root = combinedRoot.Value;
                     
                     // Chercher psData
                     JsonElement psData = default;
@@ -250,6 +250,7 @@ namespace PCDiagnosticPro.Services
             {
                 App.LogMessage($"[VALIDATION] Erreur validation: {ex.Message}");
             }
+            return Task.CompletedTask;
         }
         
         /// <summary>

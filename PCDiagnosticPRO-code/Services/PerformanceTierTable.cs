@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using PCDiagnosticPro.Models;
 
 namespace PCDiagnosticPro.Services
 {
     /// <summary>
     /// Deterministic tier mapping table for CPU, GPU, RAM, Storage.
-    /// All thresholds are documented; no magic numbers. Used offline only.
+    /// When a PerformanceDataset is provided, patterns and thresholds are read from it.
+    /// When dataset is null, the original hardcoded constants are used as embedded defaults.
     /// </summary>
     public static class PerformanceTierTable
     {
@@ -19,19 +22,107 @@ namespace PCDiagnosticPro.Services
 
         #endregion
 
-        #region CPU tier
+        #region Tier order ↔ label helpers
 
-        // Primary: core/thread count. Entry &lt;4, Mid 6-8, High 12+
+        /// <summary>Convert tier order (1-5) to tier label.</summary>
+        public static string TierOrderToLabel(int order)
+        {
+            return order switch
+            {
+                5 => TierWorkstation,
+                4 => TierHighEnd,
+                3 => TierUpperMid,
+                2 => TierMidRange,
+                _ => TierEntry
+            };
+        }
+
+        #endregion
+
+        #region CPU tier — hardcoded defaults
+
         private const int CpuCoresEntryMax = 4;
         private const int CpuCoresMidMin = 6;
         private const int CpuCoresMidMax = 8;
         private const int CpuCoresHighMin = 12;
 
+        #endregion
+
+        #region GPU tier — hardcoded defaults
+
+        private const double GpuVramEntryMaxMb = 2048;
+        private const double GpuVramMidMinMb = 2048;
+        private const double GpuVramMidMaxMb = 4096;
+        private const double GpuVramUpperMidMinMb = 4096;
+        private const double GpuVramUpperMidMaxMb = 8192;
+        private const double GpuVramHighMinMb = 8192;
+
+        #endregion
+
+        #region RAM tier — hardcoded defaults
+
+        private const double RamEntryMaxGb = 8;
+        private const double RamMidMinGb = 16;
+        private const double RamHighMinGb = 32;
+
+        #endregion
+
+        #region Storage constants
+
+        public const string StorageHdd = "HDD";
+        public const string StorageSataSsd = "SATA_SSD";
+        public const string StorageNvme = "NVMe";
+
+        #endregion
+
+        #region CPU tier resolution
+
         /// <summary>
-        /// Resolve CPU tier from cores, threads, and optional model name. Uses normalized name for matching.
-        /// Returns (tier, nameMatched). If name present but no pattern matches, use heuristic and nameMatched=false.
+        /// Resolve CPU tier from cores, threads, and optional model name.
+        /// Uses dataset patterns/thresholds if provided; falls back to hardcoded defaults.
         /// </summary>
-        public static (string Tier, bool NameMatched) ResolveCpuTier(string? name, int cores, int threads)
+        public static (string Tier, bool NameMatched) ResolveCpuTier(string? name, int cores, int threads, PerformanceDataset? dataset = null)
+        {
+            if (dataset != null)
+                return ResolveCpuTierFromDataset(name, cores, threads, dataset);
+            return ResolveCpuTierHardcoded(name, cores, threads);
+        }
+
+        private static (string Tier, bool NameMatched) ResolveCpuTierFromDataset(string? name, int cores, int threads, PerformanceDataset ds)
+        {
+            int effectiveThreads = threads > 0 ? threads : (cores > 0 ? cores * 2 : 0);
+            int effectiveCores = cores > 0 ? cores : (threads > 0 ? (threads + 1) / 2 : 0);
+            var n = HardwareProfileBuilder.NormalizeHardwareName(name);
+            var nLower = n.ToLowerInvariant();
+
+            if (!string.IsNullOrEmpty(n))
+            {
+                // Pattern match from dataset
+                foreach (var p in ds.CpuPatterns)
+                {
+                    if (nLower.Contains(p.Pattern.ToLowerInvariant()))
+                        return (TierOrderToLabel(p.TierOrder), true);
+                }
+
+                // No pattern matched → heuristic from dataset rules
+                var h = ds.CpuHeuristicRules;
+                if (effectiveCores >= h.HighEndMinCores || effectiveThreads >= h.HighEndMinThreads) return (TierHighEnd, false);
+                if (effectiveCores >= h.UpperMidMinCores || effectiveThreads >= h.UpperMidMinThreads) return (TierUpperMid, false);
+                if (effectiveCores >= h.MidRangeMinCores && effectiveCores <= h.MidRangeMaxCores) return (TierMidRange, false);
+                if (effectiveCores >= h.EntryMinCores || effectiveThreads >= h.EntryMinThreads) return (TierEntry, false);
+                return (TierEntry, false);
+            }
+
+            // No name — pure heuristic from dataset
+            var hr = ds.CpuHeuristicRules;
+            if (effectiveCores >= hr.HighEndMinCores || effectiveThreads >= hr.HighEndMinThreads) return (TierHighEnd, true);
+            if (effectiveCores >= hr.UpperMidMinCores || effectiveThreads >= hr.UpperMidMinThreads) return (TierUpperMid, true);
+            if (effectiveCores >= hr.MidRangeMinCores && effectiveCores <= hr.MidRangeMaxCores) return (TierMidRange, true);
+            if (effectiveCores >= hr.EntryMinCores || effectiveThreads >= hr.EntryMinThreads) return (TierEntry, true);
+            return (TierEntry, true);
+        }
+
+        private static (string Tier, bool NameMatched) ResolveCpuTierHardcoded(string? name, int cores, int threads)
         {
             int effectiveThreads = threads > 0 ? threads : (cores > 0 ? cores * 2 : 0);
             int effectiveCores = cores > 0 ? cores : (threads > 0 ? (threads + 1) / 2 : 0);
@@ -65,34 +156,61 @@ namespace PCDiagnosticPro.Services
 
         #endregion
 
-        #region GPU tier
-
-        // VRAM thresholds (MB): &lt;2G Entry, 2-4 Mid, 4-8 Upper Mid, 8+ High
-        private const double GpuVramEntryMaxMb = 2048;
-        private const double GpuVramMidMinMb = 2048;
-        private const double GpuVramMidMaxMb = 4096;
-        private const double GpuVramUpperMidMinMb = 4096;
-        private const double GpuVramUpperMidMaxMb = 8192;
-        private const double GpuVramHighMinMb = 8192;
+        #region GPU tier resolution
 
         /// <summary>
-        /// Resolve GPU tier from VRAM (MB) and optional model name. Uses normalized name for matching.
-        /// Returns (tier, nameMatched). Known high-end (e.g. 3090) cannot be Entry; defensive guard for anomaly.
+        /// Resolve GPU tier from VRAM (MB) and optional model name.
+        /// Uses dataset patterns/thresholds if provided; falls back to hardcoded defaults.
         /// </summary>
-        public static (string Tier, bool NameMatched) ResolveGpuTier(string? name, double vramMb)
+        public static (string Tier, bool NameMatched) ResolveGpuTier(string? name, double vramMb, PerformanceDataset? dataset = null)
+        {
+            if (dataset != null)
+                return ResolveGpuTierFromDataset(name, vramMb, dataset);
+            return ResolveGpuTierHardcoded(name, vramMb);
+        }
+
+        private static (string Tier, bool NameMatched) ResolveGpuTierFromDataset(string? name, double vramMb, PerformanceDataset ds)
         {
             var n = HardwareProfileBuilder.NormalizeHardwareName(name);
             var nLower = n.ToLowerInvariant();
 
             if (!string.IsNullOrEmpty(n))
             {
-                // Explicit high-end: 3090, 4080, 4090, etc.
+                foreach (var p in ds.GpuPatterns)
+                {
+                    if (nLower.Contains(p.Pattern.ToLowerInvariant()))
+                        return (TierOrderToLabel(p.TierOrder), true);
+                }
+
+                // No pattern matched → VRAM heuristic from dataset
+                var t = ds.GpuVramThresholds;
+                if (vramMb >= t.HighEndMinMb) return (TierHighEnd, false);
+                if (vramMb >= t.UpperMidMinMb) return (TierUpperMid, false);
+                if (vramMb >= t.MidRangeMinMb) return (TierMidRange, false);
+                if (vramMb >= t.EntryMinMb) return (TierEntry, false);
+                return (TierEntry, false);
+            }
+
+            var th = ds.GpuVramThresholds;
+            if (vramMb >= th.HighEndMinMb) return (TierHighEnd, true);
+            if (vramMb >= th.UpperMidMinMb) return (TierUpperMid, true);
+            if (vramMb >= th.MidRangeMinMb) return (TierMidRange, true);
+            if (vramMb >= th.EntryMinMb) return (TierEntry, true);
+            return (TierEntry, true);
+        }
+
+        private static (string Tier, bool NameMatched) ResolveGpuTierHardcoded(string? name, double vramMb)
+        {
+            var n = HardwareProfileBuilder.NormalizeHardwareName(name);
+            var nLower = n.ToLowerInvariant();
+
+            if (!string.IsNullOrEmpty(n))
+            {
                 if (nLower.Contains("3090") || nLower.Contains("4080") || nLower.Contains("4090") || nLower.Contains("rtx 40") || nLower.Contains("rx 7"))
                     return (TierHighEnd, true);
                 if (nLower.Contains("rtx 30") || nLower.Contains("rx 6")) return (TierUpperMid, true);
                 if (nLower.Contains("gtx 16") || nLower.Contains("rx 5")) return (TierMidRange, true);
                 if (nLower.Contains("uhd") || nLower.Contains("iris") || nLower.Contains("vega")) return (TierEntry, true);
-                // Name present but no dataset match → heuristic (do not default to Entry for 12GB+ VRAM)
                 if (vramMb >= GpuVramHighMinMb) return (TierHighEnd, false);
                 if (vramMb >= GpuVramUpperMidMinMb) return (TierUpperMid, false);
                 if (vramMb >= GpuVramMidMinMb) return (TierMidRange, false);
@@ -109,18 +227,24 @@ namespace PCDiagnosticPro.Services
 
         #endregion
 
-        #region RAM tier
-
-        // 8GB = Entry, 16GB = Mid, 32GB+ = High (comfortable 1080p gaming minimum often cited as 16GB)
-        private const double RamEntryMaxGb = 8;
-        private const double RamMidMinGb = 16;
-        private const double RamHighMinGb = 32;
+        #region RAM tier resolution
 
         /// <summary>
-        /// Resolve RAM tier from total GB. 8GB → Entry, 16GB → Mid-range, 32GB+ → High-end.
+        /// Resolve RAM tier from total GB.
+        /// Uses dataset thresholds if provided; falls back to hardcoded defaults.
         /// </summary>
-        public static string ResolveRamTier(double ramGb)
+        public static string ResolveRamTier(double ramGb, PerformanceDataset? dataset = null)
         {
+            if (dataset != null)
+            {
+                var r = dataset.RamTierRules;
+                if (ramGb >= r.HighEndMinGb) return TierHighEnd;
+                if (ramGb >= r.MidRangeMinGb) return TierMidRange;
+                if (ramGb >= r.EntryMinGb) return TierEntry;
+                if (ramGb >= r.EntryFloorGb) return TierEntry;
+                return TierEntry;
+            }
+
             if (ramGb >= RamHighMinGb) return TierHighEnd;
             if (ramGb >= RamMidMinGb) return TierMidRange;
             if (ramGb >= RamEntryMaxGb) return TierEntry;
@@ -130,20 +254,16 @@ namespace PCDiagnosticPro.Services
 
         #endregion
 
-        #region Storage tier
-
-        /// <summary>
-        /// Storage kind constants for scoring.
-        /// </summary>
-        public const string StorageHdd = "HDD";
-        public const string StorageSataSsd = "SATA_SSD";
-        public const string StorageNvme = "NVMe";
+        #region Storage tier resolution
 
         /// <summary>
         /// Resolve storage tier label. HDD → Entry, SATA SSD → Mid-range, NVMe → High-end.
+        /// Dataset parameter accepted for API consistency but storage mapping is fixed.
         /// </summary>
-        public static string ResolveStorageTier(string storageKind)
+        public static string ResolveStorageTier(string storageKind, PerformanceDataset? dataset = null)
         {
+            // Storage mapping is simple and doesn't change with dataset;
+            // the dataset StorageTierRules exist for documentation/validation completeness.
             return storageKind switch
             {
                 StorageNvme => TierHighEnd,

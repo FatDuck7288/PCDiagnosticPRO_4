@@ -1,7 +1,9 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using PCDiagnosticPro.Services;
 
 namespace PCDiagnosticPro.Views
 {
@@ -16,6 +18,20 @@ namespace PCDiagnosticPro.Views
             InitializeComponent();
         }
 
+        /// <summary>Invalidates the performance dataset cache and reloads from remote (or cache). User can re-open the report to see updated scores.</summary>
+        private void PerformanceRefreshRequirements_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                PerformanceDatasetLoader.InvalidateAndReload();
+                MessageBox.Show("Exigences rechargées. Rouvrez le rapport ou relancez un scan pour voir les scores à jour.", "Dataset performance", MessageBoxButton.OK);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Impossible de recharger le dataset : {ex.Message}", "Erreur", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
         private void UserControl_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
             if (e.Handled) return;
@@ -25,6 +41,7 @@ namespace PCDiagnosticPro.Views
             var src = e.OriginalSource as DependencyObject;
             if (src != null && !IsVisualChildOf(sv, src))
                 return;
+            
             double step = e.Delta > 0 ? 60 : -60;
             double offset = sv.VerticalOffset - step;
             offset = System.Math.Max(0, System.Math.Min(sv.ScrollableHeight, offset));

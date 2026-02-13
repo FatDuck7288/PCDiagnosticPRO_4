@@ -28,6 +28,8 @@ C) SOURCE DE VÉRITÉ DU SCORE — UDIS
                Écrase report.GlobalScore, report.Grade, report.GlobalMessage.
                La Divergence (PS vs UDIS) est enregistrée pour traçabilité.
 - Note       : GradeEngine.cs et FinalScoreCalculator.cs ont été supprimés (code mort).
+               PerformanceScoreCalculator.cs, AutoFixReadinessService.cs, SecurityTransparencyHelper.cs
+               supprimés (aucun appel dans la codebase — voir CLEANUP_SUMMARY.md).
 
 D) GARDE-FOU CONFIANCE
 -----------------------

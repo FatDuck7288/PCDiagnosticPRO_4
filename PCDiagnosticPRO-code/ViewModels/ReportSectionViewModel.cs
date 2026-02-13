@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using PCDiagnosticPro.Models;
 
 namespace PCDiagnosticPro.ViewModels
 {
@@ -67,6 +68,12 @@ namespace PCDiagnosticPro.ViewModels
         /// <summary>Scenario scores for Performance section (bar chart and capability matrix).</summary>
         public ObservableCollection<ScenarioScoreViewModel> ScenarioScores { get; } = new();
 
+        /// <summary>Task Capability scores - shows how well the PC can perform each task (0-100).</summary>
+        public ObservableCollection<TaskCapabilityRow> TaskCapabilityScores { get; } = new();
+
+        /// <summary>Market Position scores - shows PC's position relative to the market (percentile/tier).</summary>
+        public ObservableCollection<MarketPositionScore> MarketPositionScores { get; } = new();
+
         /// <summary>Performance section only: system category label (Entry-Level / Mid-Range / High-End / Workstation Grade).</summary>
         public string PerformanceCategory { get; set; } = "";
 
@@ -83,6 +90,35 @@ namespace PCDiagnosticPro.ViewModels
         public string PerformanceRamDisplay { get; set; } = "";
         /// <summary>Performance section only: evidence block – storage type (HDD/SATA_SSD/NVMe).</summary>
         public string PerformanceStorageDisplay { get; set; } = "";
+
+        // ── Performance source traceability (Requirement 3) ──
+
+        /// <summary>Performance section only: data source label (e.g. "External Dataset", "Mode secours : règles internes").</summary>
+        public string PerformanceDataSource { get; set; } = "";
+
+        /// <summary>Performance section only: dataset version display (e.g. "1.0.0" or "embedded (2.0)").</summary>
+        public string PerformanceDatasetVersionDisplay { get; set; } = "";
+
+        /// <summary>Performance section only: publication date of external dataset (empty if embedded).</summary>
+        public string PerformancePublishedAt { get; set; } = "";
+
+        /// <summary>Performance section only: URL host of the configured dataset (no full URL for security).</summary>
+        public string PerformanceUrlHost { get; set; } = "";
+
+        /// <summary>Performance section only: cache information line (e.g. "Cache: frais (2.1j)" or "Pas de cache").</summary>
+        public string PerformanceCacheInfo { get; set; } = "";
+
+        /// <summary>Performance section only: last dataset refresh timestamp.</summary>
+        public string PerformanceLastRefresh { get; set; } = "";
+
+        /// <summary>Performance section only: warning/fallback label (empty if normal operation).</summary>
+        public string PerformanceFallbackWarning { get; set; } = "";
+
+        /// <summary>Performance section only: true when scoring is unavailable (RequireExternal + dataset failed).</summary>
+        public bool PerformanceIsUnavailable { get; set; }
+
+        /// <summary>Performance section only: unavailability reason for UI display.</summary>
+        public string PerformanceUnavailableReason { get; set; } = "";
 
         public string EvidenceText
         {

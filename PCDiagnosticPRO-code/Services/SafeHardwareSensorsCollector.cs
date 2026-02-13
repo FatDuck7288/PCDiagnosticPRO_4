@@ -156,7 +156,7 @@ namespace PCDiagnosticPro.Services
                 
                 result.Gpu.Name = Available(gpuName);
                 
-                // VRAM Total: NVML first (avoids WMI UInt32 overflow), then WMI fallback.
+                // VRAM Total: NVML first (avoids WMI UInt32 overflow), then DXGI, then WMI fallback.
                 var nvmlMem = NvmlTemperatureReader.TryGetMemoryInfo();
                 if (nvmlMem.HasValue && nvmlMem.Value.Total > 0)
                 {
@@ -164,28 +164,39 @@ namespace PCDiagnosticPro.Services
                     result.Gpu.VramTotalMB = Available(totalMB);
                     App.LogMessage($"[SafeSensors→GPU] VRAM Total via NVML: {totalMB:F0} Mo");
                 }
-                else if (vramTotalBytesWmi > 0)
+                else
                 {
-                    var vramTotalMBWmi = vramTotalBytesWmi / (1024.0 * 1024.0);
-                    var gpuNameUpper = gpuName.ToUpperInvariant();
-                    bool isHighEndGpu = gpuNameUpper.Contains("3090") || gpuNameUpper.Contains("4090") ||
-                                       gpuNameUpper.Contains("3080") || gpuNameUpper.Contains("4080") ||
-                                       gpuNameUpper.Contains("4070");
-                    if (isHighEndGpu && vramTotalMBWmi < 8192)
+                    // Try DXGI fallback for AMD/Intel GPUs (or when NVML fails)
+                    var dxgiVram = DxgiVramReader.TryGetDedicatedVideoMemoryMB();
+                    if (dxgiVram.HasValue && dxgiVram.Value > 0)
                     {
-                        App.LogMessage($"[SafeSensors→GPU] VRAM WMI overflow détecté: {vramTotalMBWmi:F0} Mo pour {gpuName}");
-                        result.Gpu.VramTotalMB = UnavailableDouble("VRAM overflow WMI (UInt32) - installer NVML pour valeur correcte");
+                        result.Gpu.VramTotalMB = Available(dxgiVram.Value);
+                        App.LogMessage($"[SafeSensors→GPU] VRAM Total via DXGI: {dxgiVram.Value:F0} Mo");
                     }
-                    else if (vramTotalMBWmi > 0 && vramTotalMBWmi < 100000)
+                    else if (vramTotalBytesWmi > 0)
                     {
-                        result.Gpu.VramTotalMB = Available(vramTotalMBWmi);
-                        App.LogMessage($"[SafeSensors→GPU] VRAM Total via WMI: {vramTotalMBWmi:F0} Mo");
+                        var vramTotalMBWmi = vramTotalBytesWmi / (1024.0 * 1024.0);
+                        var gpuNameUpper = gpuName.ToUpperInvariant();
+                        bool isHighEndGpu = gpuNameUpper.Contains("3090") || gpuNameUpper.Contains("4090") ||
+                                           gpuNameUpper.Contains("3080") || gpuNameUpper.Contains("4080") ||
+                                           gpuNameUpper.Contains("4070") || gpuNameUpper.Contains("7900") ||
+                                           gpuNameUpper.Contains("6900") || gpuNameUpper.Contains("6800");
+                        if (isHighEndGpu && vramTotalMBWmi < 8192)
+                        {
+                            App.LogMessage($"[SafeSensors→GPU] VRAM WMI overflow détecté: {vramTotalMBWmi:F0} Mo pour {gpuName}");
+                            result.Gpu.VramTotalMB = UnavailableDouble("VRAM overflow WMI (UInt32) - valeur incorrecte pour GPU haute gamme");
+                        }
+                        else if (vramTotalMBWmi > 0 && vramTotalMBWmi < 100000)
+                        {
+                            result.Gpu.VramTotalMB = Available(vramTotalMBWmi);
+                            App.LogMessage($"[SafeSensors→GPU] VRAM Total via WMI: {vramTotalMBWmi:F0} Mo");
+                        }
+                        else
+                            result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non fiable via WMI");
                     }
                     else
-                        result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non fiable via WMI");
+                        result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non disponible");
                 }
-                else
-                    result.Gpu.VramTotalMB = UnavailableDouble("VRAM totale non disponible");
                 
                 // VRAM Used: Perf Counter "Dedicated Usage" + NVML Used as candidates; take minimum to avoid committed-style ~11 GB when Task Manager shows ~3 GB.
                 var vramTotalMB = result.Gpu.VramTotalMB?.Available == true ? result.Gpu.VramTotalMB.Value : (double?)null;
@@ -671,6 +682,122 @@ namespace PCDiagnosticPro.Services
             {
                 App.LogMessage($"[NVML] Exception (memory info): {ex.Message}");
                 return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// DXGI-based VRAM reader that works for all GPUs (NVIDIA, AMD, Intel)
+    /// Uses DirectX Graphics Infrastructure (DXGI) which is part of Windows
+    /// No special drivers needed - works as a universal fallback
+    /// </summary>
+    internal static class DxgiVramReader
+    {
+        [DllImport("dxgi.dll", CallingConvention = CallingConvention.StdCall)]
+        private static extern int CreateDXGIFactory1([MarshalAs(UnmanagedType.LPStruct)] Guid riid, out IntPtr ppFactory);
+
+        // DXGI_ADAPTER_DESC structure
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct DXGI_ADAPTER_DESC
+        {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+            public string Description;
+            public uint VendorId;
+            public uint DeviceId;
+            public uint SubSysId;
+            public uint Revision;
+            public ulong DedicatedVideoMemory;    // This is VRAM
+            public ulong DedicatedSystemMemory;
+            public ulong SharedSystemMemory;
+            public long AdapterLuid_LowPart;
+            public int AdapterLuid_HighPart;
+        }
+
+        private static readonly Guid IID_IDXGIFactory1 = new Guid("770aae78-f26f-4dba-a829-253c83d1b387");
+        private static readonly Guid IID_IDXGIAdapter1 = new Guid("29038f61-3839-4626-91fd-086879011a05");
+
+        // IDXGIFactory1 interface methods (via vtable)
+        private delegate int EnumAdapters1Delegate(IntPtr pFactory, uint index, out IntPtr ppAdapter);
+        private delegate int GetDescDelegate(IntPtr pAdapter, out DXGI_ADAPTER_DESC pDesc);
+
+        /// <summary>
+        /// Try to get dedicated video memory (VRAM) in MB using DXGI
+        /// This works for all GPU vendors (NVIDIA, AMD, Intel)
+        /// </summary>
+        public static double? TryGetDedicatedVideoMemoryMB()
+        {
+            IntPtr pFactory = IntPtr.Zero;
+            IntPtr pAdapter = IntPtr.Zero;
+
+            try
+            {
+                // Create DXGI Factory
+                int hr = CreateDXGIFactory1(IID_IDXGIFactory1, out pFactory);
+                if (hr != 0 || pFactory == IntPtr.Zero)
+                {
+                    App.LogMessage($"[DXGI] CreateDXGIFactory1 failed with HRESULT 0x{hr:X8}");
+                    return null;
+                }
+
+                // Get vtable pointer for IDXGIFactory1
+                IntPtr vtable = Marshal.ReadIntPtr(pFactory);
+                
+                // EnumAdapters1 is at vtable index 12 (after IUnknown methods + IDXGIObject + IDXGIFactory methods)
+                IntPtr enumAdaptersPtr = Marshal.ReadIntPtr(vtable, 12 * IntPtr.Size);
+                var enumAdapters = Marshal.GetDelegateForFunctionPointer<EnumAdapters1Delegate>(enumAdaptersPtr);
+
+                // Enumerate first adapter (primary GPU)
+                hr = enumAdapters(pFactory, 0, out pAdapter);
+                if (hr != 0 || pAdapter == IntPtr.Zero)
+                {
+                    App.LogMessage($"[DXGI] EnumAdapters1 failed with HRESULT 0x{hr:X8}");
+                    return null;
+                }
+
+                // Get adapter vtable
+                IntPtr adapterVtable = Marshal.ReadIntPtr(pAdapter);
+                
+                // GetDesc is at vtable index 8 (after IUnknown + IDXGIObject methods)
+                IntPtr getDescPtr = Marshal.ReadIntPtr(adapterVtable, 8 * IntPtr.Size);
+                var getDesc = Marshal.GetDelegateForFunctionPointer<GetDescDelegate>(getDescPtr);
+
+                // Get adapter description
+                hr = getDesc(pAdapter, out DXGI_ADAPTER_DESC desc);
+                if (hr != 0)
+                {
+                    App.LogMessage($"[DXGI] GetDesc failed with HRESULT 0x{hr:X8}");
+                    return null;
+                }
+
+                var dedicatedVideoMemoryMB = desc.DedicatedVideoMemory / (1024.0 * 1024.0);
+                App.LogMessage($"[DXGI] GPU: {desc.Description}, Dedicated VRAM: {dedicatedVideoMemoryMB:F0} MB");
+
+                // Sanity check - VRAM should be at least 128MB for a discrete GPU
+                if (dedicatedVideoMemoryMB < 128)
+                {
+                    App.LogMessage($"[DXGI] VRAM too low ({dedicatedVideoMemoryMB:F0} MB), might be integrated GPU without dedicated memory");
+                    return null;
+                }
+
+                return dedicatedVideoMemoryMB;
+            }
+            catch (DllNotFoundException)
+            {
+                App.LogMessage("[DXGI] dxgi.dll not found");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                App.LogMessage($"[DXGI] Exception: {ex.Message}");
+                return null;
+            }
+            finally
+            {
+                // Release COM objects
+                if (pAdapter != IntPtr.Zero)
+                    Marshal.Release(pAdapter);
+                if (pFactory != IntPtr.Zero)
+                    Marshal.Release(pFactory);
             }
         }
     }
