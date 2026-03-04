@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rn \"const.*=.*[0-9]\\\\{2,\\\\}\" /d/Git_Cursor_Sux/Cursor_Suce/PCDiagnosticPRO-code/Services/*.cs)",
+      "Bash(grep -n \"UiCoverageDisplay\\\\|UiMappedFields\\\\|UiDetectedFields\\\\|collected.*displayed\\\\|X collected\" /d/Git_Cursor_Sux/Cursor_Suce/PCDiagnosticPRO-code/Views/*.xaml.cs)",
+      "Bash(xargs wc -l)",
+      "Bash(dotnet run --project \"PCDiagnosticPRO-code/PCDiagnosticPro.csproj\" --no-build)",
+      "Bash(powershell -Command \"Start-Process ''PCDiagnosticPRO-code/bin/Debug/net8.0-windows/PCDiagnosticPro.exe'' -Wait -PassThru | Select-Object -ExpandProperty ExitCode\")",
+      "Bash(powershell -Command \"Get-Content $env:TEMP\\\\PCDiagnosticPro_ui.log -ErrorAction SilentlyContinue | Select-Object -Last 30\")",
+      "Bash(nvidia-smi)",
+      "Bash(dotnet restore \"PCDiagnosticPRO-code/PCDiagnosticPro.csproj\")"
+    ]
+  }
+}

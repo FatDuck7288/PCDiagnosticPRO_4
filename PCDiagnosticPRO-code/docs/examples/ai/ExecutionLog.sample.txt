@@ -1,0 +1,3 @@
+﻿[2026-02-24T17:45:58.1010000Z] [info] Preparing PowerShell AutoFix execution.
+[2026-02-24T17:45:58.4020000Z] [info] PowerShell started with elevation request (UAC).
+[2026-02-24T17:46:01.2190000Z] [info] PowerShell finished with exit code 0.

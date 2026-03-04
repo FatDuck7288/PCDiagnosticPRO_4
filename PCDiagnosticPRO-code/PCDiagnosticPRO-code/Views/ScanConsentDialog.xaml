@@ -1,0 +1,149 @@
+﻿<Window x:Class="PCDiagnosticPro.Views.ScanConsentDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Autorisation administrateur requise"
+        SizeToContent="WidthAndHeight"
+        MinWidth="620"
+        MaxWidth="860"
+        MinHeight="420"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Background="#FF0D1117">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="DialogTextPrimaryBrush" Color="#FFE6EDF3"/>
+        <SolidColorBrush x:Key="DialogTextSecondaryBrush" Color="#FF8B949E"/>
+        <SolidColorBrush x:Key="DialogAccentRedBrush" Color="{DynamicResource AccentRed}"/>
+        <SolidColorBrush x:Key="DialogAccentGreenBrush" Color="#FF2ECC71"/>
+        <SolidColorBrush x:Key="DialogAccentYellowBrush" Color="{DynamicResource AccentYellow}"/>
+        <SolidColorBrush x:Key="DialogBgMediumBrush" Color="#FF161B22"/>
+        <SolidColorBrush x:Key="DialogBorderDarkBrush" Color="#FF30363D"/>
+    </Window.Resources>
+
+    <Grid Margin="24" MaxWidth="780">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Autorisation administrateur requise"
+                       FontSize="20"
+                       FontWeight="Bold"
+                       Foreground="{StaticResource DialogTextPrimaryBrush}"/>
+            <TextBlock Text="Le scan demande des droits eleves pour certaines fonctionnalites."
+                       FontSize="12"
+                       Foreground="{StaticResource DialogTextSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1">
+            <Border Background="{StaticResource DialogBgMediumBrush}" CornerRadius="8" Padding="14" Margin="0,0,0,8"
+                    BorderBrush="{StaticResource DialogBorderDarkBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE770;" FontFamily="Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Top" Margin="0,0,12,0" Foreground="{StaticResource DialogTextPrimaryBrush}"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Capteurs materiels (temperature CPU/GPU/MB)" FontWeight="SemiBold" FontSize="13"
+                                   Foreground="{StaticResource DialogTextPrimaryBrush}"/>
+                        <TextBlock Text="Necessite les droits administrateur pour acceder aux capteurs hardware via LibreHardwareMonitor."
+                                   FontSize="11" Foreground="{StaticResource DialogTextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Background="{StaticResource DialogBgMediumBrush}" CornerRadius="8" Padding="14" Margin="0,0,0,8"
+                    BorderBrush="{StaticResource DialogBorderDarkBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Top" Margin="0,0,12,0"
+                               Foreground="{StaticResource DialogAccentYellowBrush}"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Alertes Windows Security possibles" FontWeight="SemiBold" FontSize="13"
+                                   Foreground="{StaticResource DialogAccentYellowBrush}"/>
+                        <TextBlock Text="Windows peut afficher des alertes de securite (Acces controle aux dossiers). Cela est normal pour les outils de diagnostic materiel."
+                                   FontSize="11" Foreground="{StaticResource DialogTextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Background="{StaticResource DialogBgMediumBrush}" CornerRadius="8" Padding="14" Margin="0,0,0,8"
+                    BorderBrush="{StaticResource DialogBorderDarkBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Top" Margin="0,0,12,0" Foreground="{StaticResource DialogAccentGreenBrush}"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Aucune ecriture dans vos dossiers proteges" FontWeight="SemiBold" FontSize="13"
+                                   Foreground="{StaticResource DialogAccentGreenBrush}"/>
+                        <TextBlock FontSize="11" Foreground="{StaticResource DialogTextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                   Text="Toutes les donnees sont stockees dans %LOCALAPPDATA%\PCXRay (compatibilite lecture de %LOCALAPPDATA%\PCDiagnosticPro). Aucun fichier ne sera ecrit dans Documents, Images ou OneDrive."/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <Border Grid.Row="2" Height="1" Background="{StaticResource DialogBorderDarkBrush}" Margin="0,8,0,12"/>
+
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="1"
+                    Content="Annuler"
+                    MinWidth="100"
+                    Height="34"
+                    Margin="0,0,8,0"
+                    Background="Transparent"
+                    Foreground="{StaticResource DialogTextPrimaryBrush}"
+                    BorderBrush="{StaticResource DialogBorderDarkBrush}"
+                    BorderThickness="1"
+                    Cursor="Hand"
+                    Click="Cancel_Click"/>
+
+            <Button Grid.Column="2"
+                    Content="Mode limite"
+                    MinWidth="128"
+                    Height="34"
+                    Margin="0,0,8,0"
+                    Background="{StaticResource DialogBgMediumBrush}"
+                    Foreground="{StaticResource DialogAccentYellowBrush}"
+                    BorderBrush="{StaticResource DialogAccentYellowBrush}"
+                    BorderThickness="1"
+                    Cursor="Hand"
+                    ToolTip="Continuer sans temperatures materielles"
+                    Click="LimitedMode_Click"/>
+
+            <Button x:Name="ContinueUacButton"
+                    Grid.Column="3"
+                    Content="Continuer (UAC)"
+                    MinWidth="150"
+                    Height="34"
+                    Background="{StaticResource DialogAccentRedBrush}"
+                    Foreground="White"
+                    BorderThickness="0"
+                    FontWeight="SemiBold"
+                    Cursor="Hand"
+                    ToolTip="Relancer en mode administrateur"
+                    Click="ContinueUAC_Click"/>
+        </Grid>
+    </Grid>
+</Window>

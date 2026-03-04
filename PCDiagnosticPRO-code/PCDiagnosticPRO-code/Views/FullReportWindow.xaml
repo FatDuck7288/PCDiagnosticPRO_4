@@ -1,0 +1,67 @@
+﻿<Window x:Class="PCDiagnosticPro.Views.FullReportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:PCDiagnosticPro.Views"
+        mc:Ignorable="d"
+        Title="Rapport intégral"
+        Height="700" Width="1000"
+        MinHeight="500" MinWidth="800"
+        WindowStartupLocation="CenterOwner"
+        Background="#0D1117">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <!-- Header: titre + stats -->
+        <Border Grid.Row="0" Background="#161B22" Padding="20,14" BorderBrush="#30363D" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Grid.Row="0">
+                    <TextBlock Text="RAPPORT INTÉGRAL" FontSize="18" FontWeight="Bold" Foreground="#E6EDF3" VerticalAlignment="Center"/>
+                    <TextBlock Margin="24,0,0,0" VerticalAlignment="Center" Foreground="#8B949E" FontSize="12">
+                        <Run Text="Run: "/>
+                        <Run Text="{Binding RunId}"/>
+                        <Run Text=" — "/>
+                        <Run Text="{Binding ScanDate, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}"/>
+                        <Run Text=" — "/>
+                        <Run Text="{Binding Status}"/>
+                    </TextBlock>
+                    <TextBlock Margin="16,0,0,0" VerticalAlignment="Center" Foreground="#8B949E" FontSize="11">
+                        <Run Text="Collecte: "/>
+                        <Run Text="{Binding CoveragePercent, StringFormat='{}{0:F0}'}"/>
+                        <Run Text="% — "/>
+                        <Run Text="{Binding ReliabilityDisplay, Mode=OneWay}"/>
+                        <Run Text=" — Actionabilité: "/>
+                        <Run Text="{Binding ActionabilityPercent, StringFormat='{}{0:F0}'}"/>
+                        <Run Text="%"/>
+                    </TextBlock>
+                    <TextBlock Margin="16,0,0,0" VerticalAlignment="Center" Foreground="#6B8" FontSize="10" FontFamily="Consolas"
+                               Text="{Binding UiCoverageDisplay}"/>
+                </StackPanel>
+                <Border Grid.Row="1"
+                        Margin="0,10,0,0"
+                        Padding="10,6"
+                        Background="#FF5722"
+                        CornerRadius="4"
+                        Visibility="{Binding ShowContractGateBanner, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding ContractGateBannerText}" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                        <TextBlock Text="{Binding ContractGateBannerDetails}" Foreground="#FFF3E0" FontSize="10"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+        <local:FullReportView Grid.Row="1" x:Name="ReportView"/>
+    </Grid>
+</Window>

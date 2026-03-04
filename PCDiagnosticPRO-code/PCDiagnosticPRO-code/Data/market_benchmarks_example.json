@@ -1,0 +1,204 @@
+{
+  "datasetVersion": "1.0.0",
+  "publishedAt": "2026-02-12T00:00:00Z",
+  "sourceName": "PCDiagnosticPRO Market Benchmarks",
+  "totalEntries": 50,
+  "totalCpusInMarket": 2500,
+  "totalGpusInMarket": 1800,
+  "cpuEntries": [
+    {
+      "normalizedName": "ryzen 9 5900x",
+      "alternativeNames": ["5900x", "amd ryzen 9 5900x"],
+      "rawScore": 28400,
+      "normalizedScore": 94.2,
+      "percentile": 95.3,
+      "rank": 118,
+      "cores": 12,
+      "threads": 24,
+      "releaseYear": 2020
+    },
+    {
+      "normalizedName": "ryzen 9 5950x",
+      "alternativeNames": ["5950x", "amd ryzen 9 5950x"],
+      "rawScore": 39100,
+      "normalizedScore": 97.8,
+      "percentile": 97.2,
+      "rank": 70,
+      "cores": 16,
+      "threads": 32,
+      "releaseYear": 2020
+    },
+    {
+      "normalizedName": "ryzen 7 5800x",
+      "alternativeNames": ["5800x", "amd ryzen 7 5800x"],
+      "rawScore": 22800,
+      "normalizedScore": 88.5,
+      "percentile": 88.7,
+      "rank": 283,
+      "cores": 8,
+      "threads": 16,
+      "releaseYear": 2020
+    },
+    {
+      "normalizedName": "ryzen 5 5600x",
+      "alternativeNames": ["5600x", "amd ryzen 5 5600x"],
+      "rawScore": 17200,
+      "normalizedScore": 78.3,
+      "percentile": 76.8,
+      "rank": 580,
+      "cores": 6,
+      "threads": 12,
+      "releaseYear": 2020
+    },
+    {
+      "normalizedName": "core i9-12900k",
+      "alternativeNames": ["i9-12900k", "12900k", "intel core i9-12900k"],
+      "rawScore": 41400,
+      "normalizedScore": 98.1,
+      "percentile": 97.5,
+      "rank": 63,
+      "cores": 16,
+      "threads": 24,
+      "releaseYear": 2021
+    },
+    {
+      "normalizedName": "core i9-13900k",
+      "alternativeNames": ["i9-13900k", "13900k", "intel core i9-13900k"],
+      "rawScore": 59500,
+      "normalizedScore": 99.3,
+      "percentile": 98.7,
+      "rank": 33,
+      "cores": 24,
+      "threads": 32,
+      "releaseYear": 2022
+    },
+    {
+      "normalizedName": "core i7-12700k",
+      "alternativeNames": ["i7-12700k", "12700k", "intel core i7-12700k"],
+      "rawScore": 31500,
+      "normalizedScore": 95.8,
+      "percentile": 94.2,
+      "rank": 145,
+      "cores": 12,
+      "threads": 20,
+      "releaseYear": 2021
+    },
+    {
+      "normalizedName": "core i5-12400",
+      "alternativeNames": ["i5-12400", "12400", "intel core i5-12400"],
+      "rawScore": 17700,
+      "normalizedScore": 79.5,
+      "percentile": 77.8,
+      "rank": 555,
+      "cores": 6,
+      "threads": 12,
+      "releaseYear": 2022
+    }
+  ],
+  "gpuEntries": [
+    {
+      "normalizedName": "rtx 4090",
+      "alternativeNames": ["geforce rtx 4090", "nvidia rtx 4090"],
+      "rawScore": 39100,
+      "normalizedScore": 99.8,
+      "percentile": 99.4,
+      "rank": 11,
+      "vramMb": 24576,
+      "memoryBandwidthGBps": 1008,
+      "releaseYear": 2022
+    },
+    {
+      "normalizedName": "rtx 4080",
+      "alternativeNames": ["geforce rtx 4080", "nvidia rtx 4080"],
+      "rawScore": 28500,
+      "normalizedScore": 98.2,
+      "percentile": 97.8,
+      "rank": 40,
+      "vramMb": 16384,
+      "memoryBandwidthGBps": 717,
+      "releaseYear": 2022
+    },
+    {
+      "normalizedName": "rtx 3090",
+      "alternativeNames": ["geforce rtx 3090", "nvidia rtx 3090"],
+      "rawScore": 19800,
+      "normalizedScore": 95.1,
+      "percentile": 93.7,
+      "rank": 113,
+      "vramMb": 24576,
+      "memoryBandwidthGBps": 936,
+      "releaseYear": 2020
+    },
+    {
+      "normalizedName": "rtx 3080",
+      "alternativeNames": ["geforce rtx 3080", "nvidia rtx 3080"],
+      "rawScore": 17400,
+      "normalizedScore": 92.8,
+      "percentile": 91.0,
+      "rank": 162,
+      "vramMb": 10240,
+      "memoryBandwidthGBps": 760,
+      "releaseYear": 2020
+    },
+    {
+      "normalizedName": "rtx 3070",
+      "alternativeNames": ["geforce rtx 3070", "nvidia rtx 3070"],
+      "rawScore": 13400,
+      "normalizedScore": 88.1,
+      "percentile": 84.6,
+      "rank": 277,
+      "vramMb": 8192,
+      "memoryBandwidthGBps": 448,
+      "releaseYear": 2020
+    },
+    {
+      "normalizedName": "rtx 3060",
+      "alternativeNames": ["geforce rtx 3060", "nvidia rtx 3060"],
+      "rawScore": 8800,
+      "normalizedScore": 76.2,
+      "percentile": 71.5,
+      "rank": 513,
+      "vramMb": 12288,
+      "memoryBandwidthGBps": 360,
+      "releaseYear": 2021
+    },
+    {
+      "normalizedName": "rx 7900 xtx",
+      "alternativeNames": ["radeon rx 7900 xtx", "amd rx 7900 xtx"],
+      "rawScore": 24800,
+      "normalizedScore": 97.2,
+      "percentile": 96.5,
+      "rank": 63,
+      "vramMb": 24576,
+      "memoryBandwidthGBps": 960,
+      "releaseYear": 2022
+    },
+    {
+      "normalizedName": "rx 6800 xt",
+      "alternativeNames": ["radeon rx 6800 xt", "amd rx 6800 xt"],
+      "rawScore": 17200,
+      "normalizedScore": 92.5,
+      "percentile": 90.6,
+      "rank": 169,
+      "vramMb": 16384,
+      "memoryBandwidthGBps": 512,
+      "releaseYear": 2020
+    }
+  ],
+  "ramBaseline": {
+    "mappings": [
+      { "minGb": 4, "percentile": 10 },
+      { "minGb": 8, "percentile": 30 },
+      { "minGb": 16, "percentile": 55 },
+      { "minGb": 32, "percentile": 75 },
+      { "minGb": 64, "percentile": 90 },
+      { "minGb": 128, "percentile": 98 }
+    ]
+  },
+  "storageBaseline": {
+    "hddPercentile": 15.0,
+    "sataSsdPercentile": 50.0,
+    "nvmePercentile": 85.0,
+    "nvmeGen4Percentile": 95.0
+  }
+}

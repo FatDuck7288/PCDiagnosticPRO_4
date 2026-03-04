@@ -1,0 +1,74 @@
+================================================================================
+                           THIRD PARTY NOTICES
+                           PC Diagnostic PRO
+================================================================================
+
+This project includes the following third-party software:
+
+--------------------------------------------------------------------------------
+1. LibreHardwareMonitorLib
+--------------------------------------------------------------------------------
+
+   Version: 0.9.2
+   License: Mozilla Public License 2.0 (MPL-2.0)
+   Project URL: https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
+   
+   Copyright (c) LibreHardwareMonitor contributors
+   
+   This Source Code Form is subject to the terms of the Mozilla Public
+   License, v. 2.0. If a copy of the MPL was not distributed with this
+   file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+   LibreHardwareMonitor is a fork of Open Hardware Monitor.
+   
+   SUMMARY OF MPL-2.0:
+   - You may use, modify, and distribute the code
+   - If you modify MPL-licensed files, you must make those modifications 
+     available under the MPL
+   - You may combine MPL-licensed code with code under other licenses
+   - You must include copyright notices and license information
+   - No trademark rights are granted
+
+   Full license text: https://www.mozilla.org/en-US/MPL/2.0/
+
+--------------------------------------------------------------------------------
+2. .NET 8.0 Runtime
+--------------------------------------------------------------------------------
+
+   License: MIT License
+   Project URL: https://github.com/dotnet/runtime
+   
+   Copyright (c) .NET Foundation and Contributors
+   
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+--------------------------------------------------------------------------------
+3. WPF (Windows Presentation Foundation)
+--------------------------------------------------------------------------------
+
+   License: MIT License
+   Project URL: https://github.com/dotnet/wpf
+   
+   Copyright (c) .NET Foundation and Contributors
+   
+   Licensed under the MIT License (same terms as .NET Runtime above)
+
+================================================================================
+                              END OF NOTICES
+================================================================================

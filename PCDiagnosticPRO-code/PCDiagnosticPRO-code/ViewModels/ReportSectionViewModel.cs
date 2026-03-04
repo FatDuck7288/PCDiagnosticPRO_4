@@ -1,0 +1,162 @@
+using System.Collections.ObjectModel;
+using PCDiagnosticPro.Models;
+
+namespace PCDiagnosticPro.ViewModels
+{
+    /// <summary>
+    /// Section du rapport intégral : titre, niveau, résumé, tableau clé/valeur, issues, preuves.
+    /// </summary>
+    public class ReportSectionViewModel : ViewModelBase
+    {
+        private string _id = "";
+        private string _title = "";
+        private IssueLevel _level = IssueLevel.Info;
+        private bool _hasCritical;
+        private double _sectionScore = -1;
+        private string _summaryLine1 = "";
+        private string _summaryLine2 = "";
+        private string _evidenceText = "";
+        private string _notesText = "";
+        private bool _showPerformanceScenarios = true;
+        private string _sectionHeaderBadge = "";
+        private string _sectionHeaderBadgeDetail = "";
+
+        public string Id
+        {
+            get => _id;
+            set => SetProperty(ref _id, value ?? "");
+        }
+
+        public string Title
+        {
+            get => _title;
+            set => SetProperty(ref _title, value ?? "");
+        }
+
+        public IssueLevel Level
+        {
+            get => _level;
+            set => SetProperty(ref _level, value);
+        }
+
+        public bool HasCritical
+        {
+            get => _hasCritical;
+            set => SetProperty(ref _hasCritical, value);
+        }
+
+        /// <summary>Score de la section 0–100 (pour bordure colorée : or 100, vert 70+, jaune 60–70, rouge &lt;60).</summary>
+        public double SectionScore
+        {
+            get => _sectionScore;
+            set => SetProperty(ref _sectionScore, value);
+        }
+
+        public string SummaryLine1
+        {
+            get => _summaryLine1;
+            set => SetProperty(ref _summaryLine1, value ?? "");
+        }
+
+        public string SummaryLine2
+        {
+            get => _summaryLine2;
+            set => SetProperty(ref _summaryLine2, value ?? "");
+        }
+
+        public ObservableCollection<KeyValueRow> KeyValues { get; } = new();
+        public ObservableCollection<ReportIssue> Issues { get; } = new();
+        public ObservableCollection<ReportTableViewModel> Tables { get; } = new();
+        public ObservableCollection<ServicesStartupTaskRow> ServicesStartupTaskRows { get; } = new();
+
+        /// <summary>Scenario scores for Performance section (bar chart and capability matrix).</summary>
+        public ObservableCollection<ScenarioScoreViewModel> ScenarioScores { get; } = new();
+
+        /// <summary>Task Capability scores - shows how well the PC can perform each task (0-100).</summary>
+        public ObservableCollection<TaskCapabilityRow> TaskCapabilityScores { get; } = new();
+
+        /// <summary>Market Position scores - shows PC's position relative to the market (percentile/tier).</summary>
+        public ObservableCollection<MarketPositionScore> MarketPositionScores { get; } = new();
+
+        /// <summary>Performance section only: system category label (Entry-Level / Mid-Range / High-End / Workstation Grade).</summary>
+        public string PerformanceCategory { get; set; } = "";
+
+        /// <summary>Performance section only: primary limiting factor (CPU / GPU / RAM / Storage / None significant).</summary>
+        public string PrimaryBottleneck { get; set; } = "";
+
+        /// <summary>Performance section only: evidence block – CPU spec (model or tier).</summary>
+        public string PerformanceCpuDisplay { get; set; } = "";
+        /// <summary>Performance section only: evidence block – GPU spec (model or tier).</summary>
+        public string PerformanceGpuDisplay { get; set; } = "";
+        /// <summary>Performance section only: evidence block – VRAM dedicated (e.g. "8192 MB").</summary>
+        public string PerformanceVramDisplay { get; set; } = "";
+        /// <summary>Performance section only: evidence block – RAM (e.g. "16 GB").</summary>
+        public string PerformanceRamDisplay { get; set; } = "";
+        /// <summary>Performance section only: evidence block – storage type (HDD/SATA_SSD/NVMe).</summary>
+        public string PerformanceStorageDisplay { get; set; } = "";
+
+        // ── Performance source traceability (Requirement 3) ──
+
+        /// <summary>Performance section only: data source label (e.g. "External Dataset", "Mode secours : règles internes").</summary>
+        public string PerformanceDataSource { get; set; } = "";
+
+        /// <summary>Performance section only: dataset version display (e.g. "1.0.0" or "embedded (2.0)").</summary>
+        public string PerformanceDatasetVersionDisplay { get; set; } = "";
+
+        /// <summary>Performance section only: publication date of external dataset (empty if embedded).</summary>
+        public string PerformancePublishedAt { get; set; } = "";
+
+        /// <summary>Performance section only: URL host of the configured dataset (no full URL for security).</summary>
+        public string PerformanceUrlHost { get; set; } = "";
+
+        /// <summary>Performance section only: cache information line (e.g. "Cache: frais (2.1j)" or "Pas de cache").</summary>
+        public string PerformanceCacheInfo { get; set; } = "";
+
+        /// <summary>Performance section only: last dataset refresh timestamp.</summary>
+        public string PerformanceLastRefresh { get; set; } = "";
+
+        /// <summary>Performance section only: warning/fallback label (empty if normal operation).</summary>
+        public string PerformanceFallbackWarning { get; set; } = "";
+
+        /// <summary>Performance section only: true when scoring is unavailable (RequireExternal + dataset failed).</summary>
+        public bool PerformanceIsUnavailable { get; set; }
+
+        /// <summary>Performance section only: unavailability reason for UI display.</summary>
+        public string PerformanceUnavailableReason { get; set; } = "";
+
+        public string EvidenceText
+        {
+            get => _evidenceText;
+            set => SetProperty(ref _evidenceText, value ?? "");
+        }
+
+        public string NotesText
+        {
+            get => _notesText;
+            set => SetProperty(ref _notesText, value ?? "");
+        }
+
+        public bool ShowPerformanceScenarios
+        {
+            get => _showPerformanceScenarios;
+            set => SetProperty(ref _showPerformanceScenarios, value);
+        }
+
+        /// <summary>Optional section header badge (used for GPU completeness in Rapport Integral).</summary>
+        public string SectionHeaderBadge
+        {
+            get => _sectionHeaderBadge;
+            set => SetProperty(ref _sectionHeaderBadge, value ?? "");
+        }
+
+        /// <summary>Optional badge detail text shown below the badge.</summary>
+        public string SectionHeaderBadgeDetail
+        {
+            get => _sectionHeaderBadgeDetail;
+            set => SetProperty(ref _sectionHeaderBadgeDetail, value ?? "");
+        }
+
+        /// <summary>Affiche le bouton "Vérifier BIOS" uniquement pour la section Plateforme/Firmware.</summary>
+        public bool ShowBiosUpdateCheck => string.Equals(_id, "PlatformFirmware", System.StringComparison.OrdinalIgnoreCase);
+    }
+}

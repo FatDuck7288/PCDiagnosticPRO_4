@@ -1,0 +1,4333 @@
+#Requires -Version 5.1
+# NOTE: #Requires -RunAsAdministrator removed intentionally.
+# The script supports graceful degradation via Test-Administrator (line ~1228)
+# and per-section $Script:IsAdmin checks throughout. Non-admin users get partial results.
+<#
+.SYNOPSIS
+    Script de collecte diagnostic Windows 10/11 - Sonde brute pour pipeline IA
+.DESCRIPTION
+    COLLECTE UNIQUEMENT - Aucune analyse, scoring ou interpretation.
+    Genere un rapport TXT humain + JSON structure pour traitement externe.
+    STRICTEMENT LECTURE SEULE - Aucune modification systeme.
+    
+.NOTES
+    Version: 7.0
+    Auteur: Data Next Step / Alexandre
+    Compatibilite: PowerShell 5.1 Desktop
+    
+    CHANGELOG v7.0 (VERSION FINALE BRIQUE 1):
+    =========================================
+    [FINAL] Version stabilisee pour integration C# WPF Virtual IT Pro
+    [NEUTRALISE] Temperature CPU: Non disponible (limitation WMI - collecte externalisee)
+    [NEUTRALISE] Temperature GPU: Non disponible (limitation WMI - collecte externalisee)
+    [NEUTRALISE] VRAM via AdapterRAM: Non disponible (limitation WMI - collecte externalisee)
+    [SCORE] Les limitations techniques ne penalisent plus le score
+    [SCORE] Score minimum 10, grade base sur problemes REELS uniquement
+    [GPU] Section conservee avec donnees fiables (nom, fabricant, driver, resolution)
+    [TEMPERATURES] Disques conserves si disponibles, CPU/GPU neutralises
+    [ROBUSTESSE] Aucune erreur bloquante, best effort systematique
+
+.PARAMETER Full
+    Active export JSON complet dans le rapport TXT
+.PARAMETER MaxEvents
+    Nombre max d'evenements par journal (defaut: 50)
+.PARAMETER SkipPreflightCheck
+    Ignore verification Execution Policy
+.PARAMETER NoRedact
+    Desactive le masquage des donnees sensibles
+.PARAMETER RedactLevel
+    Niveau de redaction (Basic, Full). Defaut: Full
+.PARAMETER OutputDir
+    Repertoire de sortie pour les rapports
+.PARAMETER QuickScan
+    Mode scan rapide (3 secondes de monitoring)
+.PARAMETER MonitorSeconds
+    Duree du monitoring dynamique (3-60, defaut: 10)
+.PARAMETER AllowExternalNetworkTests
+    Autorise les tests reseau externes (ping/DNS). Par defaut: desactive
+.PARAMETER NetworkTestTargets
+    Liste des cibles ping pour les tests reseau externes
+.PARAMETER DnsTestTargets
+    Liste des domaines pour les tests DNS externes
+.PARAMETER ExternalCommandTimeoutSeconds
+    Timeout (secondes) pour les commandes externes (dxdiag, nvidia-smi)
+.PARAMETER MaxTempFiles
+    Limite max de fichiers temp analyzes (0 = illimite)
+.PARAMETER HardenOutputAcl
+    Applique un durcissement ACL sur le dossier de sortie
+#>
+
+#region [LICENSE]
+# Ce script intègre la bibliothèque **LibreHardwareMonitorLib.dll** distribuée sous licence MPL 2.0.
+# La licence MPL 2.0 est disponible à l'adresse : https://www.mozilla.org/MPL/2.0/.
+# Conformément aux exigences de licence, cette sonde de température est identifiée comme le « Module de température Virtual IT Pro »
+# et ne se revendique pas comme le produit officiel LibreHardwareMonitor.
+#endregion
+
+[CmdletBinding()]
+param(
+    [switch]$Full,
+    [int]$MaxEvents = 100,
+    [switch]$SkipPreflightCheck,
+    [switch]$NoRedact,
+    [ValidateSet('Basic', 'Full')]
+    [string]$RedactLevel = 'Full',
+    [string]$OutputDir = "C:\Virtual IT Pro\Rapport",
+    [switch]$QuickScan,
+    [ValidateRange(3, 60)]
+    # OPTIMISATION: Réduit de 10s à 3s (suffisant pour moyennes CPU/Disk)
+    [int]$MonitorSeconds = 3,
+    [switch]$AllowExternalNetworkTests,
+    [string[]]$NetworkTestTargets = @('8.8.8.8', '1.1.1.1'),
+    [string[]]$DnsTestTargets = @('google.com', 'microsoft.com'),
+    [ValidateRange(1, 300)]
+    [int]$ExternalCommandTimeoutSeconds = 20,
+    [int]$MaxTempFiles = 0,
+    [switch]$HardenOutputAcl,
+    [string]$RunId = '',
+    [string]$CompletionMarkerPath = ''
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Continue'
+$ProgressPreference = 'SilentlyContinue'
+
+# =============================================================================
+# ENCODING: Force UTF-8 end-to-end for ALL output (console, files, JSON)
+# CRITICAL: This must be set BEFORE any output is generated.
+# PowerShell 5.1 defaults to system code page (1252 on French Windows) which
+# corrupts French accented characters (é → é, è → è, etc.)
+# =============================================================================
+
+# Force UTF-8 for all file output operations
+$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+$PSDefaultParameterValues['Set-Content:Encoding'] = 'utf8'
+$PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
+
+# Force UTF-8 for console output - CRITICAL for C# process stream reading
+try {
+    # Set console output encoding to UTF-8
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    # Set PowerShell's output encoding for pipeline operations
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+    # Also set input encoding for consistency
+    [Console]::InputEncoding = [System.Text.Encoding]::UTF8
+}
+catch {
+    # Silently continue - the encoding settings above are the most important
+}
+# =============================================================================
+
+#region ============== CONFIGURATION ==============
+$Script:Config = @{
+    SchemaVersion = '7.0'
+    Limits = @{ MaxEvents = 100 }
+    DynamicSignals = @{
+        DefaultSeconds = 10; QuickSeconds = 3
+        MinSeconds = 3; MaxSeconds = 60; SampleInterval = 1
+    }
+}
+#endregion
+
+#region ============== VARIABLES GLOBALES ==============
+$Script:ScriptVersion = "7.0"
+$TOTAL_STEPS = 35   # Nombre exact de sections emettant [PROGRESS] (collectors 1-35; DynamicSignals/AdvancedAnalysis exclus)
+$Script:REDACTED = "[REDACTED]"  # Constante centralisee pour toutes les valeurs masquees
+$Script:RunId = if ([string]::IsNullOrWhiteSpace($RunId)) { [Guid]::NewGuid().ToString() } else { $RunId }
+$Script:StartTime = Get-Date
+$Script:GlobalStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$Script:IsAdmin = $false
+$Script:ReportLines = [System.Collections.Generic.List[string]]::new()
+$Script:SectionData = [ordered]@{}
+$Script:WmiCache = @{}
+$Script:ErrorLog = [System.Collections.Generic.List[object]]::new()
+$Script:Findings = @()
+$Script:MissingData = [System.Collections.Generic.List[object]]::new()
+$Script:RedactCache = @{}
+$Script:CollectorStatus = [ordered]@{}
+$Script:CollectorTimings = [ordered]@{}
+$Script:PartialFailure = $false
+$Script:SectionKeys = @(
+    'MachineIdentity','OS','CPU','Memory','Storage','GPU','Network','Security','Services','StartupPrograms',
+    'HealthChecks','EventLogs','WindowsUpdate','Audio','DevicesDrivers','InstalledApplications','ScheduledTasks',
+    'Processes','Battery','Printers','UserProfiles','Virtualization','RestorePoints','TempFiles','EnvironmentVariables',
+    'Certificates','Temperatures','SystemIntegrity','PowerSettings','MinidumpAnalysis','ReliabilityHistory',
+    'PerformanceCounters','NetworkLatency','SmartDetails','Bluetooth','DynamicSignals','AdvancedAnalysis'
+)
+$Script:SectionNameMap = @{
+    MachineIdentity = 'Identite Machine'
+    OS = 'Systeme Exploitation'
+    CPU = 'Processeur'
+    Memory = 'Memoire'
+    Storage = 'Stockage'
+    GPU = 'Carte Graphique'
+    Network = 'Reseau'
+    Security = 'Securite'
+    Services = 'Services'
+    StartupPrograms = 'Demarrage'
+    HealthChecks = 'Health Checks'
+    EventLogs = 'Journaux Evenements'
+    WindowsUpdate = 'Windows Update'
+    Audio = 'Audio'
+    DevicesDrivers = 'Peripheriques'
+    InstalledApplications = 'Applications'
+    ScheduledTasks = 'Taches Planifiees'
+    Processes = 'Processus'
+    Battery = 'Batterie'
+    Printers = 'Imprimantes'
+    UserProfiles = 'Profils Utilisateurs'
+    Virtualization = 'Virtualisation'
+    RestorePoints = 'Points Restauration'
+    TempFiles = 'Fichiers Temporaires'
+    EnvironmentVariables = 'Variables Environnement'
+    Certificates = 'Certificats'
+    Registry = 'Registre'
+    Temperatures = 'Temperatures'
+    SystemIntegrity = 'Integrite Systeme'
+    PowerSettings = 'Alimentation'
+    MinidumpAnalysis = 'Analyse Minidumps'
+    ReliabilityHistory = 'Historique Fiabilite'
+    PerformanceCounters = 'Compteurs Performance'
+    NetworkLatency = 'Latence Reseau'
+    SmartDetails = 'SMART Detaille'
+    DynamicSignals = 'DynamicSignals'
+    AdvancedAnalysis = 'AdvancedAnalysis'
+}
+
+$Script:NoRedact = $NoRedact.IsPresent
+$Script:RedactLevel = $RedactLevel
+$Script:QuickScan = $QuickScan.IsPresent
+
+if ($Script:QuickScan) { 
+    $Script:MonitorSeconds = $Script:Config.DynamicSignals.QuickSeconds 
+} else { 
+    $Script:MonitorSeconds = [math]::Max($Script:Config.DynamicSignals.MinSeconds, [math]::Min($MonitorSeconds, $Script:Config.DynamicSignals.MaxSeconds))
+}
+
+$Script:OutputDir = $OutputDir
+try {
+    if (-not (Test-Path $Script:OutputDir)) {
+        $null = New-Item -ItemType Directory -Path $Script:OutputDir -Force -ErrorAction SilentlyContinue
+    }
+} catch { }
+
+$timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+$Script:OutputPath = Join-Path $Script:OutputDir "Scan_$($Script:RunId)_$timestamp.txt"
+$Script:JsonOutputPath = Join-Path $Script:OutputDir "Scan_$($Script:RunId)_$timestamp.json"
+$Script:CompletionMarkerPath = if ([string]::IsNullOrWhiteSpace($CompletionMarkerPath)) {
+    Join-Path $Script:OutputDir "scan_result_$($Script:RunId).ready"
+} else {
+    $CompletionMarkerPath
+}
+$Script:ReportWritten = $false
+$Script:JsonWritten = $false
+$Script:RedactionStats = @{ TotalRedactions = 0 }
+# FIX RISK #1: External network tests disabled by default (requires explicit user consent)
+$Script:AllowExternalNetworkTests = $AllowExternalNetworkTests.IsPresent
+$Script:NetworkTestTargets = $NetworkTestTargets
+$Script:DnsTestTargets = $DnsTestTargets
+$Script:ExternalCommandTimeoutSeconds = [math]::Max(1, $ExternalCommandTimeoutSeconds)
+$Script:MaxTempFiles = $MaxTempFiles
+$Script:HardenOutputAcl = $HardenOutputAcl.IsPresent
+#endregion
+
+#region ============== HELPERS ROBUSTES ==============
+<#
+.SYNOPSIS
+    Recupere une propriete sur un objet de facon 100% securisee
+.DESCRIPTION
+    Ne throw JAMAIS. Retourne $Default si:
+    - $Object est $null
+    - La propriete n'existe pas
+    - La valeur est $null
+#>
+function Get-SafePropValue {
+    param(
+        [object]$Object,
+        [string]$PropertyName,
+        [object]$Default = $null
+    )
+    try {
+        if ($null -eq $Object) { return $Default }
+        if ([string]::IsNullOrEmpty($PropertyName)) { return $Default }
+        
+        # Pour les PSCustomObject et objets .NET
+        if ($Object.PSObject -and $Object.PSObject.Properties) {
+            $prop = $Object.PSObject.Properties[$PropertyName]
+            if ($null -ne $prop) {
+                $val = $prop.Value
+                if ($null -ne $val) { return $val }
+            }
+        }
+        return $Default
+    }
+    catch { return $Default }
+}
+
+<#
+.SYNOPSIS
+    Recupere une valeur dans un dictionnaire/hashtable de facon 100% securisee
+.DESCRIPTION
+    Gere: Hashtable, OrderedDictionary, Dictionary<>, IDictionary
+    Ne throw JAMAIS.
+#>
+function Get-SafeDictValue {
+    param(
+        [object]$Dict,
+        [string]$Key,
+        [object]$Default = $null
+    )
+    try {
+        if ($null -eq $Dict) { return $Default }
+        if ([string]::IsNullOrEmpty($Key)) { return $Default }
+        
+        # Verifier si c'est un dictionnaire
+        if ($Dict -is [System.Collections.IDictionary]) {
+            # Utiliser Contains() qui marche pour tous les IDictionary
+            if ($Dict.Contains($Key)) {
+                $val = $Dict[$Key]
+                if ($null -ne $val) { return $val }
+            }
+        }
+        return $Default
+    }
+    catch { return $Default }
+}
+
+<#
+.SYNOPSIS
+    Compte les elements d'une collection de facon 100% securisee
+.DESCRIPTION
+    Ne throw JAMAIS. Retourne 0 si:
+    - $Collection est $null
+    - $Collection n'a pas de Count
+    - Erreur quelconque
+#>
+function Get-SafeCount {
+    param([object]$Collection)
+    try {
+        if ($null -eq $Collection) { return 0 }
+
+        # Forcer en array pour avoir .Count fiable
+        $arr = @($Collection)
+        return $arr.Count
+    }
+    catch { return 0 }
+}
+
+<#
+.SYNOPSIS
+    Convertit une valeur en chaine de caracteres de facon 100% securisee
+.DESCRIPTION
+    Ne throw JAMAIS. Retourne '' si la valeur est null ou non convertible.
+#>
+function Get-SafeString {
+    param([object]$Value)
+    try {
+        if ($null -eq $Value) { return '' }
+        return [string]$Value
+    }
+    catch { return '' }
+}
+
+<#
+.SYNOPSIS
+    Verifie si une cle existe dans un dictionnaire de facon securisee
+#>
+function Test-SafeHasKey {
+    param([object]$Dict, [string]$Key)
+    try {
+        if ($null -eq $Dict) { return $false }
+        if ([string]::IsNullOrEmpty($Key)) { return $false }
+        if ($Dict -is [System.Collections.IDictionary]) {
+            return $Dict.Contains($Key)
+        }
+        return $false
+    }
+    catch { return $false }
+}
+function Convert-SafeLong {
+    param([object]$Value, [long]$Default = 0)
+    if ($null -eq $Value) { return $Default }
+    try { return [long]$Value }
+    catch { return $Default }
+}
+
+function Convert-SafeInt {
+    param([object]$Value, [int]$Default = 0)
+    if ($null -eq $Value) { return $Default }
+    try { return [int]$Value }
+    catch { return $Default }
+}
+
+function Convert-SafeDouble {
+    param([object]$Value, [double]$Default = 0.0)
+    if ($null -eq $Value) { return $Default }
+    try { return [double]$Value }
+    catch { return $Default }
+}
+
+function Get-CimOrWmi {
+    <#
+    .SYNOPSIS
+        Fallback automatique CIM -> WMI
+    #>
+    param(
+        [string]$ClassName,
+        [string]$Namespace = 'root/cimv2',
+        [string]$Filter = ''
+    )
+    $result = $null
+    $source = 'none'
+    
+    # Methode 1: Get-CimInstance
+    try {
+        if ($Filter) {
+            $result = Get-CimInstance -ClassName $ClassName -Namespace $Namespace -Filter $Filter -ErrorAction Stop
+        } else {
+            $result = Get-CimInstance -ClassName $ClassName -Namespace $Namespace -ErrorAction Stop
+        }
+        if ($null -ne $result) { $source = 'CIM' }
+    } catch { }
+    
+    # Methode 2: Get-WmiObject (fallback)
+    if ($null -eq $result) {
+        try {
+            if ($Filter) {
+                $result = Get-WmiObject -Class $ClassName -Namespace $Namespace -Filter $Filter -ErrorAction Stop
+            } else {
+                $result = Get-WmiObject -Class $ClassName -Namespace $Namespace -ErrorAction Stop
+            }
+            if ($null -ne $result) { $source = 'WMI' }
+        } catch { }
+    }
+    
+    return [PSCustomObject]@{
+        Data = $result
+        Source = $source
+    }
+}
+
+#
+# Helper: exécute une commande avec timeout et capture stdout/stderr
+#
+function Invoke-CommandWithTimeout {
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [int]$TimeoutSeconds = 20
+    )
+    $result = [ordered]@{ success = $false; exitCode = -1; output = @(); error = '' }
+    if ([string]::IsNullOrEmpty($FilePath)) { return $result }
+    try {
+        $tempOut = [System.IO.Path]::Combine($env:TEMP, "cmd_out_$([Guid]::NewGuid().ToString()).txt")
+        $tempErr = [System.IO.Path]::Combine($env:TEMP, "cmd_err_$([Guid]::NewGuid().ToString()).txt")
+        $proc = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -NoNewWindow -PassThru `
+            -RedirectStandardOutput $tempOut -RedirectStandardError $tempErr
+        if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
+            try { $proc.Kill() } catch { }
+            $result['error'] = "Timeout after $TimeoutSeconds seconds"
+            return $result
+        }
+        $result['exitCode'] = $proc.ExitCode
+        if (Test-Path $tempOut) { $result['output'] = @(Get-Content -Path $tempOut -ErrorAction SilentlyContinue) }
+        if (Test-Path $tempErr) { $result['error'] = (Get-Content -Path $tempErr -ErrorAction SilentlyContinue) -join "`n" }
+        $result['success'] = ($proc.ExitCode -eq 0)
+        return $result
+    } catch {
+        $result['error'] = $_.Exception.Message
+        return $result
+    } finally {
+        try { if (Test-Path $tempOut) { Remove-Item -Path $tempOut -Force -ErrorAction SilentlyContinue } } catch { }
+        try { if (Test-Path $tempErr) { Remove-Item -Path $tempErr -Force -ErrorAction SilentlyContinue } } catch { }
+    }
+}
+
+#
+# Convertit récursivement un objet en structure sérialisable JSON (pas d'OrderedDictionary, clés string)
+# - Les dictionnaires sont transformés en hashtable à clés string
+# - Les listes/énumérables sont converties en tableaux de valeurs sûres
+# - Les PSCustomObject et objets .NET avec propriétés sont convertis en hashtable de propriétés
+# - Les chaînes et types primitifs sont retournés tels quels
+# Ce helper garantit que ConvertTo-Json ne lève pas d'exception sous PowerShell 5.1.
+function ConvertTo-JsonSafeObject {
+    param([object]$InputObject)
+    # Valeur nulle
+    if ($null -eq $InputObject) { return $null }
+    # Ne pas traiter les chaînes comme IEnumerable
+    if ($InputObject -is [string] -or $InputObject -is [char] -or $InputObject.GetType().IsPrimitive) {
+        return $InputObject
+    }
+    # Dictionnaires: hashtable à clés string
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        $ht = @{}
+        foreach ($k in $InputObject.Keys) {
+            try {
+                $strKey = ''
+                if ($null -ne $k) { $strKey = [string]$k }
+                $ht[$strKey] = ConvertTo-JsonSafeObject ($InputObject[$k])
+            } catch { }
+        }
+        return $ht
+    }
+    # Collections (IEnumerable) autres que string
+    if ($InputObject -is [System.Collections.IEnumerable] -and -not ($InputObject -is [string])) {
+        $arr = @()
+        foreach ($item in $InputObject) {
+            $arr += ConvertTo-JsonSafeObject $item
+        }
+        # Important: unary comma preserves empty arrays as [] instead of {} in final JSON.
+        return ,$arr
+    }
+    # PSCustomObject ou objets .NET: convertir propriétés en hashtable
+    $props = $InputObject.PSObject.Properties
+    if ((Get-SafeCount $props) -gt 0) {
+        $objHt = @{}
+        foreach ($prop in $props) {
+            try {
+                $propName = [string]$prop.Name
+                $objHt[$propName] = ConvertTo-JsonSafeObject $prop.Value
+            } catch { }
+        }
+        return $objHt
+    }
+    # Fallback: retourner sous forme de chaîne
+    try { return [string]$InputObject } catch { return $InputObject }
+}
+
+function Test-TemperatureValue {
+    param([double]$Value, [double]$Min, [double]$Max)
+    try {
+        if ($null -eq $Value) { return $false }
+        if ($Value -lt $Min -or $Value -gt $Max) { return $false }
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Format-Temperature {
+    <#
+    .SYNOPSIS
+        Normalise une temperature avec conversion Kelvin automatique
+    #>
+    param(
+        [object]$Value,
+        [double]$Min = 0,
+        [double]$Max = 95
+    )
+    try {
+        if ($null -eq $Value) { return $null }
+        $temp = $null
+        try { $temp = [double]$Value } catch { return $null }
+        if ($null -eq $temp) { return $null }
+        
+        # Conversion Kelvin -> Celsius AVANT validation
+        if ($temp -gt 200 -and $temp -lt 500) {
+            # Kelvin standard (ex: 300K = 27C)
+            $temp = $temp - 273.15
+        }
+        elseif ($temp -gt 1000 -and $temp -lt 5000) {
+            # Dixiemes de Kelvin (ex: 3000 = 300K = 27C)
+            $temp = ($temp / 10) - 273.15
+        }
+        
+        # Validation apres conversion
+        if ($temp -lt $Min -or $temp -gt $Max) { return $null }
+        return [math]::Round($temp, 1)
+    } catch {
+        return $null
+    }
+}
+
+function Get-SmartTemperature {
+    <#
+    .SYNOPSIS
+        Extrait temperature SMART depuis raw value
+        Lit le LOW BYTE, pas l'entier complet
+        Plage valide: 0-125 degres Celsius
+    #>
+    param([object]$RawValue)
+    try {
+        if ($null -eq $RawValue) { return $null }
+        $raw = [long]$RawValue
+        
+        # Low byte = temperature en Celsius (methode standard SMART)
+        $lowByte = $raw -band 0xFF
+        if ($lowByte -ge 0 -and $lowByte -le 125) {
+            return [int]$lowByte
+        }
+        
+        # Essai byte suivant si low byte hors plage
+        $nextByte = ($raw -shr 8) -band 0xFF
+        if ($nextByte -ge 0 -and $nextByte -le 125) {
+            return [int]$nextByte
+        }
+        
+        # Fallback: valeur directe si dans plage valide
+        if ($raw -ge 0 -and $raw -le 125) {
+            return [int]$raw
+        }
+        
+        # Valeur hors plage = invalide
+        return $null
+    } catch {
+        return $null
+    }
+}
+
+function Get-SectionStatus {
+    param([string]$SectionKey, [object]$SectionData)
+    try {
+        $collectorName = Get-SafeDictValue $Script:SectionNameMap $SectionKey ''
+        $statusEntry = $null
+        if ($collectorName -and (Test-SafeHasKey $Script:CollectorStatus $collectorName)) {
+            $statusEntry = $Script:CollectorStatus[$collectorName]
+        } elseif (Test-SafeHasKey $Script:CollectorStatus $SectionKey) {
+            $statusEntry = $Script:CollectorStatus[$SectionKey]
+        }
+        $rawStatus = ''
+        if ($null -ne $statusEntry) { $rawStatus = Get-SafeDictValue $statusEntry 'status' '' }
+        switch ($rawStatus) {
+            'ok' { return 'OK' }
+            'partial' { return 'PARTIAL' }
+            'failed' { return 'FAILED' }
+        }
+        if ($null -ne $SectionData) { return 'OK' }
+        return 'FAILED'
+    } catch {
+        return 'FAILED'
+    }
+}
+
+function Get-JsonErrors {
+    $errors = @()
+    try {
+        foreach ($err in @($Script:ErrorLog)) {
+            if ($null -eq $err) { continue }
+            $errors += [ordered]@{
+                code = [string](Get-SafePropValue $err 'Type' 'UNKNOWN')
+                message = [string](Get-SafePropValue $err 'Message' 'Unknown error')
+                section = (Get-SafePropValue $err 'Source' $null)
+                exceptionType = (Get-SafePropValue $err 'ExceptionType' $null)
+            }
+        }
+    } catch { }
+    return $errors
+}
+
+function New-JsonSnapshot {
+    $now = Get-Date
+    $duration = $null
+    try {
+        $endTime = $now
+        if ($null -ne $Script:EndTime) { $endTime = $Script:EndTime }
+        $duration = [math]::Round(($endTime - $Script:StartTime).TotalSeconds, 2)
+    } catch { $duration = 0.0 }
+
+    $sections = [ordered]@{}
+    foreach ($key in @($Script:SectionKeys)) {
+        $sectionData = $null
+        if ($null -ne $Script:SectionData -and (Test-SafeHasKey $Script:SectionData $key)) {
+            $sectionData = $Script:SectionData[$key]
+        }
+        $sections[$key] = [ordered]@{
+            status = (Get-SectionStatus -SectionKey $key -SectionData $sectionData)
+            data = $sectionData
+            summary = $null
+        }
+    }
+    
+    # Calculer redactLevel (PS 5.1 compatible)
+    $redactLevelValue = $Script:RedactLevel
+    if ($Script:NoRedact) { $redactLevelValue = 'NONE' }
+    
+    # Calculer ScoreV2
+    $scoreV2Data = $null
+    try { $scoreV2Data = Get-ScoreV2 } catch { $scoreV2Data = $null }
+    
+    # Collecter missingData
+    $missingDataArray = @()
+    try { $missingDataArray = @($Script:MissingData) } catch { $missingDataArray = @() }
+
+    return [ordered]@{
+        metadata = [ordered]@{
+            version = [string]$Script:ScriptVersion
+            runId = [string]$Script:RunId
+            timestamp = $now.ToString('o')
+            isAdmin = [bool]$Script:IsAdmin
+            redactLevel = [string]$redactLevelValue
+            quickScan = [bool]$Script:QuickScan
+            monitorSeconds = [int]$Script:MonitorSeconds
+            durationSeconds = [double]$duration
+            partialFailure = [bool]$Script:PartialFailure
+        }
+        paths = [ordered]@{
+            txtPath = [string]$Script:OutputPath
+            jsonPath = [string]$Script:JsonOutputPath
+            outputDir = [string]$Script:OutputDir
+        }
+        sections = $sections
+        errors = @(Get-JsonErrors)
+        findings = @($Script:Findings)
+        missingData = $missingDataArray
+        scoreV2 = $scoreV2Data
+        timings = [ordered]@{
+            runId = [string]$Script:RunId
+            totalDurationMs = [long][math]::Round($Script:GlobalStopwatch.Elapsed.TotalMilliseconds)
+            collectors = @($Script:CollectorTimings.Values)
+        }
+    }
+}
+
+function New-MinimalReportLines {
+    $lines = @()
+    $lines += ("#" * 100)
+    $lines += "# RAPPORT MINIMAL VIRTUAL IT PRO - COLLECTE PARTIELLE"
+    $lines += ("#" * 100)
+    $lines += "Run ID               : $($Script:RunId)"
+    $lines += "Version              : $($Script:ScriptVersion)"
+    $lines += "Date                 : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    $lines += "PartialFailure       : $($Script:PartialFailure)"
+    $lines += "Sortie TXT           : $($Script:OutputPath)"
+    $lines += "Sortie JSON          : $($Script:JsonOutputPath)"
+    $lines += ""
+    $lines += "SECTIONS COLLECTEES"
+    $lines += ("-" * 50)
+    $sectionKeys = @()
+    if ($null -ne $Script:SectionData -and $Script:SectionData -is [System.Collections.IDictionary]) { $sectionKeys = @($Script:SectionData.Keys) }
+    $lines += "Sections: $(Get-SafeCount $sectionKeys)"
+    foreach ($key in $sectionKeys) { $lines += "  - $key" }
+    $lines += ""
+    $lines += "ERREURS"
+    $lines += ("-" * 50)
+    $lines += "Erreurs de collecte: $(Get-SafeCount $Script:ErrorLog)"
+    foreach ($err in @($Script:ErrorLog)) {
+        if ($null -eq $err) { continue }
+        $lines += "[$(Get-SafePropValue $err 'Type' 'UNKNOWN')] $(Get-SafePropValue $err 'Source' 'Unknown') - $(Get-SafePropValue $err 'Message' 'No message')"
+    }
+    return $lines
+}
+
+#
+# Helper: retourne le temps CPU en secondes pour un processus, en gérant tous les types sans lever d'exception
+#
+function Get-ProcCpuSeconds {
+    param([object]$Proc)
+    try {
+        if ($null -eq $Proc) { return 0.0 }
+        # Obtenir la valeur CPU de façon sûre
+        $cpuVal = Get-SafePropValue $Proc 'CPU'
+        # Si la propriété CPU est renseignée, tenter de calculer les secondes CPU
+        if ($null -ne $cpuVal) {
+            # Si c'est un TimeSpan, utiliser TotalSeconds
+            if ($cpuVal -is [System.TimeSpan]) {
+                return [double]$cpuVal.TotalSeconds
+            }
+            # Si c'est un nombre (double/int), tenter une conversion directe
+            try { return [double]$cpuVal } catch { }
+            # Si la propriété TotalSeconds existe, l'utiliser (ex: TimeSpan masqué)
+            $matchCount = 0
+            if ($cpuVal.PSObject) { $matchCount = Get-SafeCount ($cpuVal.PSObject.Properties.Match('TotalSeconds')) }
+            if ($matchCount -gt 0) {
+                try { return [double]$cpuVal.TotalSeconds } catch { }
+            }
+        }
+        # Fallback : utiliser TotalProcessorTime si disponible (TimeSpan)
+        $tpt = Get-SafePropValue $Proc 'TotalProcessorTime'
+        if ($tpt -is [System.TimeSpan]) {
+            return [double]$tpt.TotalSeconds
+        }
+        return 0.0
+    } catch {
+        return 0.0
+    }
+}
+
+#
+# Helper: validate a VRAM value based on GPU name and memory constraints
+# Retourne $true si la valeur est jugée fiable, $false sinon
+function Test-VramValue {
+    param(
+        [string]$gpuName,
+        [int]$vramMB
+    )
+    try {
+        # Si VRAM est absent ou inférieure à 512 MB, invalide
+        if ($null -eq $vramMB -or $vramMB -lt 512) { return $false }
+        # Doit être un multiple de 256 MB
+        if (($vramMB % 256) -ne 0) { return $false }
+        # Rejeter certaines valeurs erronées fréquentes
+        if ($vramMB -in @(4095, 2047, 1023)) { return $false }
+        $lower = ''
+        if ($null -ne $gpuName) { $lower = $gpuName.ToLower() }
+        # Cartes haut de gamme : minimum 8 GB (8192 MB)
+        if ($lower -match '3090' -and $vramMB -lt 8192) { return $false }
+        if ($lower -match '3080' -and $vramMB -lt 8192) { return $false }
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+#
+# DC-3: Section timeout wrapper — runs a scriptblock in an isolated job.
+# Only pure cmdlet calls (no custom script functions) should be passed in $Script.
+# Variables from outer scope are captured via $using: syntax inside the scriptblock.
+function Invoke-WithSectionTimeout {
+    param(
+        [scriptblock]$Script,
+        [int]$TimeoutSeconds = 30,
+        [string]$SectionName = 'Unknown'
+    )
+    $job = Start-Job -ScriptBlock $Script
+    if (-not (Wait-Job $job -Timeout $TimeoutSeconds)) {
+        Stop-Job $job -Force
+        Remove-Job $job
+        Add-ErrorLog -Type 'TIMEOUT' -Source $SectionName -Message "Section timeout (${TimeoutSeconds}s)"
+        return $null
+    }
+    $result = Receive-Job $job
+    Remove-Job $job
+    return $result
+}
+
+#
+# Helper: récupère les informations GPU via nvidia-smi si disponible
+# Retourne une liste d'objets { index, name, vramMB, driver }
+function Get-NvidiaGpuInfo {
+    try {
+        $result = @()
+        # Rechercher la commande nvidia-smi
+        $cmd = Get-Command 'nvidia-smi.exe' -ErrorAction SilentlyContinue
+        if ($null -ne $cmd) {
+            # DC-5: Include PCIe link gen and width in the nvidia-smi query.
+            $nvidiaArgs = @('--query-gpu=index,name,memory.total,driver_version,pcie.link.gen.current,pcie.link.width.current', '--format=csv,noheader,nounits')
+            $exec = Invoke-CommandWithTimeout -FilePath $cmd.Source -ArgumentList $nvidiaArgs -TimeoutSeconds $Script:ExternalCommandTimeoutSeconds
+            if ($exec['success'] -and $null -ne $exec['output']) {
+                $lines = @($exec['output'])
+                foreach ($l in $lines) {
+                    $parts = $l.Split(',') | ForEach-Object { $_.Trim() }
+                    if ((Get-SafeCount $parts) -ge 3) {
+                        $idx = $parts[0]
+                        $gpuName = $parts[1]
+                        $memStr = $parts[2]
+                        $drv = ''
+                        if ((Get-SafeCount $parts) -ge 4) { $drv = $parts[3] }
+                        $pcieGen = $null
+                        $pcieWidth = $null
+                        if ((Get-SafeCount $parts) -ge 5) { try { $pcieGen = [int]$parts[4] } catch { } }
+                        if ((Get-SafeCount $parts) -ge 6) { try { $pcieWidth = [int]$parts[5] } catch { } }
+                        $mb = 0
+                        try { $mb = [int]$memStr } catch { try { $mb = [int]([double]$memStr) } catch { $mb = 0 } }
+                        $result += [ordered]@{
+                            index = Convert-SafeInt $idx
+                            name = $gpuName
+                            vramMB = $mb
+                            driver = $drv
+                            pcieLinkGen = $pcieGen
+                            pcieLinkWidth = $pcieWidth
+                        }
+                    }
+                }
+            } elseif ($exec['error']) {
+                Add-ErrorLog -Type 'GPU_WARN' -Source 'Get-NvidiaGpuInfo' -Message $exec['error']
+            }
+        }
+        return $result
+    } catch {
+        Write-Host "[WARN] Carte Graphique | nvidia-smi non disponible"
+        return @()
+    }
+}
+
+#
+# Helper: récupère les informations GPU via dxdiag
+# Utilise l'export texte de dxdiag (/t) et analyse les lignes pour obtenir le nom et la mémoire dédiée
+function Get-DxdiagGpuInfo {
+    try {
+        $list = @()
+        $tempFile = [System.IO.Path]::Combine($env:TEMP, "dxdiag_gpu_$([Guid]::NewGuid().ToString()).txt")
+        # Exécuter dxdiag en mode silencieux vers fichier texte
+        $exec = Invoke-CommandWithTimeout -FilePath 'dxdiag.exe' -ArgumentList @('/t', $tempFile) -TimeoutSeconds $Script:ExternalCommandTimeoutSeconds
+        if (Test-Path $tempFile) {
+            $lines = Get-Content -Path $tempFile -ErrorAction SilentlyContinue
+            Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+            $currentName = ''
+            foreach ($ln in $lines) {
+                $trim = ($ln -as [string]).Trim()
+                # Trouver la ligne du nom de carte
+                if ($trim -match '^Card name\s*:\s*(.+)$') {
+                    $currentName = $Matches[1].Trim()
+                    continue
+                }
+                # Trouver la mémoire dédiée (Dedicated Memory ou Dedicated Video Memory)
+                if ($trim -match '^Dedicated (Video )?Memory\s*:\s*(\d+(?:\.\d+)?)\s*(GB|MB)$') {
+                    $valStr = $Matches[2]
+                    $unit = $Matches[3]
+                    $val = 0.0
+                    try { $val = [double]$valStr } catch { $val = 0.0 }
+                    $memMB = 0
+                    if ($unit -match 'GB') {
+                        $memMB = [int]([math]::Round($val * 1024))
+                    } else {
+                        $memMB = [int]([math]::Round($val))
+                    }
+                    if ($currentName) { $list += [ordered]@{ name = $currentName; vramMB = $memMB } }
+                }
+            }
+        }
+        if (-not $exec['success'] -and $exec['error']) {
+            Add-ErrorLog -Type 'GPU_WARN' -Source 'Get-DxdiagGpuInfo' -Message $exec['error']
+        }
+        return $list
+    } catch {
+        Write-Host "[WARN] Carte Graphique | dxdiag non disponible"
+        return @()
+    }
+}
+
+function Get-RegistryGpuInfo {
+    try {
+        $list = @()
+        $classKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        $keys = Get-ChildItem -Path $classKey -ErrorAction SilentlyContinue
+        foreach ($key in @($keys)) {
+            if ($null -eq $key) { continue }
+            $psPath = Get-SafePropValue $key 'PSPath' ''
+            if ([string]::IsNullOrEmpty($psPath)) { continue }
+            $props = Get-ItemProperty -Path $psPath -ErrorAction SilentlyContinue
+            if ($null -eq $props) { continue }
+            $memBytes = Get-SafePropValue $props 'HardwareInformation.qwMemorySize' $null
+            $memMB = 0
+            if ($null -ne $memBytes) { $memMB = [math]::Round((Convert-SafeLong $memBytes) / 1MB, 0) }
+            if ($memMB -le 0) { continue }
+            $list += [ordered]@{
+                name = (Get-SafePropValue $props 'DriverDesc' '')
+                matchingId = (Get-SafePropValue $props 'MatchingDeviceId' '')
+                pnpDeviceId = (Get-SafePropValue $props 'PnPDeviceID' '')
+                vramMB = $memMB
+            }
+        }
+        return $list
+    } catch {
+        return @()
+    }
+}
+
+function Get-GpuVendor {
+    param([string]$Name, [string]$PnpDeviceId)
+    $combined = ("$Name $PnpDeviceId").ToLower()
+    if ($combined -match 'nvidia') { return 'NVIDIA' }
+    if ($combined -match 'amd|radeon|advanced micro devices') { return 'AMD' }
+    if ($combined -match 'intel') { return 'Intel' }
+    return 'Unknown'
+}
+
+# Helper: charge la DLL LibreHardwareMonitorLib.dll si elle est présente (avec téléchargement optionnel) et retourne $true/$false
+# Constante pour le caractere degre (evite les problemes d'encodage UTF-8)
+$Script:DegreeSymbol = [char]176
+
+function Import-LibreHardwareMonitor {
+    <#
+    .SYNOPSIS
+        Charge la DLL LibreHardwareMonitor si disponible localement
+    .DESCRIPTION
+        Recherche dans plusieurs emplacements: app packagée, script, Program Files.
+        LICENCE: LibreHardwareMonitor est sous MPL 2.0 - à vérifier par l'équipe.
+    #>
+    try {
+        # Verifier si deja charge en memoire
+        $lhmType = [System.AppDomain]::CurrentDomain.GetAssemblies() | 
+            Where-Object { $_.FullName -like '*LibreHardwareMonitor*' }
+        if ($null -ne $lhmType) { return $true }
+        
+        # Chemins possibles (app packagée prioritaire)
+        $possiblePaths = @(
+            (Join-Path $PSScriptRoot 'LibreHardwareMonitorLib.dll'),
+            (Join-Path $PSScriptRoot 'Sensors\LibreHardwareMonitorLib.dll'),
+            (Join-Path $PSScriptRoot 'lib\LibreHardwareMonitorLib.dll'),
+            (Join-Path $PSScriptRoot '..\Bin\LibreHardwareMonitorLib.dll'),
+            'C:\Virtual IT Pro\Bin\LibreHardwareMonitorLib.dll',
+            'C:\Virtual IT Pro\Sensors\LibreHardwareMonitorLib.dll',
+            (Join-Path $env:ProgramFiles 'Virtual IT Pro\Bin\LibreHardwareMonitorLib.dll'),
+            (Join-Path $env:ProgramFiles 'LibreHardwareMonitor\LibreHardwareMonitorLib.dll'),
+            (Join-Path ${env:ProgramFiles(x86)} 'LibreHardwareMonitor\LibreHardwareMonitorLib.dll')
+        )
+        
+        $dllPath = $null
+        foreach ($path in $possiblePaths) {
+            if ($path -and (Test-Path $path -ErrorAction SilentlyContinue)) { 
+                $dllPath = $path
+                break 
+            }
+        }
+        
+        if ($null -eq $dllPath) {
+            Add-ErrorLog -Type 'TEMP_INFO' -Source 'Import-LibreHardwareMonitor' -Message 'DLL non trouvee - fallback WMI actif'
+            return $false
+        }
+        
+        Add-Type -Path $dllPath -ErrorAction Stop
+        return $true
+    }
+    catch {
+        Add-ErrorLog -Type 'TEMP_WARN' -Source 'Import-LibreHardwareMonitor' -Message "Echec chargement: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Get-NvidiaSmiTemperature {
+    <#
+    .SYNOPSIS
+        Recupere la temperature GPU via nvidia-smi (tres fiable pour NVIDIA)
+    .OUTPUTS
+        Hashtable avec Value et Source, ou $null si echec
+    #>
+    try {
+        # nvidia-smi est installe avec les drivers NVIDIA
+        $nvidiaSmiPaths = @(
+            'C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe',
+            'C:\Windows\System32\nvidia-smi.exe',
+            (Get-Command 'nvidia-smi.exe' -ErrorAction SilentlyContinue).Source
+        )
+        
+        $nvidiaSmi = $null
+        foreach ($path in $nvidiaSmiPaths) {
+            if ($path -and (Test-Path $path -ErrorAction SilentlyContinue)) { 
+                $nvidiaSmi = $path
+                break 
+            }
+        }
+        
+        if ($null -eq $nvidiaSmi) { return $null }
+        
+        # Executer nvidia-smi pour obtenir la temperature
+        $output = & $nvidiaSmi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>$null
+        
+        if ($null -ne $output -and $output -match '^\d+$') {
+            $temp = [double]$output.Trim()
+            if ($temp -gt 0 -and $temp -lt 150) {
+                return @{
+                    Value = [math]::Round($temp, 1)
+                    Source = 'nvidia-smi'
+                }
+            }
+        }
+        return $null
+    }
+    catch {
+        Write-Host "[WARN] Temperatures | nvidia-smi non disponible"
+        return $null
+    }
+}
+
+function Get-WmiCpuTemperature {
+    <#
+    .SYNOPSIS
+        Recupere la temperature CPU via WMI (MSAcpi_ThermalZoneTemperature)
+    .DESCRIPTION
+        Utilise la VRAIE classe WMI dans root\WMI (necessite admin)
+    #>
+    try {
+        # Methode 1: MSAcpi_ThermalZoneTemperature (la plus fiable)
+        $thermalZones = Get-CimInstance -Namespace 'root\WMI' -ClassName 'MSAcpi_ThermalZoneTemperature' -ErrorAction Stop
+        
+        if ($null -ne $thermalZones) {
+            $maxTemp = $null
+            foreach ($zone in @($thermalZones)) {
+                if ($null -eq $zone) { continue }
+                # CurrentTemperature est en dixiemes de Kelvin
+                $currentTemp = Get-SafePropValue $zone 'CurrentTemperature' 0
+                if ($currentTemp -gt 0) {
+                    # Conversion: (valeur / 10) - 273.15 = Celsius
+                    $celsius = ($currentTemp / 10) - 273.15
+                    if ($celsius -gt -50 -and $celsius -lt 150) {
+                        if ($null -eq $maxTemp -or $celsius -gt $maxTemp) {
+                            $maxTemp = $celsius
+                        }
+                    }
+                }
+            }
+            if ($null -ne $maxTemp) {
+                return @{ Value = [math]::Round($maxTemp, 1); Source = 'WMI (MSAcpi)' }
+            }
+        }
+    }
+    catch { }
+    
+    # Methode 2: ThermalZoneInformation (Windows 10+)
+    try {
+        $perfData = Get-CimInstance -ClassName 'Win32_PerfFormattedData_Counters_ThermalZoneInformation' -ErrorAction Stop
+        if ($null -ne $perfData) {
+            foreach ($zone in @($perfData)) {
+                if ($null -eq $zone) { continue }
+                $highPrecTemp = Get-SafePropValue $zone 'HighPrecisionTemperature' 0
+                if ($highPrecTemp -gt 0) {
+                    $celsius = ($highPrecTemp / 10) - 273.15
+                    if ($celsius -gt -50 -and $celsius -lt 150) {
+                        return @{ Value = [math]::Round($celsius, 1); Source = 'WMI (ThermalZone)' }
+                    }
+                }
+            }
+        }
+    }
+    catch { }
+    
+    return $null
+}
+
+function Get-GpuTempFallback {
+    <#
+    .SYNOPSIS
+        Fallback pour temperature GPU (apres nvidia-smi et LHM)
+    .DESCRIPTION
+        Note: Win32_VideoController n'a PAS de propriete Temperature standard.
+        Cette fonction est un placeholder pour futures implementations.
+    #>
+    try {
+        # Win32_VideoController n'expose PAS Temperature - c'est un mythe
+        # Retourner null pour forcer l'affichage "Non detecte"
+        return $null
+    }
+    catch { return $null }
+}
+
+function Get-SmartTemperatureFromVendorSpecific {
+    <#
+    .SYNOPSIS
+        Extrait temperature SMART depuis VendorSpecific
+        Attributs 194 (Temperature_Celsius) ou 190 (Airflow_Temperature)
+        Lecture du LOW BYTE de la raw value
+    #>
+    param([byte[]]$VendorSpecific)
+    try {
+        if ($null -eq $VendorSpecific) { return $null }
+        $rawData = @($VendorSpecific)
+        $rawLen = Get-SafeCount $rawData
+        
+        for ($i = 2; $i -lt ($rawLen - 12); $i += 12) {
+            $attrId = $rawData[$i]
+            # Attribut 194 (Temperature_Celsius) ou 190 (Airflow_Temperature)
+            if ($attrId -eq 194 -or $attrId -eq 190) {
+                # Raw value commence a offset i+5, low byte = temperature
+                $lowByte = $rawData[$i + 5]
+                $result = Get-SmartTemperature -RawValue $lowByte
+                if ($null -ne $result) { return $result }
+                
+                # Fallback: essayer lecture entiere si low byte echoue
+                try { 
+                    $fullValue = [BitConverter]::ToUInt32($rawData, $i + 5)
+                    $result = Get-SmartTemperature -RawValue $fullValue
+                    if ($null -ne $result) { return $result }
+                } catch { }
+            }
+        }
+        return $null
+    } catch {
+        return $null
+    }
+}
+
+function Get-DiskTemperatures {
+    $disks = @()
+    try {
+        $cmd = Get-Command 'Get-StorageReliabilityCounter' -ErrorAction SilentlyContinue
+        if ($null -ne $cmd) {
+            $physicalDisks = @((Get-PhysicalDisk -ErrorAction SilentlyContinue))
+            if ((Get-SafeCount $physicalDisks) -gt 0) {
+                foreach ($pd in $physicalDisks) {
+                    if ($null -eq $pd) { continue }
+
+                    $model = Get-SafePropValue $pd 'FriendlyName' $null
+                    if (-not $model) { $model = Get-SafePropValue $pd 'Model' $null }
+                    if (-not $model) { $model = Get-SafePropValue $pd 'DeviceId' 'Disque' }
+
+                    $serial = Protect-SerialNumber (Get-SafePropValue $pd 'SerialNumber' $null)
+                    $temp = $null
+                    $source = 'StorageReliabilityCounter'
+                    $reason = $null
+
+                    try {
+                        $reliability = @($pd | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue)
+                        if ((Get-SafeCount $reliability) -gt 0) {
+                            $rel = $reliability[0]
+                            $tempRaw = Get-SafePropValue $rel 'Temperature' $null
+                            $temp = Format-Temperature -Value $tempRaw -Min 0 -Max 90
+                            if ($null -eq $temp -and $null -ne $tempRaw) {
+                                Add-ErrorLog -Type 'TEMP_WARN' -Source 'DiskTemperature' -Message "Lecture disque invalide (StorageReliabilityCounter): $tempRaw"
+                            }
+                        }
+                    } catch { }
+
+                    if ($null -eq $temp) {
+                        $msftTempRaw = Get-SafePropValue $pd 'Temperature' $null
+                        $msftTemp = Format-Temperature -Value $msftTempRaw -Min 0 -Max 90
+                        if ($null -ne $msftTemp) {
+                            $temp = $msftTemp
+                            $source = 'MSFT_PhysicalDisk'
+                        }
+                    }
+
+                    if ($null -eq $temp) {
+                        $reason = 'capteur non exposé ou accès restreint'
+                    }
+
+                    $disks += [ordered]@{
+                        model = $model
+                        serial = $serial
+                        tempC = $temp
+                        source = $source
+                        reason = $reason
+                    }
+                }
+                if ((Get-SafeCount $disks) -gt 0) { return @($disks) }
+            }
+        }
+    } catch { }
+
+    try {
+        $diskList = @((Get-WmiSafe -ClassName 'Win32_DiskDrive'))
+        $smartList = @((Get-WmiSafe -Namespace 'root\\WMI' -ClassName 'MSStorageDriver_ATAPISmartData'))
+        $diskCount = Get-SafeCount $diskList
+        $smartCount = Get-SafeCount $smartList
+        for ($i = 0; $i -lt $diskCount; $i++) {
+            $disk = $diskList[$i]
+            if ($null -eq $disk) { continue }
+            $smartItem = $null
+            if ($i -lt $smartCount) { $smartItem = $smartList[$i] }
+            $tempRaw = $null
+            $reason = $null
+            if ($null -ne $smartItem) {
+                $vendorSpecific = Get-SafePropValue $smartItem 'VendorSpecific' $null
+                $tempRaw = Get-SmartTemperatureFromVendorSpecific -VendorSpecific $vendorSpecific
+            } else {
+                $reason = 'source SMART indisponible'
+            }
+            $temp = Format-Temperature -Value $tempRaw -Min 0 -Max 90
+            if ($null -eq $temp -and $null -ne $tempRaw) {
+                Add-ErrorLog -Type 'TEMP_WARN' -Source 'DiskTemperature' -Message "Lecture SMART invalide: $tempRaw"
+                $reason = 'valeur SMART invalide'
+            }
+            if ($null -eq $temp -and -not $reason) {
+                $reason = if ($smartCount -eq 0) { 'accès SMART refusé ou non exposé' } else { 'température SMART non remontée' }
+            }
+            $disks += [ordered]@{
+                model = Get-SafePropValue $disk 'Model' $null
+                serial = Protect-SerialNumber (Get-SafePropValue $disk 'SerialNumber' $null)
+                tempC = $temp
+                source = 'SMART'
+                reason = $reason
+            }
+        }
+    } catch { }
+    return @($disks)
+}
+
+#endregion
+
+#region ============== FONCTIONS UTILITAIRES ==============
+function Test-Administrator {
+    try {
+        $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch { return $false }
+}
+
+function Show-Progress {
+    param([int]$current, [int]$total, [string]$section)
+    # Legacy wrapper — delegates to Write-Status for structured output
+    Write-Status -Type 'PROGRESS' -Section $section -Current $current -Total $total
+}
+
+function Write-Status {
+    param(
+        [string]$Type,       # PROGRESS | STATUS | DONE | ERROR | WARN | INFO | SECTION
+        [string]$Section,
+        [string]$Message = '',
+        [int]$Current = 0,
+        [int]$Total = 0
+    )
+    try {
+        $safeSection = if ([string]::IsNullOrWhiteSpace($Section)) { "PowerShell" } else { ($Section -replace '\|', '/' -replace '=', ':').Trim() }
+        $safeMessage = if ([string]::IsNullOrWhiteSpace($Message)) { "" } else { ($Message -replace '\|', '/' -replace '=', ':').Trim() }
+        if ($Type -eq 'PROGRESS' -and $Total -gt 0) {
+            $pct = [math]::Floor(($Current * 100) / $Total)
+            Write-Host "[PROGRESS] $Section | $Current/$Total | $pct%"
+        }
+        elseif ($Type -eq 'SECTION') {
+            Write-Host "[SECTION] $Section | $Message"
+            if (-not [string]::IsNullOrWhiteSpace($safeMessage)) {
+                Write-Host "LIVE|$safeMessage"
+            }
+        }
+        else {
+            Write-Host "[$Type] $Section | $Message"
+        }
+    }
+    catch { }
+}
+
+function Get-ShortHash {
+    param([string]$Value)
+    try {
+        if ([string]::IsNullOrEmpty($Value)) { return "000000" }
+        if (Test-SafeHasKey $Script:RedactCache $Value) { return $Script:RedactCache[$Value] }
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Value))
+        $sha256.Dispose()
+        $shortHash = [BitConverter]::ToString($hashBytes).Replace('-', '').Substring(0, 6).ToLower()
+        $Script:RedactCache[$Value] = $shortHash
+        return $shortHash
+    }
+    catch { return "000000" }
+}
+
+function Protect-Username {
+    param([string]$Username)
+    if ([string]::IsNullOrEmpty($Username) -or $Script:NoRedact) { return $Username }
+    try { $Script:RedactionStats.TotalRedactions++; return "USER-$(Get-ShortHash $Username)" }
+    catch { return $Username }
+}
+
+function Protect-ProductKey {
+    param([string]$Key)
+    if ([string]::IsNullOrEmpty($Key) -or $Script:NoRedact) { return $Key }
+    try {
+        $Script:RedactionStats.TotalRedactions++
+        if ($Script:RedactLevel -eq 'Full') { return "KEY-XXXX" }
+        if ($Key.Length -gt 4) { return "KEY-***$($Key.Substring($Key.Length - 4))" }
+        return "KEY-XXXX"
+    }
+    catch { return "KEY-XXXX" }
+}
+
+function Protect-IPAddress {
+    param([string]$IP)
+    if ([string]::IsNullOrEmpty($IP) -or $Script:NoRedact) { return $IP }
+    try {
+        if ($IP -match '^192\.168\.') { $Script:RedactionStats.TotalRedactions++; return '192.168.x.x' }
+        if ($IP -match '^10\.') { $Script:RedactionStats.TotalRedactions++; return '10.x.x.x' }
+        if ($IP -match '^172\.(1[6-9]|2[0-9]|3[0-1])\.') { $Script:RedactionStats.TotalRedactions++; return '172.x.x.x' }
+        if ($IP -match '^127\.') { $Script:RedactionStats.TotalRedactions++; return '127.x.x.x' }
+        if ($IP -match '^fe80:') { $Script:RedactionStats.TotalRedactions++; return 'fe80::xxxx' }
+        if ($Script:RedactLevel -eq 'Full') { $Script:RedactionStats.TotalRedactions++; return "IP-$(Get-ShortHash $IP)" }
+        if ($IP -match '^[0-9]{1,3}(\.[0-9]{1,3}){3}$') { $Script:RedactionStats.TotalRedactions++; return 'x.x.x.x' }
+        if ($IP -match '^[0-9a-fA-F:]+$') { $Script:RedactionStats.TotalRedactions++; return 'xxxx:xxxx:xxxx:xxxx' }
+        return $IP
+    }
+    catch { return $IP }
+}
+
+function Protect-SerialNumber {
+    param([string]$Serial)
+    if ([string]::IsNullOrEmpty($Serial) -or $Script:NoRedact) { return $Serial }
+    try {
+        $Script:RedactionStats.TotalRedactions++
+        if ($Script:RedactLevel -eq 'Full') { return "SERIAL-XXXX" }
+        if ($Serial.Length -gt 4) { return "SERIAL-***$($Serial.Substring($Serial.Length - 4))" }
+        return "SERIAL-XXXX"
+    }
+    catch { return "SERIAL-XXXX" }
+}
+
+function Protect-PnpDeviceId {
+    param([string]$PnpDeviceId)
+    if ([string]::IsNullOrEmpty($PnpDeviceId) -or $Script:NoRedact) { return $PnpDeviceId }
+    try {
+        $Script:RedactionStats.TotalRedactions++
+        if ($Script:RedactLevel -eq 'Full') { return "PNP-XXXX" }
+        return "PNP-$(Get-ShortHash $PnpDeviceId)"
+    }
+    catch { return $PnpDeviceId }
+}
+
+function Protect-ProfilePath {
+    param([string]$Path)
+    if ([string]::IsNullOrEmpty($Path) -or $Script:NoRedact) { return $Path }
+    try {
+        if ($Path -match '^[A-Za-z]:\\Users\\([^\\]+)(.*)$') {
+            $matchCount = Get-SafeCount $Matches
+            $username = ''
+            if ($Matches -and $matchCount -gt 1) { $username = $Matches[1] }
+            $remainder = ''
+            if ($Matches -and $matchCount -gt 2) { $remainder = $Matches[2] }
+            if ($username -in @('Public', 'Default', 'Default User', 'All Users')) { return $Path }
+            $Script:RedactionStats.TotalRedactions++
+            return "%USERPROFILE%$remainder"
+        }
+        return $Path
+    }
+    catch { return $Path }
+}
+
+function Protect-EnvValue {
+    param([string]$Key, [string]$Value)
+    if ([string]::IsNullOrEmpty($Value) -or $Script:NoRedact) { return $Value }
+    try {
+        if ($Script:RedactLevel -eq 'Full') { $Script:RedactionStats.TotalRedactions++; return "ENV-$(Get-ShortHash $Value)" }
+        if ($Key -match '(?i)(password|secret|token|key|pwd)') { $Script:RedactionStats.TotalRedactions++; return $Script:REDACTED }
+        if ($Value -match '^[A-Za-z]:\\Users\\') { $Script:RedactionStats.TotalRedactions++; return (Protect-ProfilePath $Value) }
+        return $Value
+    } catch { return $Value }
+}
+
+function Protect-ComputerName {
+    param([string]$ComputerName)
+    if ([string]::IsNullOrEmpty($ComputerName) -or $Script:NoRedact) { return $ComputerName }
+    try {
+        if ($Script:RedactLevel -eq 'Full') {
+            $Script:RedactionStats.TotalRedactions++
+            return "PC-$(Get-ShortHash $ComputerName)"
+        }
+        return $ComputerName
+    }
+    catch { return $ComputerName }
+}
+
+function Protect-MACAddress {
+    param([string]$MAC)
+    if ([string]::IsNullOrEmpty($MAC) -or $Script:NoRedact) { return $MAC }
+    try {
+        if ($Script:RedactLevel -eq 'Full') {
+            $Script:RedactionStats.TotalRedactions++
+            if ($MAC -match '^([0-9A-Fa-f]{2}[:-]){2}[0-9A-Fa-f]{2}') { return $MAC.Substring(0, 8) + ':XX:XX:XX' }
+            return 'XX:XX:XX:XX:XX:XX'
+        }
+        return $MAC
+    }
+    catch { return $MAC }
+}
+
+function Protect-CertificateSubject {
+    param([string]$Subject)
+    if ([string]::IsNullOrEmpty($Subject) -or $Script:NoRedact) { return $Subject }
+    try {
+        if ($Script:RedactLevel -eq 'Full') { $Script:RedactionStats.TotalRedactions++; return "CERT-$(Get-ShortHash $Subject)" }
+        return $Subject
+    }
+    catch { return $Subject }
+}
+
+function Get-WmiSafe {
+    param([string]$ClassName, [string]$Namespace = 'root\cimv2', [string]$Filter = '', [switch]$BypassCache)
+    try {
+        $cacheKey = "$Namespace\$ClassName\$Filter"
+        if (-not $BypassCache -and (Test-SafeHasKey $Script:WmiCache $cacheKey)) { 
+            return $Script:WmiCache[$cacheKey] 
+        }
+        $params = @{ ClassName = $ClassName; Namespace = $Namespace; ErrorAction = 'Stop' }
+        if ($Filter) { $params['Filter'] = $Filter }
+        $result = Get-CimInstance @params
+        $Script:WmiCache[$cacheKey] = $result
+        return $result
+    }
+    catch {
+        $errorEntry = [PSCustomObject]@{ 
+            Timestamp = (Get-Date).ToString('o'); Type = 'WMI_ERROR'
+            Namespace = $Namespace; ClassName = $ClassName; Reason = $_.Exception.Message 
+        }
+        try { [void]$Script:ErrorLog.Add($errorEntry) } catch { }
+        return $null
+    }
+}
+
+function Add-ErrorLog {
+    param([string]$Type, [string]$Source, [string]$Message)
+    try {
+        $errorEntry = [PSCustomObject]@{ 
+            Timestamp = (Get-Date).ToString('o'); Type = $Type
+            Source = $Source; Message = $Message 
+        }
+        [void]$Script:ErrorLog.Add($errorEntry)
+        if ($Type -and ($Type -notmatch 'INFO')) { $Script:PartialFailure = $true }
+    }
+    catch { }
+}
+
+function Add-WmiError {
+    <#
+    .SYNOPSIS
+        Journalise erreur WMI/CIM avec details complets
+    #>
+    param(
+        [string]$Namespace,
+        [string]$ClassName,
+        [string]$Method,
+        [object]$Exception
+    )
+    $msg = "[$Method] $Namespace\$ClassName"
+    if ($null -ne $Exception) {
+        $exMsg = $Exception.Message
+        if ([string]::IsNullOrEmpty($exMsg)) { $exMsg = $Exception.ToString() }
+        if ([string]::IsNullOrEmpty($exMsg)) { $exMsg = 'Exception sans message' }
+        $msg += " - $exMsg"
+    } else {
+        $msg += " - Echec sans exception"
+    }
+    Add-ErrorLog -Type 'WMI_ERROR' -Source $ClassName -Message $msg
+}
+
+function Test-ValidValue {
+    <#
+    .SYNOPSIS
+        Distingue valeur valide (incluant 0) de null/empty
+    #>
+    param([object]$Value, [switch]$AllowZero)
+    if ($null -eq $Value) { return $false }
+    if ($Value -is [string] -and [string]::IsNullOrEmpty($Value)) { return $false }
+    if ($Value -is [array] -and $Value.Count -eq 0) { return $false }
+    # 0 est valide par defaut
+    return $true
+}
+
+function Invoke-WithFallback {
+    <#
+    .SYNOPSIS
+        Execute une liste de methodes avec fallback automatique
+    #>
+    param(
+        [scriptblock[]]$Methods,
+        [string]$Section,
+        [string]$Item,
+        [object]$Default = $null
+    )
+    $result = $null
+    $sourceUsed = 'none'
+    $quality = 'unavailable'
+    $reason = ''
+    
+    for ($i = 0; $i -lt $Methods.Count; $i++) {
+        try {
+            $result = & $Methods[$i]
+            if ($null -ne $result -and $result -ne '' -and $result -ne 0) {
+                $sourceUsed = "method_$i"
+                $quality = 'ok'
+                if ($i -gt 0) { $quality = 'fallback' }
+                break
+            }
+        } catch {
+            $reason = $_.Exception.Message
+        }
+    }
+    
+    if ($null -eq $result -or $result -eq '') {
+        $result = $Default
+        $quality = 'unavailable'
+        Add-MissingData -Section $Section -Item $Item -Reason $reason
+    }
+    
+    return [PSCustomObject]@{
+        Value = $result
+        Source = $sourceUsed
+        Quality = $quality
+        Reason = $reason
+    }
+}
+
+function Add-MissingData {
+    <#
+    .SYNOPSIS
+        Ajoute une entree de donnee manquante au tableau global missingData[]
+    #>
+    param(
+        [string]$Section,
+        [string]$Item,
+        [string]$Reason,
+        [string]$Source = 'PowerShell',
+        [string]$Confidence = 'low'
+    )
+    try {
+        $entry = [PSCustomObject]@{
+            section    = $Section
+            item       = $Item
+            reason     = $Reason
+            source     = $Source
+            confidence = $Confidence
+            timestamp  = (Get-Date).ToString('o')
+        }
+        [void]$Script:MissingData.Add($entry)
+    } catch { }
+}
+
+function Get-ScoreV2 {
+    <#
+    .SYNOPSIS
+        Calcule le ScoreV2 avec breakdown detaille (v7.0)
+    .DESCRIPTION
+        Base: 100
+        Penalites ponderees (problemes REELS uniquement):
+        - CRITICAL/FATAL: -25 (max 2 comptés = -50 cap)
+        - COLLECTOR_ERROR: -3 par section (sauf limitations techniques)
+        - WARN: -1 (max 10 comptés)
+        - TIMEOUT: -5
+        v7.0: Les limitations techniques (WMI, externalisees) ne penalisent PAS le score
+        Score minimum: 10 (jamais 0 sauf crash total)
+    #>
+    $baseScore = 100
+    $penalties = [ordered]@{
+        critical = 0
+        collectorErrors = 0
+        warnings = 0
+        timeouts = 0
+        infoIssues = 0
+        excludedLimitations = 0
+    }
+    $topPenalties = @()
+    
+    # Compter les erreurs par type
+    foreach ($err in @($Script:ErrorLog)) {
+        if ($null -eq $err) { continue }
+        $errType = Get-SafePropValue $err 'Type' ''
+        $errSource = Get-SafePropValue $err 'Source' 'Unknown'
+        $errMsg = Get-SafePropValue $err 'Message' ''
+        
+        # v7.0: Exclure les limitations techniques du score
+        $isLimitation = $false
+        if ($errMsg -match 'limitation WMI|externalisee|Neutralise|Non disponible') {
+            $isLimitation = $true
+            $penalties.excludedLimitations++
+        }
+        
+        if ($isLimitation) {
+            # Ne pas penaliser les limitations techniques
+            continue
+        }
+        
+        if ($errType -match 'CRITICAL|FATAL') { 
+            $penalties.critical++
+            $topPenalties += [ordered]@{ type = 'CRITICAL'; source = $errSource; penalty = 25; msg = $errMsg }
+        }
+        elseif ($errType -match 'COLLECTOR_ERROR') { 
+            $penalties.collectorErrors++
+            $topPenalties += [ordered]@{ type = 'COLLECTOR_ERROR'; source = $errSource; penalty = 3; msg = $errMsg }
+        }
+        # FIX RISK #2: WMI_ERROR for critical categories (CPU, RAM, disk) should penalize score
+        elseif ($errType -match 'WMI_ERROR') {
+            # Check if it's a critical category (Win32_Processor, Win32_PhysicalMemory, Win32_DiskDrive, Win32_LogicalDisk)
+            $isCriticalWmi = $errSource -match 'Win32_Processor|Win32_PhysicalMemory|Win32_DiskDrive|Win32_LogicalDisk|Win32_OperatingSystem'
+            if ($isCriticalWmi) {
+                $penalties.collectorErrors++
+                $topPenalties += [ordered]@{ type = 'WMI_ERROR'; source = $errSource; penalty = 3; msg = $errMsg }
+            }
+            # Optional WMI categories (ThermalZone, Battery, etc.) get minimal penalty
+            else {
+                $penalties.warnings++
+            }
+        }
+        elseif ($errType -match 'TIMEOUT') { 
+            $penalties.timeouts++
+            $topPenalties += [ordered]@{ type = 'TIMEOUT'; source = $errSource; penalty = 5; msg = $errMsg }
+        }
+        elseif ($errType -match 'WARN|WARNING|TEMP_WARN') { 
+            $penalties.warnings++
+        }
+        elseif ($errType -match 'INFO|TEMP_INFO') { 
+            $penalties.infoIssues++
+        }
+    }
+    
+    # Calculer le score avec caps
+    $totalPenalty = 0
+    $totalPenalty += [math]::Min($penalties.critical, 2) * 25  # Max 2 critiques comptés
+    $totalPenalty += $penalties.collectorErrors * 3
+    $totalPenalty += [math]::Min($penalties.warnings, 10) * 1  # Max 10 warns comptés
+    $totalPenalty += $penalties.timeouts * 5
+    # INFO et limitations techniques ne penalisent pas le score
+    
+    # Score minimum 10 (sauf si 0 sections collectées)
+    $finalScore = [math]::Max(10, [math]::Min(100, $baseScore - $totalPenalty))
+    
+    # Determiner le grade (aligne sur SchemaRegistry.ScoreToGrade C#)
+    # A+(>=95) A(>=90) B+(>=80) B(>=70) C(>=60) D(>=50) F(<50)
+    $grade = 'F'
+    if ($finalScore -ge 95) { $grade = 'A+' }
+    elseif ($finalScore -ge 90) { $grade = 'A' }
+    elseif ($finalScore -ge 80) { $grade = 'B+' }
+    elseif ($finalScore -ge 70) { $grade = 'B' }
+    elseif ($finalScore -ge 60) { $grade = 'C' }
+    elseif ($finalScore -ge 50) { $grade = 'D' }
+    
+    # Top 5 penalites
+    $sortedPenalties = $topPenalties | Sort-Object { $_.penalty } -Descending | Select-Object -First 5
+    
+    return [ordered]@{
+        score = $finalScore
+        baseScore = $baseScore
+        totalPenalty = $totalPenalty
+        breakdown = $penalties
+        grade = $grade
+        topPenalties = @($sortedPenalties)
+    }
+}
+
+function Set-CollectorStatus {
+    param([string]$Name, [string]$Status, [string]$Message = '', [long]$DurationMs = -1)
+    try {
+        if ([string]::IsNullOrEmpty($Name)) { return }
+        $entry = [ordered]@{
+            status = $Status
+            message = $Message
+            timestamp = (Get-Date).ToString('o')
+        }
+        if ($DurationMs -ge 0) { $entry['durationMs'] = $DurationMs }
+        $Script:CollectorStatus[$Name] = $entry
+        $Script:CollectorTimings[$Name] = [ordered]@{
+            name = $Name
+            source = 'PS'
+            durationMs = if ($DurationMs -ge 0) { [long]$DurationMs } else { 0 }
+            status = $Status
+        }
+    } catch { }
+}
+
+function Get-ErrorLogData {
+    $errors = @()
+    try {
+        foreach ($err in @($Script:ErrorLog)) {
+            if ($null -eq $err) { continue }
+            $errors += [ordered]@{
+                timestamp = Get-SafePropValue $err 'Timestamp' ''
+                type = Get-SafePropValue $err 'Type' 'UNKNOWN'
+                source = Get-SafePropValue $err 'Source' 'Unknown'
+                message = Get-SafePropValue $err 'Message' 'No message'
+            }
+        }
+    } catch { }
+    return $errors
+}
+
+function Invoke-HardenOutputAcl {
+    param([string]$Path)
+    try {
+        if (-not $Script:HardenOutputAcl) { return }
+        if (-not (Test-Path $Path)) { return }
+        $acl = Get-Acl -Path $Path
+        $inherit = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit, [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+        $propagation = [System.Security.AccessControl.PropagationFlags]::None
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Administrators","FullControl",$inherit,$propagation,"Allow")
+        $acl.SetAccessRuleProtection($true, $false)
+        $acl.ResetAccessRule($rule)
+        Set-Acl -Path $Path -AclObject $acl
+    } catch {
+        Add-ErrorLog -Type 'ACL_WARN' -Source 'Invoke-HardenOutputAcl' -Message $_.Exception.Message
+    }
+}
+
+function Write-AtomicUtf8File {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Content
+    )
+    $tmpPath = "$Path.tmp"
+    $encoding = New-Object System.Text.UTF8Encoding($true)
+    [System.IO.File]::WriteAllText($tmpPath, $Content, $encoding)
+    if (Test-Path $Path) {
+        [System.IO.File]::Replace($tmpPath, $Path, $null)
+    } else {
+        [System.IO.File]::Move($tmpPath, $Path)
+    }
+}
+
+function Write-CompletionMarker {
+    param([string]$JsonPath)
+    try {
+        if ([string]::IsNullOrWhiteSpace($Script:CompletionMarkerPath)) { return }
+        $payload = [ordered]@{
+            runId = [string]$Script:RunId
+            jsonPath = [string]$JsonPath
+            timestamp = (Get-Date).ToString('o')
+        }
+        $markerJson = ($payload | ConvertTo-Json -Depth 4 -Compress)
+        Write-AtomicUtf8File -Path $Script:CompletionMarkerPath -Content $markerJson
+        Write-Status -Type 'DONE' -Section 'Marker' -Message $Script:CompletionMarkerPath
+    }
+    catch {
+        Write-Status -Type 'WARN' -Section 'Marker' -Message $_.Exception.Message
+    }
+}
+
+function Get-JsonSnapshotString {
+    $snapshot = New-JsonSnapshot
+    return (ConvertTo-JsonSafeObject $snapshot) | ConvertTo-Json -Depth 15 -Compress
+}
+
+function Write-ReportLine { 
+    param([string]$Line = "") 
+    try { [void]$Script:ReportLines.Add($Line) } catch { } 
+}
+
+function Write-Section {
+    param([string]$Title, [string[]]$Content)
+    try {
+        Write-ReportLine ""; Write-ReportLine ("=" * 100)
+        Write-ReportLine "[$Title]"; Write-ReportLine ("=" * 100)
+        $contentArray = @($Content)
+        foreach ($line in $contentArray) { Write-ReportLine $line }
+    }
+    catch { }
+}
+
+function Format-Bytes {
+    param([long]$Bytes)
+    try {
+        if ($Bytes -ge 1TB) { return "{0:N2} TB" -f ($Bytes / 1TB) }
+        if ($Bytes -ge 1GB) { return "{0:N2} GB" -f ($Bytes / 1GB) }
+        if ($Bytes -ge 1MB) { return "{0:N2} MB" -f ($Bytes / 1MB) }
+        if ($Bytes -ge 1KB) { return "{0:N2} KB" -f ($Bytes / 1KB) }
+        return "$Bytes B"
+    }
+    catch { return "0 B" }
+}
+
+function Get-RegistryValue {
+    param([string]$Path, [string]$Name, [object]$Default = $null)
+    try { return (Get-ItemPropertyValue -Path $Path -Name $Name -ErrorAction Stop) }
+    catch { return $Default }
+}
+
+function Invoke-PreflightCheck {
+    param([string]$ScriptPath, [switch]$SkipCheck)
+    if ($SkipCheck) { return $true }
+    try {
+        $policy = Get-ExecutionPolicy
+        if ($policy -in @('Restricted','Default')) {
+            Write-Status -Type 'WARN' -Section 'Preflight' -Message "Policy: $policy"
+            return $false
+        }
+        return $true
+    }
+    catch { return $true }
+}
+#endregion
+
+#region ============== COLLECTEURS BRUTS ==============
+function Get-MachineIdentity {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "IDENTIFICATION DU SYSTEME"; $content += ("-" * 50)
+        
+        $data['computerName'] = Protect-ComputerName $env:COMPUTERNAME
+        $data['username'] = Protect-Username $env:USERNAME
+        $data['domain'] = $env:USERDOMAIN
+        
+        $content += "Nom Machine              : $(Get-SafeDictValue $data 'computerName' 'N/A')"
+        $content += "Utilisateur              : $(Get-SafeDictValue $data 'username' 'N/A')"
+        $content += "Domaine                  : $(Get-SafeDictValue $data 'domain' 'N/A')"
+
+        $os = Get-WmiSafe -ClassName 'Win32_OperatingSystem'
+        if ($null -ne $os) {
+            $data['osCaption'] = Get-SafePropValue $os 'Caption' 'N/A'
+            $data['osVersion'] = Get-SafePropValue $os 'Version' 'N/A'
+            $data['osBuild'] = Get-SafePropValue $os 'BuildNumber' 'N/A'
+            $content += ""; $content += "VERSION WINDOWS"; $content += ("-" * 50)
+            $content += "Edition                  : $(Get-SafeDictValue $data 'osCaption' 'N/A')"
+            $content += "Version                  : $(Get-SafeDictValue $data 'osVersion' 'N/A')"
+            $content += "Build                    : $(Get-SafeDictValue $data 'osBuild' 'N/A')"
+            
+            $lastBoot = Get-SafePropValue $os 'LastBootUpTime'
+            if ($null -ne $lastBoot) {
+                try {
+                    $uptime = (Get-Date) - $lastBoot
+                    $data['lastBoot'] = $lastBoot.ToString('o')
+                    $data['uptimeDays'] = ([math]::Max(0, $uptime.Days))
+                    $data['uptimeHours'] = ([math]::Max(0, $uptime.Hours))
+                    $content += ""; $content += "UPTIME"; $content += ("-" * 50)
+                    $content += "Dernier Boot             : $($lastBoot.ToString('yyyy-MM-dd HH:mm'))"
+                    $content += "Uptime                   : $(([math]::Max(0, $uptime.Days)))j $(([math]::Max(0, $uptime.Hours)))h"
+                }
+                catch { }
+            }
+        }
+
+        $cs = Get-WmiSafe -ClassName 'Win32_ComputerSystem'
+        if ($null -ne $cs) {
+            $data['manufacturer'] = Get-SafePropValue $cs 'Manufacturer' 'N/A'
+            $data['model'] = Get-SafePropValue $cs 'Model' 'N/A'
+            $content += ""; $content += "FABRICANT"; $content += ("-" * 50)
+            $content += "Fabricant                : $(Get-SafeDictValue $data 'manufacturer' 'N/A')"
+            $content += "Modele                   : $(Get-SafeDictValue $data 'model' 'N/A')"
+        }
+
+        $bios = Get-WmiSafe -ClassName 'Win32_BIOS'
+        if ($null -ne $bios) {
+            $rawSerial = Get-SafePropValue $bios 'SerialNumber' ''
+            $data['biosSerial'] = Protect-SerialNumber $rawSerial
+            $data['biosVersion'] = Get-SafePropValue $bios 'SMBIOSBIOSVersion' 'N/A'
+            $content += ""; $content += "BIOS"; $content += ("-" * 50)
+            $content += "Serial                   : $(Get-SafeDictValue $data 'biosSerial' 'N/A')"
+            $content += "Version                  : $(Get-SafeDictValue $data 'biosVersion' 'N/A')"
+        }
+
+        try {
+            $secureBoot = Confirm-SecureBootUEFI -ErrorAction Stop
+            $data['secureBoot'] = $secureBoot
+            $content += "Secure Boot              : $(if($secureBoot){'ACTIVE'}else{'INACTIF'})"
+        }
+        catch { $data['secureBoot'] = $null }
+
+        $tpm = Get-WmiSafe -ClassName 'Win32_Tpm' -Namespace "root\cimv2\security\microsofttpm"
+        if ($null -ne $tpm) {
+            $data['tpmPresent'] = $true
+            $data['tpmVersion'] = Get-SafePropValue $tpm 'SpecVersion' 'N/A'
+            $content += ""; $content += "TPM"; $content += ("-" * 50)
+            $content += "TPM Version              : $(Get-SafeDictValue $data 'tpmVersion' 'N/A')"
+        } else { $data['tpmPresent'] = $false }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-MachineIdentity' -Message $_.Exception.Message }
+    $Script:SectionData['MachineIdentity'] = $data
+    return $content
+}
+
+function Get-OSInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $os = Get-WmiSafe -ClassName 'Win32_OperatingSystem'
+        $content += "INFORMATIONS WINDOWS"; $content += ("-" * 50)
+        if ($null -ne $os) {
+            $data['caption'] = Get-SafePropValue $os 'Caption' 'N/A'
+            $data['architecture'] = Get-SafePropValue $os 'OSArchitecture' 'N/A'
+            $content += "Nom OS                   : $(Get-SafeDictValue $data 'caption' 'N/A')"
+            $content += "Architecture             : $(Get-SafeDictValue $data 'architecture' 'N/A')"
+            $displayVersion = Get-RegistryValue -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name "DisplayVersion"
+            $data['displayVersion'] = $displayVersion
+            $content += "Display Version          : $displayVersion"
+        }
+        $content += ""; $content += "LICENCE"; $content += ("-" * 50)
+        try {
+            $license = Get-CimInstance -ClassName SoftwareLicensingProduct -ErrorAction Stop | 
+                Where-Object { (Get-SafePropValue $_ 'Name' '') -like "*Windows*" -and (Get-SafePropValue $_ 'LicenseStatus' 0) -eq 1 } | 
+                Select-Object -First 1
+            if ($null -ne $license) {
+                $data['licenseStatus'] = 'Active'
+                $data['licensePartialKey'] = Protect-ProductKey (Get-SafePropValue $license 'PartialProductKey' 'N/A')
+                $content += "Licence                  : Active ($(Get-SafeDictValue $data 'licensePartialKey' 'N/A'))"
+            } else { $data['licenseStatus'] = 'Inactive'; $content += "Licence                  : Non activee" }
+        }
+        catch { $data['licenseStatus'] = 'Unknown'; $content += "Licence                  : [Erreur lecture]" }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-OSInfo' -Message $_.Exception.Message }
+    $Script:SectionData['OS'] = $data
+    return $content
+}
+
+function Get-CpuInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "PROCESSEUR(S)"; $content += ("-" * 50)
+        $cpus = Get-WmiSafe -ClassName 'Win32_Processor'
+        $cpuList = @()
+        $cpuArray = @($cpus)
+        foreach ($cpu in $cpuArray) {
+            if ($null -eq $cpu) { continue }
+            $cpuInfo = [ordered]@{
+                name = Get-SafePropValue $cpu 'Name' 'N/A'
+                cores = Get-SafePropValue $cpu 'NumberOfCores' 0
+                threads = Get-SafePropValue $cpu 'NumberOfLogicalProcessors' 0
+                maxClockSpeed = Get-SafePropValue $cpu 'MaxClockSpeed' 0
+                currentLoad = Get-SafePropValue $cpu 'LoadPercentage' 0
+            }
+            $content += "CPU: $(Get-SafeDictValue $cpuInfo 'name' 'N/A')"
+            $content += "  Cores/Threads          : $(Get-SafeDictValue $cpuInfo 'cores' 0) / $(Get-SafeDictValue $cpuInfo 'threads' 0)"
+            $content += "  Frequence Max          : $(Get-SafeDictValue $cpuInfo 'maxClockSpeed' 0) MHz"
+            $content += "  Charge Actuelle        : $(Get-SafeDictValue $cpuInfo 'currentLoad' 0)%"
+            $cpuList += $cpuInfo
+        }
+        $data['cpus'] = $cpuList
+        $data['cpuCount'] = Get-SafeCount $cpuList
+
+        # Per-core frequency via performance counters
+        try {
+            $perfData = Get-Counter '\Processor Information(*)\% Processor Performance' -ErrorAction SilentlyContinue
+            if ($null -ne $perfData -and $null -ne $perfData.CounterSamples) {
+                $perCore = @()
+                $maxSpeed = if ((Get-SafeCount $cpuList) -gt 0) { Get-SafeDictValue $cpuList[0] 'maxClockSpeed' 0 } else { 0 }
+                foreach ($sample in $perfData.CounterSamples) {
+                    $path = $sample.Path
+                    if ($path -match '_Total') { continue }
+                    $pctPerf = [math]::Round($sample.CookedValue, 1)
+                    $actualMHz = if ($maxSpeed -gt 0) { [math]::Round(($pctPerf / 100) * $maxSpeed) } else { 0 }
+                    $perCore += [ordered]@{
+                        instance     = $sample.InstanceName
+                        performancePct = $pctPerf
+                        actualMHz    = $actualMHz
+                    }
+                }
+                $data['perCoreFrequency'] = $perCore
+                $content += "Per-core: $(Get-SafeCount $perCore) coeurs mesures"
+            }
+        } catch { }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-CpuInfo' -Message $_.Exception.Message }
+    $Script:SectionData['CPU'] = $data
+    return $content
+}
+
+function Get-MemoryInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "MEMOIRE PHYSIQUE (RAM)"; $content += ("-" * 50)
+        $os = Get-WmiSafe -ClassName 'Win32_OperatingSystem'
+        if ($null -ne $os) {
+            $totalKB = Get-SafePropValue $os 'TotalVisibleMemorySize' 0
+            $freeKB = Get-SafePropValue $os 'FreePhysicalMemory' 0
+            $totalGB = [math]::Round($totalKB / 1MB, 2)
+            $freeGB = [math]::Round($freeKB / 1MB, 2)
+            $usedPercent = 0
+            if ($totalKB -gt 0) { $usedPercent = [math]::Round((($totalKB - $freeKB) / $totalKB) * 100, 1) }
+            $data['totalGB'] = $totalGB; $data['freeGB'] = $freeGB; $data['usedPercent'] = $usedPercent
+            $content += "Memoire Totale           : $totalGB GB"
+            $content += "Memoire Libre            : $freeGB GB"
+            $content += "Utilisation              : $usedPercent%"
+        }
+        $memModules = Get-WmiSafe -ClassName 'Win32_PhysicalMemory'
+        $moduleList = @()
+        if ($null -ne $memModules) {
+            $content += ""; $content += "MODULES"; $content += ("-" * 50)
+            $moduleArray = @($memModules)
+            foreach ($m in $moduleArray) {
+                if ($null -eq $m) { continue }
+                $capacity = Get-SafePropValue $m 'Capacity' 0
+                $capacityGB = [math]::Round((Convert-SafeLong $capacity) / 1GB, 2)
+                $memTypeCode = Get-SafePropValue $m 'SMBIOSMemoryType' 0
+                $memType = switch($memTypeCode) { 20{'DDR'} 21{'DDR2'} 24{'DDR3'} 26{'DDR4'} 34{'DDR5'} default{"Type$memTypeCode"} }
+                $speed = Get-SafePropValue $m 'Speed' 0
+                $slot = Get-SafePropValue $m 'DeviceLocator' 'N/A'
+                $manufacturer = [string](Get-SafePropValue $m 'Manufacturer' '')
+                $partNumber = [string](Get-SafePropValue $m 'PartNumber' '')
+                # DC-4: Enrich with configured (effective) speed and ECC detection
+                $configuredSpeed = Get-SafePropValue $m 'ConfiguredClockSpeed' $null
+                $dataWidth = Get-SafePropValue $m 'DataWidth' $null
+                $totalWidth = Get-SafePropValue $m 'TotalWidth' $null
+                $configuredVoltage = Get-SafePropValue $m 'ConfiguredVoltage' $null
+                $isEcc = ($null -ne $dataWidth -and $null -ne $totalWidth -and
+                          (Convert-SafeInt $totalWidth) -gt (Convert-SafeInt $dataWidth))
+                $moduleInfo = [ordered]@{
+                    slot = $slot
+                    capacityGB = $capacityGB
+                    type = $memType
+                    speedMHz = $speed
+                    configuredSpeedMHz = $configuredSpeed
+                    dataWidthBits = $dataWidth
+                    totalWidthBits = $totalWidth
+                    isEcc = $isEcc
+                    configuredVoltage = $configuredVoltage
+                    manufacturer = $manufacturer
+                    partNumber = $partNumber
+                }
+                $speedDisplay = if ($null -ne $configuredSpeed -and $configuredSpeed -ne $speed) {
+                    "$speed MHz (XMP/configured: $configuredSpeed MHz)"
+                } else { "$speed MHz" }
+                $content += "[$slot] $capacityGB GB $memType @ $speedDisplay"
+                $moduleList += $moduleInfo
+            }
+        }
+        $data['modules'] = $moduleList; $data['moduleCount'] = Get-SafeCount $moduleList
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-MemoryInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Memory'] = $data
+    return $content
+}
+
+function Get-StorageInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "DISQUES PHYSIQUES"; $content += ("-" * 50)
+
+        # DC-2: Build a MediaType lookup from Get-PhysicalDisk (official Win32 API).
+        # Fallback to heuristic if Get-PhysicalDisk is unavailable.
+        $mediaTypeLookup = @{}
+        try {
+            $physDisks = @(Get-PhysicalDisk -ErrorAction SilentlyContinue)
+            foreach ($pd in $physDisks) {
+                if ($null -eq $pd) { continue }
+                $pdId = [string](Get-SafePropValue $pd 'DeviceId' '')
+                $pdModel = [string](Get-SafePropValue $pd 'FriendlyName' '')
+                $mt = [string](Get-SafePropValue $pd 'MediaType' '')
+                if ($pdId) { $mediaTypeLookup[$pdId] = $mt }
+                if ($pdModel) { $mediaTypeLookup[$pdModel] = $mt }
+            }
+        } catch { }
+
+        $disks = Get-WmiSafe -ClassName 'Win32_DiskDrive'
+        $diskList = @()
+        if ($null -ne $disks) {
+            $diskArray = @($disks)
+            foreach ($d in $diskArray) {
+                if ($null -eq $d) { continue }
+                $model = Get-SafePropValue $d 'Model' 'N/A'
+                $size = Get-SafePropValue $d 'Size' 0
+                $sizeGB = [math]::Round((Convert-SafeLong $size) / 1GB, 2)
+                $status = Get-SafePropValue $d 'Status' 'Unknown'
+                $interface = Get-SafePropValue $d 'InterfaceType' ''
+                $serial = Protect-SerialNumber (Get-SafePropValue $d 'SerialNumber' '')
+                $deviceId = [string](Get-SafePropValue $d 'DeviceID' '')
+                $pnpDeviceId = [string](Get-SafePropValue $d 'PNPDeviceID' '')
+                $index = Get-SafePropValue $d 'Index' -1
+
+                # DC-2: Resolve disk type from Get-PhysicalDisk MediaType first,
+                # fall back to model-name heuristic when unavailable.
+                $diskType = 'HDD'
+                $diskIndex = if ($index -ge 0) { [string]$index } else { '' }
+                $physMediaType = if ($mediaTypeLookup.ContainsKey($diskIndex)) { $mediaTypeLookup[$diskIndex] }
+                                 elseif ($mediaTypeLookup.ContainsKey($model)) { $mediaTypeLookup[$model] }
+                                 else { '' }
+                if ($physMediaType -eq 'SSD') { $diskType = 'SSD' }
+                elseif ($physMediaType -eq 'HDD') { $diskType = 'HDD' }
+                elseif ($physMediaType -eq 'SCM') { $diskType = 'SCM' }
+                elseif ($model -match 'SSD|NVMe' -or $interface -eq 'NVMe') { $diskType = 'SSD' }
+                $diskInfo = [ordered]@{
+                    model = $model
+                    type = $diskType
+                    sizeGB = $sizeGB
+                    status = $status
+                    serial = $serial
+                    interface = $interface
+                    deviceId = $deviceId
+                    pnpDeviceId = $pnpDeviceId
+                    uniqueId = if ($index -ge 0) { "disk_index_$index" } else { "" }
+                }
+                $content += "Disque: $model"; $content += "  Type: $diskType | Taille: $sizeGB GB | Status: $status"
+                $diskList += $diskInfo
+            }
+        }
+        $data['physicalDisks'] = $diskList; $data['physicalDiskCount'] = Get-SafeCount $diskList
+
+        $content += ""; $content += "VOLUMES"; $content += ("-" * 50)
+        $volumes = Get-WmiSafe -ClassName 'Win32_LogicalDisk'
+        $volumeList = @()
+        if ($null -ne $volumes) {
+            $volumeArray = @($volumes)
+            foreach ($v in $volumeArray) {
+                if ($null -eq $v) { continue }
+                $driveType = Get-SafePropValue $v 'DriveType' 0
+                if ($driveType -ne 3) { continue }
+                $size = Get-SafePropValue $v 'Size' 0
+                if ((Convert-SafeLong $size) -le 0) { continue }
+                $freeSpace = Get-SafePropValue $v 'FreeSpace' 0
+                $letter = Get-SafePropValue $v 'DeviceID' 'N/A'
+                $totalGB = [math]::Round((Convert-SafeLong $size) / 1GB, 2)
+                $freeGB = [math]::Round((Convert-SafeLong $freeSpace) / 1GB, 2)
+                $usedPercent = [math]::Round((((Convert-SafeLong $size) - (Convert-SafeLong $freeSpace)) / (Convert-SafeLong $size)) * 100, 1)
+                $volumeInfo = [ordered]@{ letter = $letter; totalGB = $totalGB; freeGB = $freeGB; usedPercent = $usedPercent }
+                $content += "$letter $totalGB GB | Libre: $freeGB GB ($usedPercent% utilise)"
+                $volumeList += $volumeInfo
+            }
+        }
+        $data['volumes'] = $volumeList; $data['volumeCount'] = Get-SafeCount $volumeList
+
+        $content += ""; $content += "SMART"; $content += ("-" * 50)
+        $smart = Get-WmiSafe -ClassName 'MSStorageDriver_FailurePredictStatus' -Namespace 'root\wmi'
+        $smartList = @()
+        if ($null -ne $smart) {
+            $smartArray = @($smart)
+            foreach ($s in $smartArray) {
+                if ($null -eq $s) { continue }
+                $predictFailure = Get-SafePropValue $s 'PredictFailure' $false
+                $instanceName = Get-SafePropValue $s 'InstanceName' 'N/A'
+                $smartInfo = [ordered]@{ instanceName = $instanceName; predictFailure = $predictFailure }
+                $status = "[OK]"
+                if ($predictFailure) { $status = "[ALERTE] Defaillance prevue!" }
+                $content += $status
+                $smartList += $smartInfo
+            }
+        } else { $content += "[INFO] SMART non disponible via WMI" }
+        $data['smart'] = $smartList
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-StorageInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Storage'] = $data
+    return $content
+}
+
+function Get-GpuInfo {
+    <#
+    .SYNOPSIS
+        Collecte GPU v7.0 - Données fiables uniquement
+    .DESCRIPTION
+        VRAM et température GPU neutralisées (limitation WMI - collecte externalisée)
+        Conserve: Nom, Fabricant, Driver, Date, Résolution, PNPDeviceID
+    #>
+    $content = @()
+    $data = [ordered]@{}
+    try {
+        $content += "CARTES GRAPHIQUES"
+        $content += ("-" * 50)
+        $gpuList = @()
+
+        $gpusWmi = Get-WmiSafe -ClassName 'Win32_VideoController'
+        $wmiArray = @($gpusWmi)
+        $wmiCount = Get-SafeCount $wmiArray
+
+        # Collecte VRAM multi-sources (tentatives avant la boucle GPU)
+        $nvidiaSmiGpus = @(Get-NvidiaGpuInfo)
+        $registryGpus  = @(Get-RegistryGpuInfo)
+        $ts = (Get-Date).ToString('o')
+
+        for ($i = 0; $i -lt $wmiCount; $i++) {
+            $gpu = $wmiArray[$i]
+            if ($null -eq $gpu) { continue }
+
+            $name = Get-SafePropValue $gpu 'Name' 'Unknown'
+            $driver = Get-SafePropValue $gpu 'DriverVersion' ''
+            $driverDate = Get-SafePropValue $gpu 'DriverDate' ''
+            $status = Get-SafePropValue $gpu 'Status' 'Unknown'
+            $hRes = Convert-SafeInt (Get-SafePropValue $gpu 'CurrentHorizontalResolution' 0)
+            $vRes = Convert-SafeInt (Get-SafePropValue $gpu 'CurrentVerticalResolution' 0)
+            $pnpRaw = Get-SafePropValue $gpu 'PNPDeviceID' ''
+            $vendor = Get-GpuVendor -Name $name -PnpDeviceId $pnpRaw
+            $pnpDeviceId = $null
+            if ($pnpRaw) { $pnpDeviceId = Protect-PnpDeviceId $pnpRaw }
+
+            # Tentative VRAM: nvidia-smi > registry > indisponible
+            $vramMB = $null; $vramSrc = $null; $vramConf = 'unavailable'
+            $nvMatch = $nvidiaSmiGpus | Where-Object { $_.name -and $name -and $_.name.IndexOf($_.name.Split(' ')[0], [System.StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First 1
+            if ($null -ne $nvMatch -and $nvMatch.vramMB -gt 0) {
+                $vramMB = $nvMatch.vramMB; $vramSrc = 'nvidia-smi'; $vramConf = 'high'
+            } else {
+                $regMatch = $registryGpus | Where-Object { $_.name -and $name -and $name.IndexOf(($_.name -split ' ')[0], [System.StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First 1
+                if ($null -ne $regMatch -and $regMatch.vramMB -gt 0) {
+                    $vramMB = $regMatch.vramMB; $vramSrc = 'registry'; $vramConf = 'medium'
+                }
+            }
+
+            $vramAvailable = $null -ne $vramMB
+            $vramReason = if (-not $vramAvailable) { 'WMI limitation - nvidia-smi introuvable et registre sans donnee' } else { $null }
+            $vramInfo = [ordered]@{
+                available  = $vramAvailable
+                value      = $vramMB
+                reason     = $vramReason
+                source     = if ($vramAvailable) { $vramSrc } else { 'unavailable' }
+                confidence = $vramConf
+                timestamp  = $ts
+            }
+
+            # DC-5: Attach PCIe link gen/width from nvidia-smi if available
+            $pcieLinkGen = $null; $pcieLinkWidth = $null
+            if ($null -ne $nvMatch) {
+                $pcieLinkGen = Get-SafePropValue $nvMatch 'pcieLinkGen' $null
+                $pcieLinkWidth = Get-SafePropValue $nvMatch 'pcieLinkWidth' $null
+            }
+            $gpuInfo = [ordered]@{
+                name          = $name
+                vendor        = $vendor
+                driverVersion = $driver
+                driverDate    = $driverDate
+                pnpDeviceId   = $pnpDeviceId
+                resolution    = "${hRes}x${vRes}"
+                status        = $status
+                vramTotalMB   = $vramMB
+                vramNote      = if ($vramAvailable) { "$vramMB MB [$vramSrc]" } else { $null }
+                vramInfo      = $vramInfo
+                pcieLinkGen   = $pcieLinkGen
+                pcieLinkWidth = $pcieLinkWidth
+            }
+            $gpuList += $gpuInfo
+
+            $vramDisplay = if ($vramAvailable) { "$vramMB MB [$vramSrc]" } else { "Non disponible (limitation WMI)" }
+            $content += "GPU: $name"
+            $content += "  Fabricant: $vendor"
+            $content += "  Driver: $driver"
+            $content += "  Resolution: ${hRes}x${vRes}"
+            $content += "  VRAM: $vramDisplay"
+        }
+
+        if ((Get-SafeCount $gpuList) -eq 0) { $content += "[INFO] Aucun GPU detecte" }
+
+        $data['gpus'] = $gpuList
+        $data['gpuCount'] = Get-SafeCount $gpuList
+    } catch {
+        Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-GpuInfo' -Message $_.Exception.Message
+    }
+    $Script:SectionData['GPU'] = $data
+    return $content
+}
+
+#
+# Collecte des températures CPU/GPU/Disques
+# v7.0: CPU et GPU neutralisés (limitation WMI - collecte externalisée)
+# Seules les températures disques sont conservées si disponibles
+function Get-Temperatures {
+    <#
+    .SYNOPSIS
+        Collecte températures v7.0 - Données fiables uniquement
+    .DESCRIPTION
+        CPU et GPU: Neutralisés (limitation WMI - collecte externalisée vers Brique 2)
+        Disques: Conservés via StorageReliabilityCounter/SMART si disponibles
+    #>
+    $content = @()
+    $data = [ordered]@{}
+    $degC = "$([char]176)C"
+
+    try {
+        $content += "TEMPERATURES HARDWARE"
+        $content += ("-" * 50)
+
+        $ts = (Get-Date).ToString('o')
+
+        # CPU: tentative WMI (MSAcpi_ThermalZoneTemperature / ThermalZoneInformation) pour alimenter l'UI
+        $cpuResult = Get-WmiCpuTemperature
+        $cpuTempC = $null
+        $cpuSource = 'Non disponible (WMI non supporte ou admin requis)'
+        if ($null -ne $cpuResult -and $null -ne $cpuResult.Value) {
+            $cpuTempC = $cpuResult.Value
+            $cpuSource = Get-SafeDictValue $cpuResult 'Source' 'WMI'
+        }
+        $cpuNote = if ($null -ne $cpuTempC) { "$cpuTempC $degC [$cpuSource]" } else { $cpuSource }
+        $cpuTempInfo = [ordered]@{
+            available  = ($null -ne $cpuTempC)
+            value      = $cpuTempC
+            reason     = if ($null -eq $cpuTempC) { 'WMI non supporte ou droits admin requis (MSAcpi_ThermalZoneTemperature)' } else { $null }
+            source     = if ($null -ne $cpuTempC) { "WMI/$cpuSource" } else { 'unavailable' }
+            confidence = if ($null -ne $cpuTempC) { 'medium' } else { 'unavailable' }
+            timestamp  = $ts
+        }
+
+        # GPU: tentative via nvidia-smi (NVIDIA uniquement - WMI incapable)
+        $gpuTempC = $null
+        $gpuSource = 'unavailable'
+        $gpuTempResult = Get-NvidiaSmiTemperature
+        if ($null -ne $gpuTempResult -and $null -ne $gpuTempResult.Value) {
+            $gpuTempC = $gpuTempResult.Value
+            $gpuSource = Get-SafeDictValue $gpuTempResult 'Source' 'nvidia-smi'
+        }
+        $gpuNote = if ($null -ne $gpuTempC) { "$gpuTempC $degC [$gpuSource]" } else { 'Non disponible (limitation WMI - collecte externalisee)' }
+        $gpuTempInfo = [ordered]@{
+            available  = ($null -ne $gpuTempC)
+            value      = $gpuTempC
+            reason     = if ($null -eq $gpuTempC) { 'nvidia-smi absent ou GPU non-NVIDIA (WMI incapable de lire temp GPU)' } else { $null }
+            source     = if ($null -ne $gpuTempC) { $gpuSource } else { 'PowerShell/Get-NvidiaSmiTemperature' }
+            confidence = if ($null -ne $gpuTempC) { 'high' } else { 'unavailable' }
+            timestamp  = $ts
+        }
+        if ($null -eq $gpuTempC) {
+            Add-MissingData -Section 'Temperatures' -Item 'GPU_Temperature' `
+                -Reason 'nvidia-smi absent ou GPU non-NVIDIA (WMI incapable)' `
+                -Source 'PowerShell/Get-NvidiaSmiTemperature' -Confidence 'low'
+        }
+
+        $content += ""
+        $content += "CPU: $cpuNote"
+        $content += "GPU: $gpuNote"
+
+        # Températures disques (conservées)
+        $diskTemps = @((Get-DiskTemperatures))
+        if ($null -eq $diskTemps) { $diskTemps = @() }
+
+        $content += "Disques: $(Get-SafeCount $diskTemps)"
+        foreach ($disk in $diskTemps) {
+            $model = Get-SafeDictValue $disk 'model' 'Disque'
+            $temp = Get-SafeDictValue $disk 'tempC' $null
+            $source = Get-SafeDictValue $disk 'source' 'Unknown'
+            $tempLabel = 'N/A'
+            if ($null -ne $temp) { $tempLabel = "$temp $degC" }
+            $content += "  - $model : $tempLabel [$source]"
+        }
+        if ((Get-SafeCount $diskTemps) -eq 0) {
+            $content += "[INFO] Temperature disque non disponible"
+        }
+
+        # Fan speeds
+        $fanList = @()
+        try {
+            $fans = Get-CimInstance -ClassName Win32_Fan -Namespace 'root\cimv2' -ErrorAction SilentlyContinue
+            if ($null -ne $fans) {
+                foreach ($fan in @($fans)) {
+                    if ($null -eq $fan) { continue }
+                    $fanList += [ordered]@{
+                        name = Get-SafePropValue $fan 'Name' 'Fan'
+                        rpm  = Get-SafePropValue $fan 'DesiredSpeed' 0
+                        source = 'Win32_Fan'
+                    }
+                }
+            }
+        } catch { }
+        # Fallback: MSAcpi_Fan (root\WMI, admin required)
+        if ((Get-SafeCount $fanList) -eq 0 -and $Script:IsAdmin) {
+            try {
+                $acpiFans = Get-CimInstance -ClassName MSAcpi_Fan -Namespace 'root\WMI' -ErrorAction SilentlyContinue
+                if ($null -ne $acpiFans) {
+                    foreach ($af in @($acpiFans)) {
+                        if ($null -eq $af) { continue }
+                        $fanList += [ordered]@{
+                            name = Get-SafePropValue $af 'InstanceName' 'ACPI Fan'
+                            rpm  = 0
+                            source = 'MSAcpi_Fan'
+                        }
+                    }
+                }
+            } catch { }
+        }
+        # Fallback: nvidia-smi fan speed for NVIDIA GPUs
+        if ($null -ne $gpuTempC) {
+            try {
+                $nvFan = & nvidia-smi --query-gpu=fan.speed --format=csv,noheader,nounits 2>$null
+                if ($null -ne $nvFan -and $nvFan -match '^\d+$') {
+                    $fanList += [ordered]@{
+                        name = 'GPU Fan (NVIDIA)'
+                        rpm  = [int]$nvFan
+                        source = 'nvidia-smi (% speed)'
+                    }
+                }
+            } catch { }
+        }
+        if ((Get-SafeCount $fanList) -gt 0) {
+            $content += "Ventilateurs: $(Get-SafeCount $fanList)"
+            foreach ($f in $fanList) { $content += "  - $(Get-SafeDictValue $f 'name' 'Fan'): $(Get-SafeDictValue $f 'rpm' 0) RPM [$(Get-SafeDictValue $f 'source' '')]" }
+        } else {
+            $content += "[INFO] Ventilateurs non detectes via WMI"
+        }
+
+        # Données JSON (cpuTempC alimente l'UI Température CPU quand disponible)
+        $data['cpuTempC']    = $cpuTempC
+        $data['gpuTempC']    = $gpuTempC
+        $data['cpuNote']     = $cpuNote
+        $data['gpuNote']     = $gpuNote
+        $data['disks']       = $diskTemps
+        $data['fans']        = $fanList
+        $data['cpuSource']   = $cpuSource
+        $data['gpuSource']   = if ($null -ne $gpuTempC) { $gpuSource } else { 'Neutralise_v7' }
+        $data['lhmAvailable']= $false
+        $data['cpuTempInfo'] = $cpuTempInfo
+        $data['gpuTempInfo'] = $gpuTempInfo
+        $Script:SectionData['Temperatures'] = $data
+    }
+    catch {
+        Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-Temperatures' -Message $_.Exception.Message
+        $data['cpuTempC']    = $null
+        $data['gpuTempC']    = $null
+        $data['cpuNote']     = 'Erreur collecte'
+        $data['gpuNote']     = 'Erreur collecte'
+        $data['disks']       = @()
+        $data['cpuSource']   = 'Erreur'
+        $data['gpuSource']   = 'Erreur'
+        $data['lhmAvailable']= $false
+        $data['cpuTempInfo'] = [ordered]@{ available = $false; value = $null; reason = 'Erreur collecte'; source = 'PowerShell/Get-Temperatures'; confidence = 'unavailable'; timestamp = (Get-Date).ToString('o') }
+        $data['gpuTempInfo'] = [ordered]@{ available = $false; value = $null; reason = 'Erreur collecte'; source = 'PowerShell/Get-Temperatures'; confidence = 'unavailable'; timestamp = (Get-Date).ToString('o') }
+        $Script:SectionData['Temperatures'] = $data
+        $content += "[ERREUR] Collecte temperatures echouee"
+    }
+
+    return $content
+}
+
+function Get-NetworkInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "CONFIGURATION RESEAU"; $content += ("-" * 50)
+        $ipConfigs = Get-WmiSafe -ClassName 'Win32_NetworkAdapterConfiguration'
+        $adapterList = @()
+        if ($null -ne $ipConfigs) {
+            $configArray = @($ipConfigs)
+            foreach ($ip in $configArray) {
+                if ($null -eq $ip) { continue }
+                $ipEnabled = Get-SafePropValue $ip 'IPEnabled' $false
+                if (-not $ipEnabled) { continue }
+                $description = Get-SafePropValue $ip 'Description' 'N/A'
+                $content += "Interface: $description"
+                $ipAddresses = @(Get-SafePropValue $ip 'IPAddress' @())
+                $maskedIPs = @(); foreach ($addr in $ipAddresses) { if ($addr) { $maskedIPs += Protect-IPAddress $addr } }
+                $gateways = @(Get-SafePropValue $ip 'DefaultIPGateway' @())
+                $maskedGateways = @(); foreach ($gw in $gateways) { if ($gw) { $maskedGateways += Protect-IPAddress $gw } }
+                $mac = Protect-MACAddress (Get-SafePropValue $ip 'MACAddress' '')
+                $dhcp = Get-SafePropValue $ip 'DHCPEnabled' $false
+                $dns = @(Get-SafePropValue $ip 'DNSServerSearchOrder' @())
+                $adapterInfo = [ordered]@{ name = $description; ip = $maskedIPs; gateway = $maskedGateways; mac = $mac; dhcp = $dhcp; dns = $dns }
+                $content += "  IP: $($maskedIPs -join ', ') | Gateway: $($maskedGateways -join ', ') | MAC: $mac"
+                $adapterList += $adapterInfo
+            }
+        }
+        $data['adapters'] = $adapterList; $data['adapterCount'] = Get-SafeCount $adapterList
+
+        $content += ""; $content += "CONNEXIONS"; $content += ("-" * 50)
+        try {
+            $connections = @(Get-NetTCPConnection -ErrorAction Stop | Where-Object { (Get-SafePropValue $_ 'State' '') -ne 'TimeWait' })
+            $listening = @($connections | Where-Object { (Get-SafePropValue $_ 'State' '') -eq 'Listen' })
+            $data['totalConnections'] = Get-SafeCount $connections
+            $data['listeningPorts'] = Get-SafeCount $listening
+            $content += "Total connexions: $(Get-SafeDictValue $data 'totalConnections' 0) | Ports en ecoute: $(Get-SafeDictValue $data 'listeningPorts' 0)"
+        }
+        catch { $content += "[INFO] Get-NetTCPConnection non disponible"; $data['totalConnections'] = 0; $data['listeningPorts'] = 0 }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-NetworkInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Network'] = $data
+    return $content
+}
+
+function Get-SecurityInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "WINDOWS DEFENDER"; $content += ("-" * 50)
+        try {
+            $defender = Get-MpComputerStatus -ErrorAction Stop
+            $data['defenderRTP'] = Get-SafePropValue $defender 'RealTimeProtectionEnabled' $null
+            $data['defenderEnabled'] = Get-SafePropValue $defender 'AntivirusEnabled' $null
+            $data['defenderSignatureAge'] = Get-SafePropValue $defender 'AntivirusSignatureAge' -1
+            $content += "Real-time Protection     : $(Get-SafeDictValue $data 'defenderRTP' 'N/A')"
+            $content += "Antivirus Enabled        : $(Get-SafeDictValue $data 'defenderEnabled' 'N/A')"
+            $content += "Signature Age (jours)    : $(Get-SafeDictValue $data 'defenderSignatureAge' 'N/A')"
+        }
+        catch { $content += "[INFO] Defender non disponible" }
+
+        $content += ""; $content += "ANTIVIRUS (Security Center)"; $content += ("-" * 50)
+        $avProducts = Get-WmiSafe -ClassName 'AntiVirusProduct' -Namespace 'root\SecurityCenter2'
+        $avList = @()
+        if ($null -ne $avProducts) {
+            $avArray = @($avProducts)
+            foreach ($av in $avArray) {
+                if ($null -eq $av) { continue }
+                $displayName = Get-SafePropValue $av 'displayName' 'N/A'
+                $content += "Produit: $displayName"
+                $avList += $displayName
+            }
+        } else { $content += "[INFO] Aucun antivirus detecte via Security Center" }
+        $data['antivirusProducts'] = $avList
+
+        $content += ""; $content += "PARE-FEU"; $content += ("-" * 50)
+        $fwData = [ordered]@{}
+        try {
+            $fw = Get-NetFirewallProfile -ErrorAction Stop
+            $fwArray = @($fw)
+            foreach ($fwProfile in $fwArray) {
+                if ($null -eq $fwProfile) { continue }
+                $profileName = Get-SafePropValue $fwProfile 'Name' 'N/A'
+                $profileEnabled = Get-SafePropValue $fwProfile 'Enabled' $false
+                $status = "DESACTIVE"
+                if ($profileEnabled) { $status = "ACTIVE" }
+                $content += "$profileName : $status"
+                $fwData[$profileName] = $profileEnabled
+            }
+        }
+        catch { $content += "[INFO] Get-NetFirewallProfile non disponible" }
+        $data['firewall'] = $fwData
+
+        $content += ""; $content += "UAC"; $content += ("-" * 50)
+        $uac = Get-RegistryValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Default 0
+        $data['uacEnabled'] = ($uac -eq 1)
+        $content += "UAC: $(if($uac -eq 1){'Active'}else{'Desactive'})"
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-SecurityInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Security'] = $data
+    return $content
+}
+
+function Get-ServicesInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $criticalServices = @('wuauserv', 'WinDefend', 'mpssvc', 'EventLog', 'CryptSvc')
+        $content += "SERVICES CRITIQUES"; $content += ("-" * 50)
+        $criticalList = @()
+        foreach ($svcName in $criticalServices) {
+            try {
+                $svc = Get-Service -Name $svcName -ErrorAction Stop
+                $status = Get-SafePropValue $svc 'Status' 'Unknown'
+                $displayName = Get-SafePropValue $svc 'DisplayName' $svcName
+                $icon = '[STOP]'
+                if ("$status" -eq 'Running') { $icon = '[OK]' }
+                $content += "$icon $displayName"
+                $criticalList += [ordered]@{ name = $svcName; displayName = $displayName; status = "$status" }
+            }
+            catch { $content += "[N/A] $svcName"; $criticalList += [ordered]@{ name = $svcName; displayName = $svcName; status = 'NotFound' } }
+        }
+        $data['criticalServices'] = $criticalList
+        try {
+            $all = @(Get-Service -ErrorAction Stop)
+            $running = @($all | Where-Object { (Get-SafePropValue $_ 'Status' '') -eq 'Running' })
+            $data['totalServices'] = Get-SafeCount $all
+            $data['runningServices'] = Get-SafeCount $running
+            $content += ""; $content += "Total: $(Get-SafeDictValue $data 'totalServices' 0) | Running: $(Get-SafeDictValue $data 'runningServices' 0)"
+        }
+        catch { $data['totalServices'] = 0; $data['runningServices'] = 0 }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-ServicesInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Services'] = $data
+    return $content
+}
+
+function Get-StartupPrograms {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "PROGRAMMES AU DEMARRAGE"; $content += ("-" * 50)
+        $startupList = @()
+        $runKeys = @(@{Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'; Scope='Machine'}, @{Path='HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'; Scope='User'})
+        foreach ($key in $runKeys) {
+            try {
+                $items = Get-ItemProperty -Path (Get-SafeDictValue $key 'Path' '') -ErrorAction SilentlyContinue
+                if ($null -ne $items -and $null -ne $items.PSObject -and $null -ne $items.PSObject.Properties) {
+                    foreach ($prop in $items.PSObject.Properties) {
+                        $propName = Get-SafePropValue $prop 'Name' ''
+                        if ($propName -match '^PS') { continue }
+                        $scope = Get-SafeDictValue $key 'Scope' 'Unknown'
+                        $content += "[$scope] $propName"
+                        $startupList += [ordered]@{ name = $propName; scope = $scope }
+                    }
+                }
+            }
+            catch { }
+        }
+        $data['startupItems'] = $startupList; $data['startupCount'] = Get-SafeCount $startupList
+        $content += ""; $content += "Total: $(Get-SafeDictValue $data 'startupCount' 0) elements"
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-StartupPrograms' -Message $_.Exception.Message }
+    $Script:SectionData['StartupPrograms'] = $data
+    return $content
+}
+
+function Get-HealthChecks {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "VERIFICATION SANTE SYSTEME"; $content += ("=" * 50); $content += ""; $content += "REDEMARRAGE REQUIS"; $content += ("-" * 50)
+        $rebootRequired = $false; $rebootReasons = @()
+        if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired") { $rebootRequired = $true; $rebootReasons += "Windows Update" }
+        if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") { $rebootRequired = $true; $rebootReasons += "Composants CBS" }
+        $data['rebootRequired'] = $rebootRequired; $data['rebootReasons'] = $rebootReasons
+        if ($rebootRequired) { $content += "[ATTENTION] Redemarrage requis: $($rebootReasons -join ', ')" }
+        else { $content += "[OK] Aucun redemarrage en attente" }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-HealthChecks' -Message $_.Exception.Message }
+    $Script:SectionData['HealthChecks'] = $data
+    return $content
+}
+
+function Get-EventLogsInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "JOURNAUX D'EVENEMENTS"; $content += ("-" * 50)
+        $logs = @('System', 'Application'); $logData = [ordered]@{}
+        foreach ($log in $logs) {
+            $content += ""; $content += "=== $log ==="
+            try {
+                $maxEv = $Script:Config.Limits.MaxEvents
+                $rawEvents = Invoke-WithSectionTimeout -Script {
+                    @(Get-WinEvent -FilterHashtable @{ LogName = $using:log; Level = 1,2; StartTime = (Get-Date).AddDays(-7) } -MaxEvents $using:maxEv -ErrorAction SilentlyContinue)
+                } -TimeoutSeconds 20 -SectionName "EventLogs-$log"
+                $errors = if ($null -ne $rawEvents) { @($rawEvents) } else { @() }
+                $critCount = Get-SafeCount ($errors | Where-Object { (Get-SafePropValue $_ 'Level' 0) -eq 1 })
+                $errCount = Get-SafeCount ($errors | Where-Object { (Get-SafePropValue $_ 'Level' 0) -eq 2 })
+                $logData[$log] = [ordered]@{ criticalCount = $critCount; errorCount = $errCount }
+                $content += "Critiques: $critCount | Erreurs: $errCount (7 jours)"
+            }
+            catch { $logData[$log] = [ordered]@{ criticalCount = 0; errorCount = 0 }; $content += "[OK] Aucune erreur recente" }
+        }
+        $data['logs'] = $logData
+        $content += ""; $content += "BSOD (30 jours)"; $content += ("-" * 50)
+        try {
+            $bsod = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-WER-SystemErrorReporting'; StartTime = (Get-Date).AddDays(-30) } -MaxEvents 20 -ErrorAction SilentlyContinue)
+            $data['bsodCount'] = Get-SafeCount $bsod
+            $content += "BSOD detectes: $(Get-SafeDictValue $data 'bsodCount' 0)"
+        }
+        catch { $data['bsodCount'] = 0; $content += "[INFO] Non disponible" }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-EventLogsInfo' -Message $_.Exception.Message; $data['available'] = $false; $data['reason'] = $_.Exception.Message }
+    if (-not $data.Contains('available')) { $data['available'] = $true }
+    $Script:SectionData['EventLogs'] = $data
+    return $content
+}
+
+function Get-WindowsUpdateInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "WINDOWS UPDATE"; $content += ("-" * 50)
+        
+        # Record last check time for informational purposes (no skip)
+        try {
+            $lastCheck = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\Results\Detect" -Name LastSuccessTime -ErrorAction SilentlyContinue).LastSuccessTime
+            if ($lastCheck) {
+                $lastCheckDate = [DateTime]::Parse($lastCheck)
+                $hoursSinceCheck = ((Get-Date) - $lastCheckDate).TotalHours
+                $data['lastCheckHours'] = [math]::Round($hoursSinceCheck, 1)
+                $content += "Derniere verification: il y a $([math]::Round($hoursSinceCheck, 1))h"
+            }
+        }
+        catch { }
+
+        try {
+            $session = New-Object -ComObject Microsoft.Update.Session
+            $searcher = $session.CreateUpdateSearcher()
+            $pending = $searcher.Search("IsInstalled=0")
+            $pendingCount = 0
+            if ($null -ne $pending -and $null -ne $pending.Updates) { $pendingCount = Get-SafePropValue $pending.Updates 'Count' 0 }
+            $data['pendingCount'] = $pendingCount
+            $data['cached'] = $false
+            $content += "Mises a jour en attente  : $pendingCount"
+        }
+        catch { $data['pendingCount'] = -1; $content += "[INFO] Non disponible" }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-WindowsUpdateInfo' -Message $_.Exception.Message }
+    $Script:SectionData['WindowsUpdate'] = $data
+    return $content
+}
+
+function Get-AudioInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "PERIPHERIQUES AUDIO"; $content += ("-" * 50)
+        $audio = Get-WmiSafe -ClassName 'Win32_SoundDevice'
+        $audioList = @()
+        if ($null -ne $audio) {
+            $audioArray = @($audio)
+            foreach ($a in $audioArray) {
+                if ($null -eq $a) { continue }
+                $name = Get-SafePropValue $a 'Name' 'N/A'
+                $status = Get-SafePropValue $a 'Status' 'Unknown'
+                $content += "Device: $name - $status"
+                $audioList += [ordered]@{ name = $name; status = $status }
+            }
+        }
+        $data['devices'] = $audioList; $data['deviceCount'] = Get-SafeCount $audioList
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-AudioInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Audio'] = $data
+    return $content
+}
+
+function Get-DevicesDrivers {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "PERIPHERIQUES AVEC PROBLEMES"; $content += ("-" * 50)
+        $problemDevices = @()
+        try {
+            $devices = Get-PnpDevice -Status Error, Degraded, Unknown -ErrorAction Stop
+            $deviceArray = @($devices)
+            if ((Get-SafeCount $deviceArray) -gt 0) {
+                foreach ($dev in $deviceArray) {
+                    if ($null -eq $dev) { continue }
+                    $friendlyName = Get-SafePropValue $dev 'FriendlyName' 'Unknown'
+                    $class = Get-SafePropValue $dev 'Class' 'N/A'
+                    $status = Get-SafePropValue $dev 'Status' 'Unknown'
+                    $content += "[$status] $friendlyName"
+                    $problemDevices += [ordered]@{ name = $friendlyName; class = $class; status = "$status" }
+                }
+            } else { $content += "[OK] Aucun peripherique en erreur" }
+        }
+        catch { $content += "[INFO] Get-PnpDevice non disponible" }
+        $data['problemDevices'] = $problemDevices; $data['problemDeviceCount'] = Get-SafeCount $problemDevices
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-DevicesDrivers' -Message $_.Exception.Message }
+    $Script:SectionData['DevicesDrivers'] = $data
+    return $content
+}
+
+function Get-InstalledApplications {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "APPLICATIONS INSTALLEES"; $content += ("-" * 50)
+        $apps = @()
+        $appsSource = 'Registry'
+
+        # Methode 1: Registre 64-bit et 32-bit (HKLM + HKCU)
+        $regPaths = @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKCU:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+        )
+        foreach ($path in $regPaths) {
+            try {
+                $items = Get-ItemProperty $path -ErrorAction SilentlyContinue | Where-Object {
+                    $_.DisplayName -and $_.DisplayName.Trim() -ne ''
+                }
+                if ($null -ne $items) { $apps += @($items) }
+            } catch { }
+        }
+
+        # Fallback si registre vide: Get-Package (PS 5.1+)
+        if ((Get-SafeCount $apps) -eq 0) {
+            try {
+                $pkgs = Get-Package -ProviderName Programs -ErrorAction SilentlyContinue
+                foreach ($pkg in @($pkgs)) {
+                    if ($null -eq $pkg) { continue }
+                    $apps += [PSCustomObject]@{ DisplayName = Get-SafePropValue $pkg 'Name' '' }
+                }
+                $appsSource = 'Get-Package'
+            } catch { }
+        }
+
+        $uniqueApps = @($apps | Where-Object { $_.DisplayName } | Sort-Object DisplayName -Unique)
+
+        # Tableau d'objets pour le JSON (ViewModel AppsDetailsViewModel / AppDisplayItem)
+        $appList = @()
+        foreach ($app in $uniqueApps) {
+            $name = [string](Get-SafePropValue $app 'DisplayName' (Get-SafePropValue $app 'Name' '')).Trim()
+            if ([string]::IsNullOrEmpty($name)) { continue }
+            $publisher = [string](Get-SafePropValue $app 'Publisher' (Get-SafePropValue $app 'Vendor' ''))
+            $version = [string](Get-SafePropValue $app 'DisplayVersion' (Get-SafePropValue $app 'Version' ''))
+            $installDate = [string](Get-SafePropValue $app 'InstallDate' '')
+            $uninstallString = [string](Get-SafePropValue $app 'UninstallString' '')
+            $installLocation = [string](Get-SafePropValue $app 'InstallLocation' '')
+            $appList += [ordered]@{
+                name            = $name
+                publisher       = $publisher
+                version         = $version
+                installDate     = $installDate
+                uninstallString = $uninstallString
+                installLocation = $installLocation
+                installSource   = $appsSource
+            }
+        }
+
+        $data['applications'] = $appList
+        $data['totalCount'] = Get-SafeCount $appList
+        $data['source'] = $appsSource
+        if ((Get-SafeCount $appList) -eq 0) {
+            Add-MissingData -Section 'InstalledApplications' -Item 'AppList' -Reason 'Aucune application trouvee dans le registre'
+        }
+        $content += "Total: $(Get-SafeDictValue $data 'totalCount' 0) applications"
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-InstalledApplications' -Message $_.Exception.Message }
+    $Script:SectionData['InstalledApplications'] = $data
+    return $content
+}
+
+function Get-ScheduledTasksInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "TACHES PLANIFIEES"; $content += ("-" * 50)
+        try {
+            $rawTasks = Invoke-WithSectionTimeout -Script { @(Get-ScheduledTask -ErrorAction SilentlyContinue) } -TimeoutSeconds 30 -SectionName 'ScheduledTasks'
+            $tasks = if ($null -ne $rawTasks) { @($rawTasks) } else { @() }
+            $ready = @($tasks | Where-Object { (Get-SafePropValue $_ 'State' '') -eq 'Ready' })
+            $data['totalTasks'] = Get-SafeCount $tasks; $data['readyTasks'] = Get-SafeCount $ready
+            $content += "Total: $(Get-SafeDictValue $data 'totalTasks' 0) | Actives: $(Get-SafeDictValue $data 'readyTasks' 0)"
+        }
+        catch { $data['totalTasks'] = 0; $data['readyTasks'] = 0; $content += "[INFO] Get-ScheduledTask non disponible" }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-ScheduledTasksInfo' -Message $_.Exception.Message }
+    $Script:SectionData['ScheduledTasks'] = $data
+    return $content
+}
+
+function Get-ProcessList {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "TOP 15 PROCESSUS (RAM)"; $content += ("-" * 50)
+        $memList = @()
+        $source = 'none'
+        
+        # Methode 1: Get-Process
+        try {
+            $procs = Get-Process -ErrorAction Stop | Sort-Object WorkingSet64 -Descending | Select-Object -First 15
+            $procArray = @($procs)
+            foreach ($p in $procArray) {
+                if ($null -eq $p) { continue }
+                $procName = Get-SafePropValue $p 'ProcessName' 'Unknown'
+                $processId = Get-SafePropValue $p 'Id' 0
+                $ws = Get-SafePropValue $p 'WorkingSet64' 0
+                $memMB = [math]::Round((Convert-SafeLong $ws) / 1MB, 1)
+                $content += "$procName (PID $processId) - $memMB MB"
+                $memList += [ordered]@{ name = $procName; pid = $processId; memoryMB = $memMB }
+            }
+            $source = 'Get-Process'
+        }
+        catch {
+            # Fallback: CIM Win32_Process
+            try {
+                $cimProcs = Get-CimInstance -ClassName Win32_Process -ErrorAction Stop | 
+                    Sort-Object WorkingSetSize -Descending | Select-Object -First 15
+                foreach ($p in @($cimProcs)) {
+                    if ($null -eq $p) { continue }
+                    $procName = Get-SafePropValue $p 'Name' 'Unknown'
+                    $processId = Get-SafePropValue $p 'ProcessId' 0
+                    $ws = Get-SafePropValue $p 'WorkingSetSize' 0
+                    $memMB = [math]::Round((Convert-SafeLong $ws) / 1MB, 1)
+                    $content += "$procName (PID $processId) - $memMB MB"
+                    $memList += [ordered]@{ name = $procName; pid = $processId; memoryMB = $memMB }
+                }
+                $source = 'CIM'
+            }
+            catch { 
+                # Fallback 3: tasklist /fo csv (dernier recours)
+                try {
+                    $tasklistOutput = & tasklist /fo csv 2>$null
+                    if ($null -ne $tasklistOutput -and $tasklistOutput.Count -gt 1) {
+                        $csvData = $tasklistOutput | ConvertFrom-Csv -ErrorAction Stop
+                        $sortedProcs = @($csvData | 
+                            ForEach-Object { 
+                                $memStr = ($_.'Mem Usage' -replace '[^\d]', '')
+                                [PSCustomObject]@{ 
+                                    Name = $_.'Image Name'
+                                    PID = $_.'PID'
+                                    MemKB = [int64]$memStr
+                                }
+                            } | 
+                            Sort-Object MemKB -Descending | 
+                            Select-Object -First 15)
+                        
+                        foreach ($p in $sortedProcs) {
+                            if ($null -eq $p) { continue }
+                            $memMB = [math]::Round($p.MemKB / 1024, 1)
+                            $content += "$($p.Name) (PID $($p.PID)) - $memMB MB"
+                            $memList += [ordered]@{ name = $p.Name; pid = [int]$p.PID; memoryMB = $memMB }
+                        }
+                        $source = 'tasklist'
+                    } else {
+                        throw "tasklist vide"
+                    }
+                }
+                catch {
+                    # Fallback 4: WMI (different provider than CIM)
+                    try {
+                        $wmiProcs = Get-WmiObject -Class Win32_Process -ErrorAction Stop | 
+                            Sort-Object WorkingSetSize -Descending | Select-Object -First 15
+                        foreach ($p in @($wmiProcs)) {
+                            if ($null -eq $p) { continue }
+                            $procName = Get-SafePropValue $p 'Name' 'Unknown'
+                            $processId = Get-SafePropValue $p 'ProcessId' 0
+                            $ws = Get-SafePropValue $p 'WorkingSetSize' 0
+                            $memMB = [math]::Round((Convert-SafeLong $ws) / 1MB, 1)
+                            $content += "$procName (PID $processId) - $memMB MB"
+                            $memList += [ordered]@{ name = $procName; pid = $processId; memoryMB = $memMB }
+                        }
+                        $source = 'WMI'
+                    }
+                    catch {
+                        $content += "[INFO] Collecte processus non disponible"
+                        Add-MissingData -Section 'Processes' -Item 'ProcessList' -Reason 'Get-Process, CIM, tasklist et WMI ont echoue'
+                        Write-Status -Type 'WARN' -Section 'Processus' -Message 'Toutes les methodes de collecte ont echoue'
+                        $data['available'] = $false
+                        $data['reason'] = 'Get-Process, CIM, tasklist et WMI ont echoue'
+                    }
+                }
+            }
+        }
+        if (-not $data.Contains('available')) { $data['available'] = ($memList.Count -gt 0) }
+        $data['topMemory'] = $memList
+        $data['source'] = $source
+    }
+    catch {
+        Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-ProcessList' -Message $_.Exception.Message
+        $data['available'] = $false
+        $data['reason'] = $_.Exception.Message
+    }
+    $Script:SectionData['Processes'] = $data
+    return $content
+}
+
+function Get-BatteryInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "BATTERIE"; $content += ("-" * 50)
+        $bat = Get-WmiSafe -ClassName 'Win32_Battery'
+        if ($null -ne $bat) {
+            $data['present'] = $true; $data['chargePercent'] = Get-SafePropValue $bat 'EstimatedChargeRemaining' 0
+            $content += "Charge: $(Get-SafeDictValue $data 'chargePercent' 0)%"
+            # Battery health: design vs full charge capacity
+            try {
+                $batCim = Get-CimInstance -ClassName 'Win32_Battery' -ErrorAction SilentlyContinue
+                if ($null -ne $batCim) {
+                    $designCap = Get-SafePropValue $batCim 'DesignCapacity' 0
+                    $fullChargeCap = Get-SafePropValue $batCim 'FullChargeCapacity' 0
+                    $data['designCapacity'] = $designCap
+                    $data['fullChargeCapacity'] = $fullChargeCap
+                    if ($designCap -gt 0 -and $fullChargeCap -gt 0) {
+                        $healthPct = [math]::Round(($fullChargeCap / $designCap) * 100, 1)
+                        $data['healthPercent'] = $healthPct
+                        $content += "Sante batterie: $healthPct% (capacite $fullChargeCap / $designCap mWh)"
+                    } else {
+                        $data['healthPercent'] = $null
+                        $content += "[INFO] Capacite batterie non disponible via WMI"
+                    }
+                }
+            } catch {
+                $data['healthPercent'] = $null
+                $content += "[INFO] Lecture sante batterie echouee"
+            }
+        } else { $data['present'] = $false; $content += "[INFO] Pas de batterie" }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-BatteryInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Battery'] = $data
+    return $content
+}
+
+function Get-PrintersInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "IMPRIMANTES"; $content += ("-" * 50)
+        $printers = Get-WmiSafe -ClassName 'Win32_Printer'
+        $printerList = @()
+        if ($null -ne $printers) {
+            $printerArray = @($printers)
+            foreach ($p in $printerArray) {
+                if ($null -eq $p) { continue }
+                $name = Get-SafePropValue $p 'Name' 'N/A'
+                $default = Get-SafePropValue $p 'Default' $false
+                $defaultStr = ""
+                if ($default) { $defaultStr = "[DEFAUT]" }
+                $content += "$name $defaultStr"
+                $printerList += [ordered]@{ name = $name; default = $default }
+            }
+        } else { $content += "Aucune imprimante" }
+        $data['printers'] = $printerList; $data['printerCount'] = Get-SafeCount $printerList
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-PrintersInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Printers'] = $data
+    return $content
+}
+
+function Get-UserProfiles {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "PROFILS UTILISATEURS"; $content += ("-" * 50)
+        $profiles = Get-WmiSafe -ClassName 'Win32_UserProfile'
+        $profileList = @()
+        if ($null -ne $profiles) {
+            $profileArray = @($profiles)
+            foreach ($p in $profileArray) {
+                if ($null -eq $p) { continue }
+                $special = Get-SafePropValue $p 'Special' $false
+                if ($special) { continue }
+                $localPath = Get-SafePropValue $p 'LocalPath' ''
+                $maskedPath = Protect-ProfilePath $localPath
+                $content += $maskedPath
+                $profileList += [ordered]@{ path = $maskedPath }
+            }
+        }
+        $data['profiles'] = $profileList; $data['profileCount'] = Get-SafeCount $profileList
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-UserProfiles' -Message $_.Exception.Message }
+    $Script:SectionData['UserProfiles'] = $data
+    return $content
+}
+
+function Get-VirtualizationInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "VIRTUALISATION"; $content += ("-" * 50)
+        $isVM = $false
+        $cs = Get-WmiSafe -ClassName 'Win32_ComputerSystem'
+        if ($null -ne $cs) {
+            $model = Get-SafePropValue $cs 'Model' ''
+            if ($model -match 'VMware|VirtualBox|Virtual Machine|Hyper-V|KVM|QEMU') { $isVM = $true }
+        }
+        $data['isVM'] = $isVM
+        $content += "Est une VM: $(if($isVM){'Oui'}else{'Non'})"
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-VirtualizationInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Virtualization'] = $data
+    return $content
+}
+
+function Get-RestorePoints {
+    $content = @(); $data = [ordered]@{
+        restorePointCount = 0
+        status = 'Unavailable'
+        reason = 'NoData'
+        confidence = 'None'
+        points = @()
+        lastPointAgeDays = $null
+    }
+    try {
+        $content += "POINTS DE RESTAURATION"; $content += ("-" * 50)
+        if (-not $Script:IsAdmin) {
+            $data['status'] = 'Unavailable'
+            $data['reason'] = 'AccessDenied'
+            $data['confidence'] = 'None'
+            $content += "[INFO] Droits administrateur requis"
+            Add-MissingData -Section 'RestorePoints' -Item 'restorePointCount' -Reason 'AccessDenied'
+            $Script:SectionData['RestorePoints'] = $data
+            return $content
+        }
+
+        try {
+            $rp = Get-ComputerRestorePoint -ErrorAction Stop | Sort-Object CreationTime -Descending | Select-Object -First 10
+            $rpArray = @($rp)
+            $data['restorePointCount'] = [Math]::Max(0, (Get-SafeCount $rpArray))
+            $data['status'] = 'Available'
+            $data['reason'] = ''
+            $data['confidence'] = 'High'
+
+            if ((Get-SafeDictValue $data 'restorePointCount' 0) -gt 0) {
+                $content += "Points disponibles: $(Get-SafeDictValue $data 'restorePointCount' 0)"
+
+                $pointsList = @()
+                foreach ($point in $rpArray) {
+                    $creationDate = $null
+                    try {
+                        if ($point.CreationTime -is [System.Management.ManagementDateTime]) {
+                            $creationDate = [System.Management.ManagementDateTimeConverter]::ToDateTime($point.CreationTime).ToString("yyyy-MM-ddTHH:mm:ss")
+                        }
+                        elseif ($point.CreationTime -is [System.DateTime]) {
+                            $creationDate = $point.CreationTime.ToString("yyyy-MM-ddTHH:mm:ss")
+                        }
+                        else {
+                            $creationDate = [System.Management.ManagementDateTimeConverter]::ToDateTime($point.CreationTime.ToString()).ToString("yyyy-MM-ddTHH:mm:ss")
+                        }
+                    }
+                    catch {
+                        $creationDate = $null
+                    }
+
+                    $pointsList += [ordered]@{
+                        sequenceNumber = $point.SequenceNumber
+                        description    = Get-SafeString $point.Description
+                        creationTime   = $creationDate
+                    }
+
+                    $content += "[$($point.SequenceNumber)] $($point.Description) | Date: $creationDate"
+                }
+
+                $data['points'] = $pointsList
+
+                if ($pointsList.Count -gt 0 -and $pointsList[0].creationTime) {
+                    try {
+                        $latestDate = [DateTime]::Parse($pointsList[0].creationTime)
+                        $lastAge = [int][Math]::Max(0, ((Get-Date) - $latestDate).TotalDays)
+                        $data['lastPointAgeDays'] = $lastAge
+                        if ($lastAge -gt 30) {
+                            Add-Finding -Severity 'WARN' -Code 'BAK-001' -Category 'Sauvegarde' `
+                                -Title 'Point de restauration ancien' `
+                                -Details "Dernier point de restauration: $($pointsList[0].creationTime)" `
+                                -Recommendation "Creer un nouveau point de restauration"
+                        }
+                    }
+                    catch { }
+                }
+            }
+            else {
+                $content += "[INFO] Aucun point de restauration"
+                Add-Finding -Severity 'WARN' -Code 'BAK-001' -Category 'Sauvegarde' `
+                    -Title 'Aucun point de restauration' `
+                    -Details "Aucun point de restauration systeme disponible" `
+                    -Recommendation "Activer la protection systeme et creer des points"
+            }
+        }
+        catch {
+            $data['restorePointCount'] = 0
+            $data['status'] = 'Unavailable'
+            $data['reason'] = 'Error'
+            $data['confidence'] = 'None'
+            $content += "[INFO] Get-ComputerRestorePoint indisponible"
+            Add-MissingData -Section 'RestorePoints' -Item 'restorePointCount' -Reason $_.Exception.Message
+            Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-RestorePoints' -Message $_.Exception.Message
+        }
+    }
+    catch {
+        $data['restorePointCount'] = 0
+        $data['status'] = 'Unavailable'
+        $data['reason'] = 'Error'
+        $data['confidence'] = 'None'
+        Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-RestorePoints' -Message $_.Exception.Message
+    }
+    $Script:SectionData['RestorePoints'] = $data
+    return $content
+}
+
+function Get-TempFilesInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "FICHIERS TEMPORAIRES"; $content += ("-" * 50)
+        $locations = @(@{Name='Temp User'; Path=$env:TEMP}, @{Name='Temp Windows'; Path="$env:WINDIR\Temp"})
+        $totalTemp = 0; $tempData = [ordered]@{}
+        foreach ($loc in $locations) {
+            $locPath = Get-SafeDictValue $loc 'Path' ''; $locName = Get-SafeDictValue $loc 'Name' 'Unknown'
+            if (Test-Path $locPath) {
+                try {
+                    $items = $null
+                    if ($Script:MaxTempFiles -gt 0) {
+                        $items = Get-ChildItem -Path $locPath -Recurse -Force -ErrorAction SilentlyContinue | Select-Object -First $Script:MaxTempFiles
+                    } else {
+                        $items = Get-ChildItem -Path $locPath -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                    $size = ($items | Measure-Object -Property Length -Sum).Sum
+                    if ($null -eq $size) { $size = 0 }
+                    $content += "$locName : $(Format-Bytes $size)"; $tempData[$locName] = $size; $totalTemp += $size
+                } catch { $tempData[$locName] = 0 }
+            }
+        }
+        $data['locations'] = $tempData; $data['totalBytes'] = $totalTemp
+        $content += "TOTAL: $(Format-Bytes $totalTemp)"
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-TempFilesInfo' -Message $_.Exception.Message }
+    $Script:SectionData['TempFiles'] = $data
+    return $content
+}
+
+function Get-EnvironmentVariablesInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "VARIABLES D'ENVIRONNEMENT"; $content += ("-" * 50)
+        $sysVars = [Environment]::GetEnvironmentVariables([EnvironmentVariableTarget]::Machine)
+        $varList = [ordered]@{}
+        $sortedKeys = @($sysVars.Keys) | Sort-Object | Select-Object -First 20
+        foreach ($key in $sortedKeys) {
+            $val = Protect-EnvValue -Key "$key" -Value "$($sysVars[$key])"
+            if ($val.Length -gt 80) { $val = $val.Substring(0, 80) + "..." }
+            $content += "$key = $val"; $varList[$key] = $val
+        }
+        $data['variables'] = $varList
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-EnvironmentVariablesInfo' -Message $_.Exception.Message }
+    $Script:SectionData['EnvironmentVariables'] = $data
+    return $content
+}
+
+function Get-CertificatesInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "CERTIFICATS"; $content += ("-" * 50)
+        $expiredCount = 0; $validCount = 0
+        try {
+            $rawCerts = Invoke-WithSectionTimeout -Script {
+                Get-ChildItem -Path 'Cert:\LocalMachine\My' -ErrorAction SilentlyContinue | Select-Object -First 10
+            } -TimeoutSeconds 15 -SectionName 'Certificates'
+            $certArray = if ($null -ne $rawCerts) { @($rawCerts) } else { @() }
+            foreach ($cert in $certArray) {
+                if ($null -eq $cert) { continue }
+                $notAfter = Get-SafePropValue $cert 'NotAfter'
+                $subject = Protect-CertificateSubject (Get-SafePropValue $cert 'Subject' 'N/A')
+                if ($subject.Length -gt 50) { $subject = $subject.Substring(0, 50) + "..." }
+                if ($null -ne $notAfter -and $notAfter -lt (Get-Date)) { $expiredCount++; $content += "[EXPIRE] $subject" }
+                else { $validCount++; $content += "[OK] $subject" }
+            }
+        }
+        catch { $content += "[INFO] Acces aux certificats non disponible" }
+        $data['expiredCount'] = $expiredCount; $data['validCount'] = $validCount
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-CertificatesInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Certificates'] = $data
+    return $content
+}
+
+function Get-RegistryKeysInfo {
+    $content = @(); $data = [ordered]@{}
+    try { $content += "CLES REGISTRE"; $content += ("-" * 50); $content += "[INFO] Cles critiques verifiees dans autres collecteurs"; $data['note'] = 'Keys checked in other collectors' }
+    catch { }
+    $Script:SectionData['Registry'] = $data
+    return $content
+}
+
+function Get-BluetoothInfo {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "BLUETOOTH"; $content += ("-" * 50)
+        $btDevices = @()
+        try {
+            $pnpBt = Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue
+            if ($null -ne $pnpBt) {
+                $pnpArray = @($pnpBt)
+                foreach ($dev in $pnpArray) {
+                    if ($null -eq $dev) { continue }
+                    $friendlyName = Get-SafePropValue $dev 'FriendlyName' ''
+                    if ([string]::IsNullOrWhiteSpace($friendlyName)) { continue }
+                    $status = Get-SafePropValue $dev 'Status' 'Unknown'
+                    $btDevices += [ordered]@{
+                        name   = $friendlyName
+                        status = $status
+                        class  = 'Bluetooth'
+                    }
+                    $content += "$friendlyName - $status"
+                }
+            }
+        } catch { }
+        # Fallback: Win32_PnPEntity filtered by PNPClass
+        if ((Get-SafeCount $btDevices) -eq 0) {
+            try {
+                $pnpEntities = Get-CimInstance -ClassName Win32_PnPEntity -ErrorAction SilentlyContinue |
+                    Where-Object { $_.PNPClass -eq 'Bluetooth' }
+                if ($null -ne $pnpEntities) {
+                    foreach ($ent in @($pnpEntities)) {
+                        if ($null -eq $ent) { continue }
+                        $entName = Get-SafePropValue $ent 'Name' ''
+                        if ([string]::IsNullOrWhiteSpace($entName)) { continue }
+                        $entStatus = Get-SafePropValue $ent 'Status' 'Unknown'
+                        $btDevices += [ordered]@{
+                            name   = $entName
+                            status = $entStatus
+                            class  = 'Bluetooth'
+                        }
+                        $content += "$entName - $entStatus"
+                    }
+                }
+            } catch { }
+        }
+        if ((Get-SafeCount $btDevices) -eq 0) {
+            $content += "[INFO] Aucun peripherique Bluetooth detecte"
+        }
+        $data['devices'] = $btDevices
+        $data['deviceCount'] = Get-SafeCount $btDevices
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-BluetoothInfo' -Message $_.Exception.Message }
+    $Script:SectionData['Bluetooth'] = $data
+    return $content
+}
+
+function Get-TemperaturesLegacy {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "TEMPERATURES SYSTEME"; $content += ("-" * 50)
+        $tempList = @()
+        if ($Script:IsAdmin) {
+            $zones = Get-WmiSafe -ClassName 'MSAcpi_ThermalZoneTemperature' -Namespace 'root\WMI'
+            if ($null -ne $zones) {
+                $zoneArray = @($zones)
+                foreach ($z in $zoneArray) {
+                    if ($null -eq $z) { continue }
+                    $currentTemp = Get-SafePropValue $z 'CurrentTemperature' 0
+                    $tempC = [math]::Round(($currentTemp / 10) - 273.15, 1)
+                    $content += "Zone: $tempC C"; $tempList += $tempC
+                }
+                $data['available'] = $true
+            } else { $content += "[INFO] Temperatures non disponibles via WMI"; $data['available'] = $false }
+        } else { $content += "[INFO] Admin requis pour temperatures"; $data['available'] = $false }
+        $data['temperatures'] = $tempList
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-TemperaturesLegacy' -Message $_.Exception.Message; $data['available'] = $false; $data['reason'] = $_.Exception.Message }
+    if (-not $data.Contains('available')) { $data['available'] = $true }
+    $Script:SectionData['Temperatures'] = $data
+    return $content
+}
+
+function Get-SystemIntegrity {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "INTEGRITE SYSTEME"; $content += ("-" * 50)
+        $cbsPending = Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending"
+        $data['cbsPending'] = $cbsPending
+        if ($cbsPending) { $content += "[ATTENTION] Composants CBS en attente" }
+        else { $content += "[OK] Aucune operation CBS en attente" }
+        $content += ""; $content += "Commandes de verification:"; $content += "  sfc /scannow"; $content += "  DISM /Online /Cleanup-Image /ScanHealth"
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-SystemIntegrity' -Message $_.Exception.Message }
+    $Script:SectionData['SystemIntegrity'] = $data
+    return $content
+}
+
+function Get-PowerSettings {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "PARAMETRES D'ALIMENTATION"; $content += ("-" * 50)
+        $activePlanName = 'Unknown'
+        $source = 'none'
+        
+        # Methode 1: powercfg /getactivescheme
+        try {
+            $activePlan = powercfg /getactivescheme 2>$null
+            if ($null -ne $activePlan -and $activePlan.Length -gt 0) {
+                # Format: "GUID du schema d'alimentation : GUID  (Nom du plan)"
+                if ($activePlan -match '\(([^)]+)\)') {
+                    $activePlanName = $Matches[1]
+                    $source = 'powercfg'
+                }
+                elseif ($activePlan -match ':.*([0-9a-fA-F-]{36})') {
+                    # Au moins on a le GUID
+                    $activePlanName = "Plan $($Matches[1].Substring(0,8))"
+                    $source = 'powercfg-guid'
+                }
+            }
+        } catch { }
+        
+        # Fallback: Registre
+        if ($activePlanName -eq 'Unknown') {
+            try {
+                $regGuid = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes' -Name 'ActivePowerScheme' -ErrorAction SilentlyContinue
+                if ($null -ne $regGuid -and $regGuid.ActivePowerScheme) {
+                    $guid = $regGuid.ActivePowerScheme
+                    $planPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes\$guid"
+                    $planName = Get-ItemProperty -Path $planPath -Name 'FriendlyName' -ErrorAction SilentlyContinue
+                    if ($planName -and $planName.FriendlyName) {
+                        $activePlanName = $planName.FriendlyName -replace '@.*,',''
+                    } else {
+                        $activePlanName = "Plan $($guid.Substring(0,8))"
+                    }
+                    $source = 'Registry'
+                }
+            } catch { }
+        }
+        
+        $data['activePlan'] = $activePlanName
+        $data['source'] = $source
+        $content += "Plan Actif: $activePlanName"
+        
+        $fastStartup = Get-RegistryValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "HiberbootEnabled" -Default -1
+        $data['fastStartup'] = $fastStartup
+        $content += "Demarrage rapide: $(if($fastStartup -eq 1){'ACTIVE'}elseif($fastStartup -eq 0){'DESACTIVE'}else{'Non configure'})"
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-PowerSettings' -Message $_.Exception.Message }
+    $Script:SectionData['PowerSettings'] = $data
+    return $content
+}
+
+function Get-MinidumpAnalysis {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "ANALYSE MINIDUMPS"; $content += ("-" * 50)
+        $minidumpPath = "$env:SystemRoot\Minidump"
+        if (Test-Path $minidumpPath) {
+            try {
+                $dumps = Get-ChildItem -Path $minidumpPath -Filter "*.dmp" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 10
+                $dumpArray = @($dumps)
+                $data['minidumpCount'] = Get-SafeCount $dumpArray
+                if ((Get-SafeDictValue $data 'minidumpCount' 0) -gt 0) {
+                    $content += "Minidumps trouves: $(Get-SafeDictValue $data 'minidumpCount' 0)"
+                    $recentDumps = @()
+                    foreach ($d in ($dumpArray | Select-Object -First 5)) {
+                        if ($null -eq $d) { continue }
+                        $lastWrite = Get-SafePropValue $d 'LastWriteTime'
+                        $name = Get-SafePropValue $d 'Name' 'N/A'
+                        if ($null -ne $lastWrite) { $content += "  [$($lastWrite.ToString('yyyy-MM-dd'))] $name"; $recentDumps += $lastWrite.ToString('o') }
+                    }
+                    $data['recentDumps'] = $recentDumps
+                } else { $content += "[OK] Aucun minidump" }
+            }
+            catch { $data['minidumpCount'] = 0; $content += "[INFO] Acces aux minidumps non disponible" }
+        } else { $data['minidumpCount'] = 0; $content += "[INFO] Dossier Minidump non trouve" }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-MinidumpAnalysis' -Message $_.Exception.Message }
+    $Script:SectionData['MinidumpAnalysis'] = $data
+    return $content
+}
+
+function Get-ReliabilityHistory {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "HISTORIQUE DE FIABILITE"; $content += ("-" * 50)
+        $records = Get-WmiSafe -ClassName 'Win32_ReliabilityRecords'
+        if ($null -ne $records) {
+            $recentRecords = @($records) | Where-Object { $null -ne $_ -and (Get-SafePropValue $_ 'TimeGenerated') -gt (Get-Date).AddDays(-30) } | Select-Object -First 20
+            $recentArray = @($recentRecords)
+            $appCrashes = Get-SafeCount ($recentArray | Where-Object { (Get-SafePropValue $_ 'SourceName' '') -match 'Application' })
+            $data['eventCount'] = Get-SafeCount $recentArray; $data['appCrashes'] = $appCrashes
+            $content += "Evenements fiabilite (30j): $(Get-SafeDictValue $data 'eventCount' 0)"
+            $content += "Crashes applications: $appCrashes"
+        } else { $data['eventCount'] = 0; $data['appCrashes'] = 0; $content += "[INFO] Win32_ReliabilityRecords non disponible" }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-ReliabilityHistory' -Message $_.Exception.Message }
+    $Script:SectionData['ReliabilityHistory'] = $data
+    return $content
+}
+
+function Get-PerformanceCounters {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "COMPTEURS DE PERFORMANCE"; $content += ("-" * 50)
+        $counterPaths = @(
+            '\PhysicalDisk(_Total)\Avg. Disk Queue Length',
+            '\PhysicalDisk(_Total)\Disk Read Bytes/sec',
+            '\PhysicalDisk(_Total)\Disk Write Bytes/sec',
+            '\Memory\Page Faults/sec',
+            '\Memory\Available MBytes'
+        )
+
+        $sampleMap = @{}
+        try {
+            $counterBatch = Get-Counter -Counter $counterPaths -SampleInterval 1 -MaxSamples 1 -ErrorAction Stop
+            foreach ($sample in @(Get-SafePropValue $counterBatch 'CounterSamples' @())) {
+                if ($null -eq $sample) { continue }
+                $pathKey = (Get-SafePropValue $sample 'Path' '').ToLowerInvariant()
+                if ([string]::IsNullOrWhiteSpace($pathKey)) { continue }
+                $sampleMap[$pathKey] = Get-SafePropValue $sample 'CookedValue' $null
+            }
+        } catch {
+            # Fallback: requetes individuelles pour conserver la couverture complete.
+            foreach ($counterPath in $counterPaths) {
+                try {
+                    $singleCounter = Get-Counter $counterPath -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue
+                    $singleSamples = @(Get-SafePropValue $singleCounter 'CounterSamples' @())
+                    if ((Get-SafeCount $singleSamples) -gt 0) {
+                        $sample = $singleSamples[0]
+                        $pathKey = (Get-SafePropValue $sample 'Path' $counterPath).ToLowerInvariant()
+                        $sampleMap[$pathKey] = Get-SafePropValue $sample 'CookedValue' $null
+                    }
+                } catch { }
+            }
+        }
+
+        function Get-CounterValueFromMap {
+            param([hashtable]$Map, [string]$Path)
+            try {
+                $needle = $Path.ToLowerInvariant()
+                foreach ($k in @($Map.Keys)) {
+                    if ($k -like "*$needle") { return $Map[$k] }
+                }
+            } catch { }
+            return $null
+        }
+
+        $queueRaw = Get-CounterValueFromMap -Map $sampleMap -Path '\PhysicalDisk(_Total)\Avg. Disk Queue Length'
+        if ($null -ne $queueRaw) {
+            $queueValue = [math]::Round((Convert-SafeDouble $queueRaw 0), 2)
+            $data['diskQueueLength'] = $queueValue
+            $content += "Disk Queue Length        : $queueValue"
+        } else {
+            # Fallback WMI si file de disque indisponible via compteurs.
+            try {
+                $wmiDisk = Get-CimInstance -ClassName Win32_PerfFormattedData_PerfDisk_PhysicalDisk -Filter "Name='_Total'" -ErrorAction Stop
+                if ($null -ne $wmiDisk) {
+                    $queueValue = [math]::Round((Get-SafePropValue $wmiDisk 'CurrentDiskQueueLength' 0), 2)
+                    $data['diskQueueLength'] = $queueValue
+                    $data['diskQueueLengthSource'] = 'WMI_Fallback'
+                    $content += "Disk Queue Length        : $queueValue [WMI]"
+                } else {
+                    $data['diskQueueLength'] = $null
+                    $data['diskQueueLengthReason'] = 'wmi_fallback_no_data'
+                }
+            } catch {
+                $data['diskQueueLength'] = $null
+                $data['diskQueueLengthReason'] = 'perf_counter_not_supported'
+                $content += "Disk Queue Length        : [Non disponible]"
+            }
+        }
+
+        $readRaw = Get-CounterValueFromMap -Map $sampleMap -Path '\PhysicalDisk(_Total)\Disk Read Bytes/sec'
+        if ($null -ne $readRaw) {
+            $readMBs = [math]::Round((Convert-SafeDouble $readRaw 0) / 1MB, 2)
+            $data['diskReadMBs'] = $readMBs; $content += "Disk Read                : $readMBs MB/s"
+        }
+
+        $writeRaw = Get-CounterValueFromMap -Map $sampleMap -Path '\PhysicalDisk(_Total)\Disk Write Bytes/sec'
+        if ($null -ne $writeRaw) {
+            $writeMBs = [math]::Round((Convert-SafeDouble $writeRaw 0) / 1MB, 2)
+            $data['diskWriteMBs'] = $writeMBs; $content += "Disk Write               : $writeMBs MB/s"
+        }
+
+        $pageFaultRaw = Get-CounterValueFromMap -Map $sampleMap -Path '\Memory\Page Faults/sec'
+        if ($null -ne $pageFaultRaw) {
+            $pfValue = [math]::Round((Convert-SafeDouble $pageFaultRaw 0), 0)
+            $data['pageFaultsPerSec'] = $pfValue; $content += "Page Faults/sec          : $pfValue"
+        }
+
+        $availMemRaw = Get-CounterValueFromMap -Map $sampleMap -Path '\Memory\Available MBytes'
+        if ($null -ne $availMemRaw) {
+            $availMB = [math]::Round((Convert-SafeDouble $availMemRaw 0), 0)
+            $data['availableMemoryMB'] = $availMB; $content += "Available Memory         : $availMB MB"
+        }
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-PerformanceCounters' -Message $_.Exception.Message; $data['available'] = $false; $data['reason'] = $_.Exception.Message }
+    if (-not $data.Contains('available')) { $data['available'] = $true }
+    $Script:SectionData['PerformanceCounters'] = $data
+    return $content
+}
+
+function Get-NetworkInfoLatency {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "LATENCE RESEAU"; $content += ("-" * 50); $content += ""; $content += "PING TEST"; $content += ("-" * 50)
+        $pingResults = @(); $targets = @($Script:NetworkTestTargets)
+        foreach ($target in $targets) {
+            try {
+                if (-not $Script:AllowExternalNetworkTests) {
+                    $content += "$target : [DESACTIVE]"
+                    $pingResults += [ordered]@{ target = $target; latencyMs = -1; success = $false; skipped = $true }
+                    continue
+                }
+                $ping = Test-Connection -ComputerName $target -Count 2 -ErrorAction Stop
+                $pingArray = @($ping)
+                $avgMs = 0
+                if ((Get-SafeCount $pingArray) -gt 0) { $avgMs = [math]::Round(($pingArray | Measure-Object -Property ResponseTime -Average).Average, 1) }
+                $content += "$target : $avgMs ms"
+                $pingResults += [ordered]@{ target = $target; latencyMs = $avgMs; success = $true; skipped = $false }
+            }
+            catch { $content += "$target : [ECHEC]"; $pingResults += [ordered]@{ target = $target; latencyMs = -1; success = $false; skipped = $false } }
+        }
+        $data['ping'] = $pingResults
+        
+        $content += ""; $content += "DNS RESOLUTION"; $content += ("-" * 50)
+        $dnsResults = @(); $dnsTargets = @($Script:DnsTestTargets)
+        foreach ($target in $dnsTargets) {
+            try {
+                if (-not $Script:AllowExternalNetworkTests) {
+                    $content += "$target : [DESACTIVE]"
+                    $dnsResults += [ordered]@{ target = $target; resolutionMs = -1; success = $false; skipped = $true }
+                    continue
+                }
+                $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                $resolved = [System.Net.Dns]::GetHostAddresses($target)
+                $sw.Stop()
+                $dnsMs = $sw.ElapsedMilliseconds
+                $resolvedArray = @($resolved)
+                $firstIP = "N/A"
+                if ((Get-SafeCount $resolvedArray) -gt 0) { $firstIP = Protect-IPAddress (Get-SafePropValue $resolvedArray[0] 'IPAddressToString' 'N/A') }
+                $content += "$target : $dnsMs ms -> $firstIP"
+                $dnsResults += [ordered]@{ target = $target; resolutionMs = $dnsMs; success = $true; skipped = $false }
+            }
+            catch { $content += "$target : [ECHEC RESOLUTION]"; $dnsResults += [ordered]@{ target = $target; resolutionMs = -1; success = $false; skipped = $false } }
+        }
+        $data['dns'] = $dnsResults
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-NetworkInfoLatency' -Message $_.Exception.Message }
+    $Script:SectionData['NetworkLatency'] = $data
+    return $content
+}
+
+function Get-SmartDetails {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "SMART DETAILLE"; $content += ("-" * 50)
+        $smartData = @()
+        $skippedCount = 0
+        
+        # OPTIMISATION: Récupérer liste des disques USB à ignorer
+        $usbDiskPatterns = @()
+        try {
+            $physicalDisks = Get-PhysicalDisk -ErrorAction SilentlyContinue
+            if ($physicalDisks) {
+                foreach ($pd in $physicalDisks) {
+                    $busType = $pd.BusType
+                    # Skip USB, Removable, et très petits disques (< 10GB = probablement clé USB)
+                    if ($busType -eq 'USB' -or $pd.Size -lt 10GB) {
+                        $usbDiskPatterns += $pd.FriendlyName
+                    }
+                }
+            }
+        }
+        catch { }
+        
+        $smartStatus = Get-WmiSafe -ClassName 'MSStorageDriver_FailurePredictStatus' -Namespace 'root\wmi'
+        if ($null -ne $smartStatus) {
+            $smartAttribs = Get-WmiSafe -ClassName 'MSStorageDriver_FailurePredictData' -Namespace 'root\wmi'
+            $statusArray = @($smartStatus)
+            foreach ($status in $statusArray) {
+                if ($null -eq $status) { continue }
+                $instanceName = Get-SafePropValue $status 'InstanceName' 'N/A'
+                
+                # OPTIMISATION: Skip disques USB/removable identifiés
+                $skipDisk = $false
+                foreach ($usbPattern in $usbDiskPatterns) {
+                    if ($instanceName -like "*$usbPattern*") {
+                        $skipDisk = $true
+                        $skippedCount++
+                        break
+                    }
+                }
+                if ($skipDisk) { continue }
+                
+                $predictFailure = Get-SafePropValue $status 'PredictFailure' $false
+                $diskInfo = [ordered]@{ instanceName = $instanceName; predictFailure = $predictFailure }
+                $content += "Disque: $($instanceName.Split('\')[-1])"
+                $content += "  Prediction defaillance : $(if($predictFailure){'OUI - ALERTE!'}else{'Non'})"
+                
+                if ($null -ne $smartAttribs) {
+                    $matchingAttrib = @($smartAttribs) | Where-Object { (Get-SafePropValue $_ 'InstanceName' '') -eq $instanceName } | Select-Object -First 1
+                    if ($null -ne $matchingAttrib) {
+                        $vendorSpecific = Get-SafePropValue $matchingAttrib 'VendorSpecific'
+                        if ($null -ne $vendorSpecific) {
+                            $rawData = @($vendorSpecific)
+                            $rawLen = Get-SafeCount $rawData
+                            for ($i = 2; $i -lt ($rawLen - 12); $i += 12) {
+                                try {
+                                    $attrId = $rawData[$i]
+                                    if ($attrId -eq 0) { continue }
+                                    $attrRaw = [BitConverter]::ToUInt32($rawData, $i + 5)
+                                    switch ($attrId) {
+                                        5 { $content += "  Reallocated Sectors    : $attrRaw"; $diskInfo['reallocatedSectors'] = $attrRaw }
+                                        9 { $content += "  Power-On Hours         : $attrRaw h"; $diskInfo['powerOnHours'] = $attrRaw }
+                                        187 { $content += "  Reported Uncorrectable : $attrRaw"; $diskInfo['reportedUncorrectable'] = $attrRaw }
+                                        190 {
+                                            $tempC = Get-SmartTemperature -RawValue $attrRaw
+                                            if ($null -ne $tempC -and $tempC -ge 0 -and $tempC -le 90) {
+                                                $content += "  Airflow Temperature    : $tempC C"
+                                                if (-not (Test-SafeHasKey $diskInfo 'temperature')) { $diskInfo['temperature'] = $tempC }
+                                            }
+                                        }
+                                        194 {
+                                            # Utiliser Get-SmartTemperature pour extraction low byte (valeurs aberrantes type 917538)
+                                            $tempC = Get-SmartTemperature -RawValue $attrRaw
+                                            if ($null -ne $tempC -and $tempC -ge 0 -and $tempC -le 90) {
+                                                $content += "  Temperature            : $tempC C"
+                                                $diskInfo['temperature'] = $tempC
+                                            } else {
+                                                # Fallback Format-Temperature pour cas standards
+                                                $tempCFallback = Format-Temperature -Value $attrRaw -Min 0 -Max 90
+                                                if ($null -ne $tempCFallback) {
+                                                    $content += "  Temperature            : $tempCFallback C"
+                                                    $diskInfo['temperature'] = $tempCFallback
+                                                } else {
+                                                    $content += "  Temperature            : N/A (invalid reading)"
+                                                    $diskInfo['temperature'] = $null
+                                                    $diskInfo['temperatureRaw'] = $attrRaw
+                                                    $diskInfo['temperatureReason'] = 'smart_raw_invalid'
+                                                    Add-ErrorLog -Type 'TEMP_WARN' -Source 'Get-SmartDetails' -Message "Temperature SMART invalide: $attrRaw (lowByte=$(($attrRaw -band 0xFF)))"
+                                                }
+                                            }
+                                        }
+                                        196 { $content += "  Reallocation Events    : $attrRaw"; $diskInfo['reallocationEvents'] = $attrRaw }
+                                        197 { $content += "  Pending Sectors        : $attrRaw"; $diskInfo['pendingSectors'] = $attrRaw }
+                                        198 { $content += "  Uncorrectable Sectors  : $attrRaw"; $diskInfo['uncorrectableSectors'] = $attrRaw }
+                                    }
+                                } catch { }
+                            }
+                        }
+                    }
+                }
+                $smartData += $diskInfo; $content += ""
+            }
+            # Log des disques ignorés (USB/removable)
+            if ($skippedCount -gt 0) {
+                $content += "[OPTIM] $skippedCount disque(s) USB/removable ignore(s)"
+            }
+        } else { $content += "[INFO] Donnees SMART non disponibles" }
+        $data['disks'] = @($smartData); $data['diskCount'] = Get-SafeCount @($smartData)
+        $data['skippedUsbCount'] = if ($skippedCount) { $skippedCount } else { 0 }
+
+        # ── NVMe / Modern storage reliability via StorageReliabilityCounter ──────────
+        # WMI MSStorageDriver_FailurePredictData is blind to NVMe drives.
+        # Get-StorageReliabilityCounter works on all bus types (NVMe, SATA, SAS) on Win8+.
+        $nvmeData = @()
+        $reliabilitySource = 'StorageReliabilityCounter'
+        $content += ""; $content += "FIABILITE STOCKAGE NVME / MODERNE"; $content += ("-" * 50)
+        try {
+            $srcCmd = Get-Command 'Get-StorageReliabilityCounter' -ErrorAction SilentlyContinue
+            $pdCmd  = Get-Command 'Get-PhysicalDisk'              -ErrorAction SilentlyContinue
+            if ($null -ne $srcCmd -and $null -ne $pdCmd) {
+                $allDisks = @(Get-PhysicalDisk -ErrorAction SilentlyContinue)
+                foreach ($pd in $allDisks) {
+                    # Skip USB/removable
+                    if ($pd.BusType -eq 'USB' -or $pd.Size -lt 10GB) { continue }
+                    try {
+                        $rel = @($pd | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue)
+                        $diskEntry = [ordered]@{
+                            friendlyName          = Get-SafePropValue $pd  'FriendlyName'          $null
+                            serialNumber          = Get-SafePropValue $pd  'SerialNumber'          $null
+                            busType               = Get-SafePropValue $pd  'BusType'               $null
+                            mediaType             = Get-SafePropValue $pd  'MediaType'             $null
+                            sizeBytes             = Get-SafePropValue $pd  'Size'                  $null
+                            healthStatus          = Get-SafePropValue $pd  'HealthStatus'          $null
+                            operationalStatus     = Get-SafePropValue $pd  'OperationalStatus'     $null
+                            source                = $reliabilitySource
+                            temperature           = $null
+                            wear                  = $null
+                            readErrorsTotal       = $null
+                            writeErrorsTotal      = $null
+                            powerOnHours          = $null
+                            unsafeShutdownCount   = $null
+                        }
+                        if ($null -ne $rel -and (Get-SafeCount $rel) -gt 0) {
+                            $r = $rel[0]
+                            $tempRaw = Get-SafePropValue $r 'Temperature' $null
+                            if ($null -ne $tempRaw) {
+                                # StorageReliabilityCounter returns temp in Kelvin on some drivers
+                                $tempC = if ($tempRaw -gt 200) { [int]($tempRaw - 273) } else { [int]$tempRaw }
+                                if ($tempC -ge 0 -and $tempC -le 120) { $diskEntry['temperature'] = $tempC }
+                            }
+                            $diskEntry['wear']                = Get-SafePropValue $r 'Wear'               $null
+                            $diskEntry['readErrorsTotal']     = Get-SafePropValue $r 'ReadErrorsTotal'    $null
+                            $diskEntry['writeErrorsTotal']    = Get-SafePropValue $r 'WriteErrorsTotal'   $null
+                            $diskEntry['powerOnHours']        = Get-SafePropValue $r 'PowerOnHours'       $null
+                            # MediaWearoutIndicator = percentage of useful life remaining (0-100)
+                            $mwi = Get-SafePropValue $r 'Wear' $null
+                            if ($null -ne $mwi) { $diskEntry['mediaWearoutIndicator'] = $mwi }
+                            # ReadLatencyMax in ms
+                            $diskEntry['readLatencyMaxMs']    = Get-SafePropValue $r 'ReadLatencyMax'     $null
+                            $diskEntry['writeLatencyMaxMs']   = Get-SafePropValue $r 'WriteLatencyMax'    $null
+                        }
+                        $isNvme = ($pd.BusType -eq 'NVMe') -or ($pd.FriendlyName -match 'NVMe')
+                        $content += "  [$($pd.BusType)] $($pd.FriendlyName) - Sante: $($pd.HealthStatus)"
+                        if ($null -ne $diskEntry['temperature']) { $content += "    Temp: $($diskEntry['temperature']) C" }
+                        if ($null -ne $diskEntry['wear'])        { $content += "    Usure: $($diskEntry['wear'])%" }
+                        if ($null -ne $diskEntry['powerOnHours']){ $content += "    Heures: $($diskEntry['powerOnHours']) h" }
+                        $nvmeData += $diskEntry
+                    } catch {
+                        Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-SmartDetails/NVMe' -Message $_.Exception.Message
+                    }
+                }
+                if ((Get-SafeCount $nvmeData) -eq 0) {
+                    $content += "[INFO] Aucun disque non-USB detecté via StorageReliabilityCounter"
+                }
+            } else {
+                $content += "[INFO] Get-StorageReliabilityCounter non disponible sur cet OS"
+                $reliabilitySource = 'unavailable_os_version'
+            }
+        } catch {
+            Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-SmartDetails/NVMe' -Message $_.Exception.Message
+            $content += "[ERREUR] StorageReliabilityCounter: $($_.Exception.Message)"
+        }
+        $data['nvmeReliability'] = @($nvmeData)
+        $data['nvmeReliabilityCount'] = Get-SafeCount $nvmeData
+        $data['nvmeReliabilitySource'] = $reliabilitySource
+        # ─────────────────────────────────────────────────────────────────────────────
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-SmartDetails' -Message $_.Exception.Message }
+    $Script:SectionData['SmartDetails'] = $data
+    return $content
+}
+
+function Get-DynamicSignals {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "SIGNES DYNAMIQUES (DONNEES BRUTES)"; $content += ("=" * 50); $content += ""
+        $monitorDuration = $Script:MonitorSeconds
+        $sampleInterval = Get-SafeDictValue $Script:Config.DynamicSignals 'SampleInterval' 1
+        $samples = [math]::Floor($monitorDuration / $sampleInterval)
+        $content += "[CONFIG] Duree: ${monitorDuration}s | Echantillons: $samples"; $content += ""
+
+        $cpuCounter = '\\Processor(_Total)\\% Processor Time'
+        $memCounters = @('\\Memory\\Available MBytes','\\Memory\\Page Faults/sec')
+        $diskCounters = @('\\PhysicalDisk(_Total)\\% Disk Time','\\PhysicalDisk(_Total)\\Avg. Disk Queue Length')
+        $allCounters = @($cpuCounter) + $memCounters + $diskCounters
+
+        $netStart = $null; $activeAdapter = $null
+        try {
+            $activeAdapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { (Get-SafePropValue $_ 'Status' '') -eq 'Up' -and -not (Get-SafePropValue $_ 'Virtual' $false) } | Sort-Object -Property LinkSpeed -Descending | Select-Object -First 1
+            if ($null -ne $activeAdapter) {
+                $adapterName = Get-SafePropValue $activeAdapter 'Name' ''
+                if ($adapterName) { $netStart = Get-NetAdapterStatistics -Name $adapterName -ErrorAction SilentlyContinue }
+            }
+        } catch { }
+
+        $pathValues = @{}
+        try {
+            $counterResults = Get-Counter -Counter $allCounters -SampleInterval $sampleInterval -MaxSamples $samples -ErrorAction Stop
+            $counterSamples = Get-SafePropValue $counterResults 'CounterSamples' @()
+            $sampleArray = @($counterSamples)
+            foreach ($sample in $sampleArray) {
+                if ($null -eq $sample) { continue }
+                $path = Get-SafePropValue $sample 'Path' ''
+                if ([string]::IsNullOrEmpty($path)) { continue }
+                if (-not (Test-SafeHasKey $pathValues $path)) { $pathValues[$path] = @() }
+                $pathValues[$path] += Get-SafePropValue $sample 'CookedValue' 0
+            }
+        } catch { Add-ErrorLog -Type 'COUNTER_ERROR' -Source 'Get-DynamicSignals' -Message $_.Exception.Message }
+
+        # CPU via Get-Counter
+        $cpuVals = @(); if (Test-SafeHasKey $pathValues $cpuCounter) { $cpuVals = @($pathValues[$cpuCounter]) }
+        $cpuCount = Get-SafeCount $cpuVals
+        $cpuAvg = 0; $cpuMax = 0; $cpuMin = 0
+        $cpuSource = 'Get-Counter'
+        if ($cpuCount -gt 0) {
+            $cpuAvg = [math]::Round(($cpuVals | Measure-Object -Average).Average, 2)
+            $cpuMax = [math]::Round(($cpuVals | Measure-Object -Maximum).Maximum, 2)
+            $cpuMin = [math]::Round(($cpuVals | Measure-Object -Minimum).Minimum, 2)
+        }
+        
+        # Validation CPU: si 0 samples ou cpuAvg=0 ET cpuMax=0 -> fallback WMI
+        if ($cpuCount -eq 0 -or ($cpuAvg -eq 0 -and $cpuMax -eq 0)) {
+            try {
+                $wmiCpu = Get-CimInstance -ClassName 'Win32_PerfFormattedData_PerfOS_Processor' -Filter "Name='_Total'" -ErrorAction Stop
+                if ($null -ne $wmiCpu) {
+                    $cpuAvg = [math]::Round((Get-SafePropValue $wmiCpu 'PercentProcessorTime' 0), 2)
+                    $cpuMax = $cpuAvg; $cpuMin = $cpuAvg; $cpuCount = 1
+                    $cpuSource = 'WMI-Fallback'
+                }
+            } catch { }
+        }
+        $data['cpu'] = [ordered]@{ average = $cpuAvg; max = $cpuMax; min = $cpuMin; sampleCount = $cpuCount; source = $cpuSource }
+        $content += "CPU: moyenne $cpuAvg% | max $cpuMax% | min $cpuMin% [$cpuSource]"
+
+        # Memoire via Get-Counter
+        $memKey = '\\Memory\\Available MBytes'
+        $availVals = @(); if (Test-SafeHasKey $pathValues $memKey) { $availVals = @($pathValues[$memKey]) }
+        $availMB = 0; if ((Get-SafeCount $availVals) -gt 0) { $availMB = [math]::Round(($availVals | Measure-Object -Average).Average, 2) }
+        
+        $pfKey = '\\Memory\\Page Faults/sec'
+        $pfVals = @(); if (Test-SafeHasKey $pathValues $pfKey) { $pfVals = @($pathValues[$pfKey]) }
+        $pfAvg = 0; if ((Get-SafeCount $pfVals) -gt 0) { $pfAvg = [math]::Round(($pfVals | Measure-Object -Average).Average, 2) }
+        
+        $totalMem = 0
+        $memSource = 'Get-Counter'
+        try {
+            $osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+            if ($null -ne $osInfo) { $totalMem = [math]::Round((Get-SafePropValue $osInfo 'TotalVisibleMemorySize' 0) / 1KB, 2) }
+        } catch { }
+        
+        # Validation memoire: si availMB=0 et totalMem>0 -> fallback WMI
+        if ($availMB -eq 0 -and $totalMem -gt 0) {
+            try {
+                $freeKB = Get-SafePropValue $osInfo 'FreePhysicalMemory' 0
+                $availMB = [math]::Round($freeKB / 1KB, 2)
+                $memSource = 'WMI-Fallback'
+            } catch { }
+        }
+        
+        $usedPercent = 0
+        if ($totalMem -gt 0) { $usedPercent = [math]::Round((($totalMem - $availMB) / $totalMem) * 100, 2) }
+        $data['memory'] = [ordered]@{ usedPercent = $usedPercent; availableMB = $availMB; pageFaultsPerSec = $pfAvg; sampleCount = (Get-SafeCount $availVals); source = $memSource }
+        $content += "Memoire: $usedPercent% utilisee | $availMB MB libres [$memSource]"
+
+        # Disque via Get-Counter
+        $diskTimeKey = '\\PhysicalDisk(_Total)\\% Disk Time'
+        $diskTimeVals = @(); if (Test-SafeHasKey $pathValues $diskTimeKey) { $diskTimeVals = @($pathValues[$diskTimeKey]) }
+        $diskTimeAvg = 0; if ((Get-SafeCount $diskTimeVals) -gt 0) { $diskTimeAvg = [math]::Round(($diskTimeVals | Measure-Object -Average).Average, 2) }
+        
+        $diskQueueKey = '\\PhysicalDisk(_Total)\\Avg. Disk Queue Length'
+        $diskQueueVals = @(); if (Test-SafeHasKey $pathValues $diskQueueKey) { $diskQueueVals = @($pathValues[$diskQueueKey]) }
+        $diskQueueAvg = 0; if ((Get-SafeCount $diskQueueVals) -gt 0) { $diskQueueAvg = [math]::Round(($diskQueueVals | Measure-Object -Average).Average, 2) }
+        
+        $diskSource = 'Get-Counter'
+        # Fallback disque si pas de samples
+        if ((Get-SafeCount $diskTimeVals) -eq 0) {
+            try {
+                $wmiDisk = Get-CimInstance -ClassName 'Win32_PerfFormattedData_PerfDisk_PhysicalDisk' -Filter "Name='_Total'" -ErrorAction Stop
+                if ($null -ne $wmiDisk) {
+                    $diskTimeAvg = [math]::Round((Get-SafePropValue $wmiDisk 'PercentDiskTime' 0), 2)
+                    $diskQueueAvg = [math]::Round((Get-SafePropValue $wmiDisk 'AvgDiskQueueLength' 0), 2)
+                    $diskSource = 'WMI-Fallback'
+                }
+            } catch { }
+        }
+        $data['disk'] = [ordered]@{ diskTimePercent = $diskTimeAvg; queueLength = $diskQueueAvg; sampleCount = (Get-SafeCount $diskTimeVals); source = $diskSource }
+        $content += "Disque: utilisation $diskTimeAvg% | file $diskQueueAvg [$diskSource]"
+
+        $topCpu = @(); $topMemory = @()
+        try {
+            # Tri sûr des processus par consommation CPU (en secondes) via Get-ProcCpuSeconds
+            $allProcs = @($(Get-Process -ErrorAction SilentlyContinue))
+            $procs = $allProcs |
+                Sort-Object @{ Expression = { Get-ProcCpuSeconds $_ } ; Descending = $true } |
+                Select-Object -First 5
+            $procArray = @($procs)
+            foreach ($p in $procArray) {
+                if ($null -eq $p) { continue }
+                $topCpu += [ordered]@{
+                    name       = (Get-SafePropValue $p 'ProcessName' 'N/A');
+                    cpuSeconds = (Get-ProcCpuSeconds $p)
+                }
+            }
+            # Tri des processus par consommation mémoire (WorkingSet64) inchangé
+            $procsM = $allProcs |
+                Sort-Object WorkingSet64 -Descending | Select-Object -First 5
+            $procMArray = @($procsM)
+            foreach ($p in $procMArray) {
+                if ($null -eq $p) { continue }
+                $ws = Get-SafePropValue $p 'WorkingSet64' 0
+                $topMemory += [ordered]@{
+                    name     = (Get-SafePropValue $p 'ProcessName' 'N/A');
+                    memoryMB = [math]::Round((Convert-SafeLong $ws) / 1MB, 2)
+                }
+            }
+        } catch { }
+        $data['topCpu'] = $topCpu; $data['topMemory'] = $topMemory
+        if ((Get-SafeCount $topCpu) -gt 0) { $content += "Top CPU: $(Get-SafeDictValue $topCpu[0] 'name' 'N/A')" }
+        if ((Get-SafeCount $topMemory) -gt 0) { $content += "Top RAM: $(Get-SafeDictValue $topMemory[0] 'name' 'N/A') ($(Get-SafeDictValue $topMemory[0] 'memoryMB' 0) MB)" }
+
+        $throughputMbps = 0; $netErrors = 0
+        try {
+            if ($null -ne $activeAdapter -and $null -ne $netStart) {
+                $adapterName = Get-SafePropValue $activeAdapter 'Name' ''
+                $netEnd = Get-NetAdapterStatistics -Name $adapterName -ErrorAction SilentlyContinue
+                if ($null -ne $netEnd) {
+                    $bytesIn = (Get-SafePropValue $netEnd 'ReceivedBytes' 0) - (Get-SafePropValue $netStart 'ReceivedBytes' 0)
+                    $bytesOut = (Get-SafePropValue $netEnd 'SentBytes' 0) - (Get-SafePropValue $netStart 'SentBytes' 0)
+                    $elapsed = $samples * $sampleInterval
+                    if ($elapsed -gt 0) { $throughputMbps = [math]::Round((((Convert-SafeLong $bytesIn) + (Convert-SafeLong $bytesOut)) * 8) / ($elapsed * 1MB), 2) }
+                    $errStart = (Get-SafePropValue $netStart 'InboundPacketsWithErrors' 0) + (Get-SafePropValue $netStart 'OutboundPacketsWithErrors' 0)
+                    $errEnd = (Get-SafePropValue $netEnd 'InboundPacketsWithErrors' 0) + (Get-SafePropValue $netEnd 'OutboundPacketsWithErrors' 0)
+                    $netErrors = $errEnd - $errStart
+                }
+            }
+        } catch { }
+        $adapterName = "inconnu"
+        if ($null -ne $activeAdapter) { $adapterName = Get-SafePropValue $activeAdapter 'Name' 'inconnu' }
+        $data['network'] = [ordered]@{ adapter = $adapterName; throughputMbps = $throughputMbps; errors = $netErrors }
+        $content += "Reseau: $throughputMbps Mbps | erreurs: $netErrors"
+        $data['monitorDuration'] = $monitorDuration; $data['samplesCollected'] = $samples
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-DynamicSignals' -Message $_.Exception.Message }
+    $Script:SectionData['DynamicSignals'] = $data
+    return $content
+}
+
+function Get-AdvancedAnalysis {
+    $content = @(); $data = [ordered]@{}
+    try {
+        $content += "ANALYSE AVANCEE (DONNEES BRUTES)"; $content += ("=" * 50)
+        
+        $content += ""; $content += "FRAGMENTATION DISQUE"; $content += ("-" * 50)
+        $fragData = [ordered]@{}
+        if ($Script:IsAdmin) {
+            try {
+                $volumes = Get-Volume -ErrorAction SilentlyContinue | Where-Object { (Get-SafePropValue $_ 'DriveType' '') -eq 'Fixed' -and (Get-SafePropValue $_ 'DriveLetter') }
+                $volumeArray = @($volumes)
+                foreach ($vol in $volumeArray) {
+                    if ($null -eq $vol) { continue }
+                    $driveLetter = Get-SafePropValue $vol 'DriveLetter' ''
+                    if ([string]::IsNullOrEmpty($driveLetter)) { continue }
+                    try {
+                        $result = Optimize-Volume -DriveLetter $driveLetter -Analyze -Verbose 4>&1 -ErrorAction Stop
+                        $fragPercent = -1
+                        $resultArray = @($result)
+                        foreach ($line in $resultArray) {
+                            $lineStr = "$line"
+                            if ($lineStr -match '(\d+)%') { try { $fragPercent = [int]$Matches[1] } catch { $fragPercent = -1 }; break }
+                        }
+                        $fragData[$driveLetter] = $fragPercent
+                        $content += "${driveLetter}: $fragPercent%"
+                    } catch { $fragData[$driveLetter] = -1; $content += "${driveLetter}: [Non disponible]" }
+                }
+            } catch { $content += "[INFO] Analyse fragmentation non disponible" }
+        } else { $content += "[INFO] Admin requis" }
+        $data['fragmentation'] = $fragData
+
+        $content += ""; $content += "BENCHMARKS SYSTEME"; $content += ("-" * 50)
+        $benchData = [ordered]@{}
+        try {
+            $winsatPath = "$env:SystemRoot\Performance\WinSAT\DataStore"
+            if (Test-Path $winsatPath) {
+                $winsatFiles = Get-ChildItem -Path $winsatPath -Filter "*.xml" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                if ($null -ne $winsatFiles) {
+                    try {
+                        $fullName = Get-SafePropValue $winsatFiles 'FullName' ''
+                        if (-not [string]::IsNullOrEmpty($fullName) -and (Test-Path $fullName -ErrorAction SilentlyContinue)) {
+                            [xml]$winsatXml = Get-Content $fullName -ErrorAction Stop
+                            $winSPR = $null
+                            if ($null -ne $winsatXml) {
+                                try { $winSPR = $winsatXml.SelectSingleNode('//WinSPR') } catch { $winSPR = $null }
+                            }
+                            if ($null -ne $winSPR) {
+                                try { $benchData['cpu'] = [double]($winSPR.SelectSingleNode('CpuScore').'#text') } catch { $benchData['cpu'] = -1 }
+                                try { $benchData['memory'] = [double]($winSPR.SelectSingleNode('MemoryScore').'#text') } catch { $benchData['memory'] = -1 }
+                                try { $benchData['disk'] = [double]($winSPR.SelectSingleNode('DiskScore').'#text') } catch { $benchData['disk'] = -1 }
+                                try { $benchData['graphics'] = [double]($winSPR.SelectSingleNode('GraphicsScore').'#text') } catch { $benchData['graphics'] = -1 }
+                                $lastWrite = Get-SafePropValue $winsatFiles 'LastWriteTime'
+                                $lastRunValue = 'Unknown'
+                                if ($null -ne $lastWrite) { 
+                                    try { $lastRunValue = $lastWrite.ToString('o') } catch { $lastRunValue = 'Unknown' } 
+                                }
+                                $benchData['lastRun'] = $lastRunValue
+                                $content += "CPU Score: $(Get-SafeDictValue $benchData 'cpu' -1) | Memory: $(Get-SafeDictValue $benchData 'memory' -1) | Disk: $(Get-SafeDictValue $benchData 'disk' -1) | Graphics: $(Get-SafeDictValue $benchData 'graphics' -1)"
+                            } else { $content += "[INFO] Donnees WinSAT invalides" }
+                        } else { $content += "[INFO] Fichier WinSAT introuvable" }
+                    } catch { $content += "[INFO] Erreur lecture WinSAT: $($_.Exception.Message)" }
+                } else { $content += "[INFO] Aucun benchmark WinSAT" }
+            } else { $content += "[INFO] WinSAT non disponible" }
+        } catch { $content += "[INFO] Lecture benchmarks impossible" }
+        $data['benchmarks'] = $benchData
+
+        $content += ""; $content += "DETECTION MALWARE"; $content += ("-" * 50)
+        $malwareData = [ordered]@{}
+        try {
+            $threats = Get-MpThreat -ErrorAction Stop
+            $threatArray = @($threats)
+            $threatCount = Get-SafeCount $threatArray
+            if ($threatCount -gt 0) {
+                $threatList = @()
+                foreach ($threat in $threatArray) {
+                    if ($null -eq $threat) { continue }
+                    $threatName = Get-SafePropValue $threat 'ThreatName' 'N/A'
+                    $severity = Get-SafePropValue $threat 'SeverityID' 0
+                    $content += "[MENACE] $threatName - Severite: $severity"
+                    $threatList += [ordered]@{ name = $threatName; severity = $severity }
+                }
+                $malwareData['threats'] = $threatList; $malwareData['count'] = $threatCount
+            } else { $content += "[OK] Aucune menace active"; $malwareData['count'] = 0 }
+        } catch { $content += "[INFO] Get-MpThreat non disponible"; $malwareData['count'] = -1 }
+        $data['malware'] = $malwareData
+    }
+    catch { Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'Get-AdvancedAnalysis' -Message $_.Exception.Message }
+    $Script:SectionData['AdvancedAnalysis'] = $data
+    return $content
+}
+#endregion
+
+#region ============== RAPPORT ==============
+function New-ErrorReport {
+    $content = @()
+    $errorCount = Get-SafeCount $Script:ErrorLog
+    if ($errorCount -eq 0) { return $null }
+    $content += "ERREURS DE COLLECTE"; $content += ("=" * 50); $content += "Total erreurs: $errorCount"; $content += ""
+    $errorArray = @($Script:ErrorLog)
+    foreach ($err in $errorArray) {
+        if ($null -eq $err) { continue }
+        $type = Get-SafePropValue $err 'Type' 'UNKNOWN'
+        $source = Get-SafePropValue $err 'Source' 'Unknown'
+        $msg = Get-SafePropValue $err 'Message' 'No message'
+        $content += "[$type] $source"; $content += "  $msg"; $content += ""
+    }
+    return $content
+}
+
+function New-Summary {
+    $content = @()
+    try {
+        $content += "RESUME DE COLLECTE"; $content += ("=" * 50); $content += ""
+        $content += "METADATA"; $content += ("-" * 50)
+        $content += "Version              : $($Script:ScriptVersion)"
+        $content += "Run ID               : $($Script:RunId)"
+        $content += "Date                 : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        $content += "Admin                : $($Script:IsAdmin)"
+        $content += "Redaction            : $(if(-not $Script:NoRedact){$Script:RedactLevel}else{'DESACTIVEE'})"
+        $content += "QuickScan            : $($Script:QuickScan)"
+        $content += "MonitorSeconds       : $($Script:MonitorSeconds)"; $content += ""
+        $content += "SECTIONS COLLECTEES"; $content += ("-" * 50)
+        $sectionKeys = @()
+        if ($null -ne $Script:SectionData -and $Script:SectionData -is [System.Collections.IDictionary]) {
+            $sectionKeys = @($Script:SectionData.Keys)
+        }
+        $content += "Sections: $(Get-SafeCount $sectionKeys)"
+        foreach ($key in $sectionKeys) { $content += "  - $key" }
+        $content += ""; $content += "ERREURS"; $content += ("-" * 50)
+        $content += "Erreurs de collecte: $(Get-SafeCount $Script:ErrorLog)"
+        $Script:SectionData['_metadata'] = [ordered]@{
+            schemaVersion = Get-SafeDictValue $Script:Config 'SchemaVersion' '6.6.0'
+            scriptVersion = $Script:ScriptVersion; runId = $Script:RunId
+            timestamp = (Get-Date).ToString('o'); isAdmin = $Script:IsAdmin
+            redactionEnabled = (-not $Script:NoRedact); redactLevel = $Script:RedactLevel
+            quickScan = $Script:QuickScan; monitorSeconds = $Script:MonitorSeconds
+            sectionCount = Get-SafeCount $sectionKeys; errorCount = Get-SafeCount $Script:ErrorLog
+            redactionCount = Get-SafeDictValue $Script:RedactionStats 'TotalRedactions' 0
+            allowExternalNetworkTests = $Script:AllowExternalNetworkTests
+            externalCommandTimeoutSeconds = $Script:ExternalCommandTimeoutSeconds
+            maxTempFiles = $Script:MaxTempFiles
+        }
+        $Script:SectionData['_errors'] = Get-ErrorLogData
+        $Script:SectionData['_collectorStatus'] = $Script:CollectorStatus
+    }
+    catch { $content += "[ERREUR] Generation resume: $($_.Exception.Message)" }
+    return $content
+}
+#endregion
+
+#region ============== EXECUTION PRINCIPALE ==============
+try {
+    Write-Host "[INFO] TOTAL_STEPS | $TOTAL_STEPS"
+    Write-Status -Type 'INFO' -Section 'Diagnostic' -Message "COLLECTE v$($Script:ScriptVersion) - Run $($Script:RunId)"
+    Write-Status -Type 'INFO' -Section 'Diagnostic' -Message "Sortie: $($Script:OutputPath)"
+    Write-Status -Type 'INFO' -Section 'Mode' -Message "Collecte pure - Analyse par IA externe"
+    if (-not $Script:NoRedact) { Write-Status -Type 'INFO' -Section 'Redaction' -Message "Niveau: $($Script:RedactLevel)" }
+    Write-Status -Type 'INFO' -Section 'Monitoring' -Message "$($Script:MonitorSeconds) secondes"
+
+    $preflightOK = Invoke-PreflightCheck -ScriptPath $PSCommandPath -SkipCheck:$SkipPreflightCheck
+    if (-not $preflightOK) {
+        Write-Status -Type 'WARN' -Section 'Preflight' -Message "Execution Policy non valide - collecte degradee"
+        Add-ErrorLog -Type 'PREFLIGHT_ERROR' -Source 'Preflight' -Message "Execution Policy non valide"
+    }
+
+    $Script:IsAdmin = Test-Administrator
+    if ($Script:IsAdmin) { Write-Status -Type 'DONE' -Section 'Privileges' -Message "Mode Administrateur" }
+    else { Write-Status -Type 'WARN' -Section 'Privileges' -Message "Mode utilisateur standard" }
+
+    Write-ReportLine ("#" * 100)
+    Write-ReportLine "#" + (" " * 15) + "RAPPORT DE COLLECTE DIAGNOSTIC PC v$($Script:ScriptVersion) - DONNEES BRUTES" + (" " * 15) + "#"
+    Write-ReportLine ("#" * 100); Write-ReportLine ""
+    Write-ReportLine "Ce rapport contient des DONNEES BRUTES uniquement."
+    Write-ReportLine "L'analyse et l'interpretation sont effectuees par l'IA externe."; Write-ReportLine ""
+    Write-ReportLine "METADATA"; Write-ReportLine ("-" * 50)
+    Write-ReportLine "Run ID               : $($Script:RunId)"
+    Write-ReportLine "Version              : $($Script:ScriptVersion)"
+    Write-ReportLine "Date                 : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    Write-ReportLine "Machine              : $(Protect-ComputerName $env:COMPUTERNAME)"
+    Write-ReportLine "Admin                : $Script:IsAdmin"
+    Write-ReportLine "Redaction            : $(if(-not $Script:NoRedact){$Script:RedactLevel}else{'DESACTIVEE'})"
+    Write-ReportLine "MonitorSeconds       : $($Script:MonitorSeconds)"
+    Write-ReportLine "ExternalNetTests     : $($Script:AllowExternalNetworkTests)"
+    Write-ReportLine ""
+
+    $collectors = @(
+        @{Name='Identite Machine'; Function={Get-MachineIdentity}; Section='1'}
+        @{Name='Systeme Exploitation'; Function={Get-OSInfo}; Section='2'}
+        @{Name='Processeur'; Function={Get-CpuInfo}; Section='3'}
+        @{Name='Memoire'; Function={Get-MemoryInfo}; Section='4'}
+        @{Name='Stockage'; Function={Get-StorageInfo}; Section='5'}
+        @{Name='Carte Graphique'; Function={Get-GpuInfo}; Section='6'}
+        @{Name='Reseau'; Function={Get-NetworkInfo}; Section='7'}
+        @{Name='Securite'; Function={Get-SecurityInfo}; Section='8'}
+        @{Name='Services'; Function={Get-ServicesInfo}; Section='9'}
+        @{Name='Demarrage'; Function={Get-StartupPrograms}; Section='10'}
+        @{Name='Health Checks'; Function={Get-HealthChecks}; Section='11'}
+        @{Name='Journaux Evenements'; Function={Get-EventLogsInfo}; Section='12'}
+        @{Name='Windows Update'; Function={Get-WindowsUpdateInfo}; Section='13'}
+        @{Name='Audio'; Function={Get-AudioInfo}; Section='14'}
+        @{Name='Peripheriques'; Function={Get-DevicesDrivers}; Section='15'}
+        @{Name='Applications'; Function={Get-InstalledApplications}; Section='16'}
+        @{Name='Taches Planifiees'; Function={Get-ScheduledTasksInfo}; Section='17'}
+        @{Name='Processus'; Function={Get-ProcessList}; Section='18'}
+        @{Name='Batterie'; Function={Get-BatteryInfo}; Section='19'}
+        @{Name='Imprimantes'; Function={Get-PrintersInfo}; Section='20'}
+        @{Name='Profils Utilisateurs'; Function={Get-UserProfiles}; Section='21'}
+        @{Name='Virtualisation'; Function={Get-VirtualizationInfo}; Section='22'}
+        @{Name='Points Restauration'; Function={Get-RestorePoints}; Section='23'}
+        @{Name='Fichiers Temporaires'; Function={Get-TempFilesInfo}; Section='24'}
+        @{Name='Variables Environnement'; Function={Get-EnvironmentVariablesInfo}; Section='25'}
+        @{Name='Certificats'; Function={Get-CertificatesInfo}; Section='26'}
+        @{Name='Temperatures'; Function={Get-Temperatures}; Section='27'}
+        @{Name='Integrite Systeme'; Function={Get-SystemIntegrity}; Section='28'}
+        @{Name='Alimentation'; Function={Get-PowerSettings}; Section='29'}
+        @{Name='Analyse Minidumps'; Function={Get-MinidumpAnalysis}; Section='30'}
+        @{Name='Historique Fiabilite'; Function={Get-ReliabilityHistory}; Section='31'}
+        @{Name='Compteurs Performance'; Function={Get-PerformanceCounters}; Section='32'}
+        @{Name='Latence Reseau'; Function={Get-NetworkInfoLatency}; Section='33'}
+        @{Name='SMART Detaille'; Function={Get-SmartDetails}; Section='34'}
+        @{Name='Bluetooth'; Function={Get-BluetoothInfo}; Section='35'}
+    )
+
+    $total = Get-SafeCount $collectors; $current = 0
+    foreach ($collector in $collectors) {
+        $current++
+        $collectorName = Get-SafeDictValue $collector 'Name' 'Unknown'
+        $collectorSection = Get-SafeDictValue $collector 'Section' '?'
+        $collectorFunc = Get-SafeDictValue $collector 'Function'
+        $collectorStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        Write-Status -Type 'PROGRESS' -Section $collectorName -Current $current -Total $total
+        Write-Status -Type 'STATUS' -Section $collectorName -Message "Collecte en cours..."
+        try {
+            if ($null -ne $collectorFunc) {
+                $sectionContent = & $collectorFunc
+                Write-Section -Title "$collectorSection. $($collectorName.ToUpper())" -Content $sectionContent
+                $collectorStopwatch.Stop()
+                $collectorDurationMs = [long][math]::Round($collectorStopwatch.Elapsed.TotalMilliseconds)
+                Set-CollectorStatus -Name $collectorName -Status 'ok' -DurationMs $collectorDurationMs
+                Write-Status -Type 'DONE' -Section $collectorName -Message 'OK'
+            } else {
+                $collectorStopwatch.Stop()
+                $collectorDurationMs = [long][math]::Round($collectorStopwatch.Elapsed.TotalMilliseconds)
+                Set-CollectorStatus -Name $collectorName -Status 'failed' -Message 'Collector function missing' -DurationMs $collectorDurationMs
+                Write-Status -Type 'WARN' -Section $collectorName -Message 'Fonction de collecte introuvable'
+            }
+        } catch {
+            $collectorStopwatch.Stop()
+            $collectorDurationMs = [long][math]::Round($collectorStopwatch.Elapsed.TotalMilliseconds)
+            Write-Section -Title "$collectorSection. $($collectorName.ToUpper())" -Content @("[ERREUR] $($_.Exception.Message)")
+            Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source $collectorName -Message $_.Exception.Message
+            Set-CollectorStatus -Name $collectorName -Status 'failed' -Message $_.Exception.Message -DurationMs $collectorDurationMs
+            Write-Status -Type 'ERROR' -Section $collectorName -Message $_.Exception.Message
+        }
+    }
+
+    Write-Status -Type 'STATUS' -Section 'Signaux Dynamiques' -Message "Monitoring $($Script:MonitorSeconds)s..."
+    $dynamicStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        $dynContent = Get-DynamicSignals
+        Write-Section -Title "36. SIGNES DYNAMIQUES" -Content $dynContent
+        $dynamicStopwatch.Stop()
+        $dynamicDurationMs = [long][math]::Round($dynamicStopwatch.Elapsed.TotalMilliseconds)
+        Set-CollectorStatus -Name 'DynamicSignals' -Status 'ok' -DurationMs $dynamicDurationMs
+        Write-Status -Type 'DONE' -Section 'Signaux Dynamiques' -Message 'OK'
+    }
+    catch {
+        $dynamicStopwatch.Stop()
+        $dynamicDurationMs = [long][math]::Round($dynamicStopwatch.Elapsed.TotalMilliseconds)
+        Write-Section -Title "36. SIGNES DYNAMIQUES" -Content @("[ERREUR] $($_.Exception.Message)")
+        Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'DynamicSignals' -Message $_.Exception.Message
+        Set-CollectorStatus -Name 'DynamicSignals' -Status 'failed' -Message $_.Exception.Message -DurationMs $dynamicDurationMs
+        Write-Status -Type 'ERROR' -Section 'Signaux Dynamiques' -Message $_.Exception.Message
+    }
+
+    Write-Status -Type 'STATUS' -Section 'Analyse Avancee' -Message "Analyse en cours..."
+    $advancedStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        $advContent = Get-AdvancedAnalysis
+        Write-Section -Title "37. ANALYSE AVANCEE" -Content $advContent
+        $advancedStopwatch.Stop()
+        $advancedDurationMs = [long][math]::Round($advancedStopwatch.Elapsed.TotalMilliseconds)
+        Set-CollectorStatus -Name 'AdvancedAnalysis' -Status 'ok' -DurationMs $advancedDurationMs
+        Write-Status -Type 'DONE' -Section 'Analyse Avancee' -Message 'OK'
+    }
+    catch {
+        $advancedStopwatch.Stop()
+        $advancedDurationMs = [long][math]::Round($advancedStopwatch.Elapsed.TotalMilliseconds)
+        Write-Section -Title "37. ANALYSE AVANCEE" -Content @("[ERREUR] $($_.Exception.Message)")
+        Add-ErrorLog -Type 'COLLECTOR_ERROR' -Source 'AdvancedAnalysis' -Message $_.Exception.Message
+        Set-CollectorStatus -Name 'AdvancedAnalysis' -Status 'failed' -Message $_.Exception.Message -DurationMs $advancedDurationMs
+        Write-Status -Type 'ERROR' -Section 'Analyse Avancee' -Message $_.Exception.Message
+    }
+
+    $errorContent = New-ErrorReport
+    if ($null -ne $errorContent) { Write-Section -Title "38. ERREURS DE COLLECTE" -Content $errorContent }
+
+    Write-Status -Type 'STATUS' -Section 'Resume' -Message "Generation du resume..."
+    $summaryContent = New-Summary
+    Write-Section -Title "RESUME FINAL" -Content $summaryContent
+    Write-Status -Type 'DONE' -Section 'Resume' -Message 'OK'
+
+    $Script:EndTime = Get-Date
+    $Script:GlobalStopwatch.Stop()
+    $durationSeconds = [math]::Round($Script:GlobalStopwatch.Elapsed.TotalSeconds, 1)
+    Write-ReportLine ""; Write-ReportLine ("#" * 100)
+    Write-ReportLine "Duree collecte       : $durationSeconds secondes"
+    Write-ReportLine "Genere le            : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
+    if ($Full) {
+        Write-ReportLine ""; Write-ReportLine "[RAW JSON DATA]"
+        try {
+            $jsonOutput = Get-JsonSnapshotString
+            Write-ReportLine $jsonOutput
+        }
+        catch { Write-ReportLine "[ERREUR JSON] $($_.Exception.Message)" }
+    }
+
+    # FIX RISK #4: Write file first, then compute hash from actual file bytes (avoids CRLF mismatch)
+    Write-Status -Type 'STATUS' -Section 'Ecriture' -Message "Sauvegarde du rapport..."
+    try {
+        $reportArray = @($Script:ReportLines)
+        [System.IO.File]::WriteAllLines($Script:OutputPath, $reportArray, (New-Object System.Text.UTF8Encoding($true)))
+        Invoke-HardenOutputAcl -Path $Script:OutputDir
+        Write-Status -Type 'DONE' -Section 'Rapport' -Message $Script:OutputPath
+        $Script:ReportWritten = $true
+        
+        # Compute SHA256 from actual file bytes written to disk (guarantees match)
+        try {
+            $fileBytes = [System.IO.File]::ReadAllBytes($Script:OutputPath)
+            $sha256 = [System.Security.Cryptography.SHA256]::Create()
+            $hashBytes = $sha256.ComputeHash($fileBytes)
+            $hashString = [BitConverter]::ToString($hashBytes) -replace '-', ''; $sha256.Dispose()
+            # Append hash to the file (re-write with hash included)
+            $hashLine = "`r`nHash (SHA256): $hashString"
+            [System.IO.File]::AppendAllText($Script:OutputPath, $hashLine, (New-Object System.Text.UTF8Encoding($true)))
+            Write-Status -Type 'INFO' -Section 'Hash' -Message "SHA256 inclus: $hashString"
+        } catch {
+            Write-Status -Type 'WARN' -Section 'Hash' -Message "Calcul echoue: $($_.Exception.Message)"
+        }
+        try {
+            $jsonString = Get-JsonSnapshotString
+            Write-AtomicUtf8File -Path $Script:JsonOutputPath -Content $jsonString
+            Invoke-HardenOutputAcl -Path $Script:OutputDir
+            Write-CompletionMarker -JsonPath $Script:JsonOutputPath
+            Write-Status -Type 'DONE' -Section 'JSON' -Message $Script:JsonOutputPath
+            $Script:JsonWritten = $true
+        } catch {
+            Write-Status -Type 'ERROR' -Section 'JSON' -Message $_.Exception.Message
+        }
+    } catch {
+        Write-Status -Type 'ERROR' -Section 'Ecriture' -Message "Impossible d'ecrire: $($_.Exception.Message)"
+    }
+
+    $sectionKeys = @()
+    if ($null -ne $Script:SectionData -and $Script:SectionData -is [System.Collections.IDictionary]) { $sectionKeys = @($Script:SectionData.Keys) }
+    Write-Status -Type 'DONE' -Section 'Diagnostic' -Message "Termine en ${durationSeconds}s | $(Get-SafeCount $sectionKeys) sections"
+    $errorCount = Get-SafeCount $Script:ErrorLog
+    if ($errorCount -gt 0) { Write-Status -Type 'WARN' -Section 'Erreurs' -Message "$errorCount erreurs de collecte" }
+    Write-Status -Type 'INFO' -Section 'Resultat' -Message "Donnees brutes pretes pour analyse IA"
+}
+catch {
+    Write-Status -Type 'ERROR' -Section 'Fatal' -Message $_.Exception.Message
+    Add-ErrorLog -Type 'FATAL' -Source 'Execution' -Message $_.Exception.Message
+    $Script:PartialFailure = $true
+}
+finally {
+    if ($null -eq $Script:EndTime) { $Script:EndTime = Get-Date }
+
+    if (-not $Script:ReportWritten) {
+        try {
+            $reportArray = New-MinimalReportLines
+            [System.IO.File]::WriteAllLines($Script:OutputPath, $reportArray, (New-Object System.Text.UTF8Encoding($true)))
+            Invoke-HardenOutputAcl -Path $Script:OutputDir
+            $Script:ReportWritten = $true
+        } catch {
+            try {
+                $fallbackDir = Join-Path $env:TEMP 'VirtualITPro\Rapport'
+                if (-not (Test-Path $fallbackDir)) { $null = New-Item -ItemType Directory -Path $fallbackDir -Force -ErrorAction SilentlyContinue }
+                $fallbackReport = Join-Path $fallbackDir "Scan_$($Script:RunId).txt"
+                $reportArray = New-MinimalReportLines
+                [System.IO.File]::WriteAllLines($fallbackReport, $reportArray, (New-Object System.Text.UTF8Encoding($true)))
+                $Script:ReportWritten = $true
+                $Script:OutputDir = $fallbackDir
+                $Script:OutputPath = $fallbackReport
+            } catch { }
+        }
+    }
+
+    if (-not $Script:JsonWritten) {
+        try {
+            $jsonString = Get-JsonSnapshotString
+            Write-AtomicUtf8File -Path $Script:JsonOutputPath -Content $jsonString
+            Invoke-HardenOutputAcl -Path $Script:OutputDir
+            $Script:JsonWritten = $true
+            Write-CompletionMarker -JsonPath $Script:JsonOutputPath
+            Write-Status -Type 'DONE' -Section 'JSON' -Message $Script:JsonOutputPath
+        } catch {
+            try {
+                $fallbackDir = Join-Path $env:TEMP 'VirtualITPro\Rapport'
+                if (-not (Test-Path $fallbackDir)) { $null = New-Item -ItemType Directory -Path $fallbackDir -Force -ErrorAction SilentlyContinue }
+                $fallbackJson = Join-Path $fallbackDir "Scan_$($Script:RunId).json"
+                $Script:OutputDir = $fallbackDir
+                $Script:JsonOutputPath = $fallbackJson
+                $jsonString = Get-JsonSnapshotString
+                Write-AtomicUtf8File -Path $fallbackJson -Content $jsonString
+                $Script:JsonWritten = $true
+                Write-CompletionMarker -JsonPath $Script:JsonOutputPath
+                Write-Status -Type 'DONE' -Section 'JSON' -Message $Script:JsonOutputPath
+            } catch { }
+        }
+    }
+}
+#endregion

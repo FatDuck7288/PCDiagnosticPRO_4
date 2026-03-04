@@ -1,0 +1,8 @@
+{"timestamp":639067808449906562,"location":"MainWindow.xaml.cs","message":"WindowBounds","phase":"SaveBounds","left":410,"top":116,"width":1100,"height":800,"windowState":"Normal"}
+{"hypothesisId":"H3","location":"MainViewModel.StartScanAsync","message":"Scan start","timestamp":639067808457682421}
+{"timestamp":639067808495711414,"location":"MainWindow.xaml.cs","message":"WindowBounds","phase":"SaveBounds","left":410,"top":116,"width":1100,"height":800,"windowState":"Normal"}
+{"hypothesisId":"H3","location":"MainViewModel.StartScanAsync","message":"Scan start","timestamp":639067808499465846}
+{"timestamp":639067808499484282,"location":"MainWindow.xaml.cs","message":"WindowBounds","phase":"SaveBounds","left":410,"top":116,"width":1100,"height":800,"windowState":"Normal"}
+{"timestamp":639067808499493529,"location":"MainWindow.xaml.cs","message":"WindowBounds","phase":"SaveBounds","left":410,"top":116,"width":1100,"height":800,"windowState":"Normal"}
+{"hypothesisId":"H3","location":"MainViewModel.StartScanAsync","message":"Before ResolveScriptPath","timestamp":639067808499496251}
+{"hypothesisId":"H3","location":"MainViewModel.StartScanAsync","message":"After ResolveScriptPath","timestamp":639067808499502930,"data":{"resolved":true}}

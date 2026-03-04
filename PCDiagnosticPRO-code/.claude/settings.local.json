@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(for func in \"Add-ErrorLog\" \"Get-AdvancedAnalysis\" \"Get-AudioInfo\" \"Get-BatteryInfo\" \"Get-CertificatesInfo\" \"Get-CpuInfo\" \"Get-DevicesDrivers\" \"Get-DynamicSignals\" \"Get-EnvironmentVariablesInfo\" \"Get-EventLogsInfo\" \"Get-GpuInfo\" \"Get-HealthChecks\" \"Get-InstalledApplications\" \"Get-JsonSnapshotString\" \"Get-MachineIdentity\" \"Get-MemoryInfo\" \"Get-MinidumpAnalysis\" \"Get-NetworkInfo\" \"Get-NetworkInfoLatency\" \"Get-OSInfo\" \"Get-PerformanceCounters\" \"Get-PowerSettings\" \"Get-PrintersInfo\" \"Get-ProcessList\" \"Get-RegistryKeysInfo\" \"Get-ReliabilityHistory\" \"Get-RestorePoints\" \"Get-SafeCount\" \"Get-SafeDictValue\" \"Get-ScheduledTasksInfo\" \"Get-SecurityInfo\" \"Get-ServicesInfo\" \"Get-SmartDetails\" \"Get-StartupPrograms\" \"Get-StorageInfo\" \"Get-SystemIntegrity\" \"Get-Temperatures\" \"Get-TempFilesInfo\" \"Get-UserProfiles\" \"Get-VirtualizationInfo\" \"Get-WindowsUpdateInfo\" \"Invoke-HardenOutputAcl\" \"Invoke-PreflightCheck\" \"New-ErrorReport\" \"New-MinimalReportLines\" \"New-Summary\" \"Protect-ComputerName\" \"Set-CollectorStatus\" \"Test-Administrator\" \"Write-AtomicUtf8File\" \"Write-CompletionMarker\" \"Write-ReportLine\" \"Write-Section\" \"Write-Status\")",
+      "Bash(do grep -q \"^function $func \" \"d:\\\\Git_Cursor_Sux\\\\Cursor_Suce\\\\PCDiagnosticPRO-code\\\\Scripts\\\\Total_PS_PC_Scan_v7.0.ps1\")",
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(grep -n \"ToolTip\\\\|tooltip\\\\|Tooltip\" /d/Git_Cursor_Sux/Cursor_Suce/PCDiagnosticPRO-code/Views/*.xaml)",
+      "Bash(find \"d:\\\\Git_Cursor_Sux\\\\Cursor_Suce\\\\PCDiagnosticPRO-code\\\\Models\" -name \"*.cs\" -exec grep -l \"NormalizedMetric\" {} ;)",
+      "Bash(grep -n \"Provenance\\\\|JsonPath\\\\|Confidence\\\\|MissingDataDisplay\" /d/Git_Cursor_Sux/Cursor_Suce/PCDiagnosticPRO-code/ViewModels/*.cs)",
+      "Bash(start \"PCDiagnosticPRO-code/bin/Debug/net8.0-windows/PCDiagnosticPro.exe\")",
+      "Bash(dotnet run --project \"PCDiagnosticPRO-code/PCDiagnosticPro.csproj\")"
+    ]
+  }
+}

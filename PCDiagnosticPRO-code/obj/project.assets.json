@@ -821,17 +821,17 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
+      "projectUniqueName": "D:\\GitRep4\\PCDiagnosticPRO_4\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
       "projectName": "PCDiagnosticPro",
-      "projectPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
+      "projectPath": "D:\\GitRep4\\PCDiagnosticPRO_4\\PCDiagnosticPRO-code\\PCDiagnosticPro.csproj",
       "packagesPath": "C:\\Users\\rams_\\.nuget\\packages\\",
-      "outputPath": "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\obj\\",
+      "outputPath": "D:\\GitRep4\\PCDiagnosticPRO_4\\PCDiagnosticPRO-code\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "D:\\Tennis\\Os\\Produits\\PC_Repair\\Test-codex-analyze-xaml-binding-exception-details\\PCDiagnosticPRO-code\\NuGet.Config",
+        "D:\\GitRep4\\PCDiagnosticPRO_4\\PCDiagnosticPRO-code\\NuGet.Config",
         "C:\\Users\\rams_\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
@@ -889,7 +889,7 @@
             "privateAssets": "none"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

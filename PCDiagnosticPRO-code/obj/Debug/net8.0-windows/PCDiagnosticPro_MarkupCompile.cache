@@ -1,20 +1,20 @@
 ﻿PCDiagnosticPro
-
+1.0.0.0
 
 winexe
 C#
 .cs
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\
+D:\GitRep4\PCDiagnosticPRO_4\PCDiagnosticPRO-code\obj\Debug\net8.0-windows\
 PCDiagnosticPro
 none
 false
 TRACE;DEBUG;NET;NET8_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_OR_GREATER;NET7_0_OR_GREATER;NET8_0_OR_GREATER;NETCOREAPP3_0_OR_GREATER;NETCOREAPP3_1_OR_GREATER;WINDOWS7_0_OR_GREATER
-D:\Tennis\Os\Produits\PC_Repair\Test-codex-analyze-xaml-binding-exception-details\PCDiagnosticPRO-code\App.xaml
+D:\GitRep4\PCDiagnosticPRO_4\PCDiagnosticPRO-code\App.xaml
 141399393216
 14740115
-135941785383
-2121363407265
+140-347969689
+212-748941644
 Controls\ScanAnimationOverlay.xaml;MainWindow.xaml;Styles\FuturisticStyles.xaml;Styles\Themes\EmpireStarWars.xaml;Views\AdminPermissionsDialog.xaml;Views\AppsDetailsWindow.xaml;Views\CollectorErrorsWindow.xaml;Views\CyberpunkInfoWindow.xaml;Views\DriversDetailsWindow.xaml;Views\FullReportView.xaml;Views\FullReportWindow.xaml;Views\KernelPowerInfoWindow.xaml;Views\ListDetailWindow.xaml;Views\ScanConsentDialog.xaml;
 
-False
+True
 

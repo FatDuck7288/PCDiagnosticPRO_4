@@ -1,0 +1,81 @@
+================================================================================
+ARCH_MAP.txt — Cartographie pipeline Score / Collecte / TXT
+================================================================================
+Mis à jour: schemaVersion 2.2.0 — Source de vérité: UDIS.
+Script PowerShell: IMMUTABLE (Total_PS_PC_Scan_v7.0.ps1).
+================================================================================
+
+A) LECTURE JSON COMBINÉ
+------------------------
+- Fichier    : ViewModels/MainViewModel.cs
+- Méthode    : LoadJsonResultAsync()
+- Détail     : Lit _resultJsonPath via File.ReadAllTextAsync.
+               HealthReportBuilder.Build(jsonContent, _lastSensorsResult) reçoit le contenu.
+
+B) OÙ ScoreV2 PS EST EXTRAIT
+----------------------------
+- Fichier    : Services/HealthReportBuilder.cs
+- Méthode    : ExtractScoreV2(JsonElement root)
+- Détail     : Lit root["scoreV2"] : score, grade, breakdown, topPenalties.
+               Utilisé comme base initiale, puis écrasé par UDIS (étape 7 de Build()).
+
+C) SOURCE DE VÉRITÉ DU SCORE — UDIS
+------------------------------------
+- Fichier    : Services/UnifiedDiagnosticScoreEngine.cs
+- Méthode    : Compute(report, root, sensors, diagnostics)
+- Formule    : UDIS = 0.7 * MachineHealthScore + 0.2 * DataReliabilityScore + 0.1 * DiagnosticClarityScore
+- Détail     : Appelé dans HealthReportBuilder.Build() (étape 7).
+               Écrase report.GlobalScore, report.Grade, report.GlobalMessage.
+               La Divergence (PS vs UDIS) est enregistrée pour traçabilité.
+- Note       : GradeEngine.cs et FinalScoreCalculator.cs ont été supprimés (code mort).
+               PerformanceScoreCalculator.cs, AutoFixReadinessService.cs, SecurityTransparencyHelper.cs
+               supprimés (aucun appel dans la codebase — voir CLEANUP_SUMMARY.md).
+
+D) GARDE-FOU CONFIANCE
+-----------------------
+- Fichier    : Services/HealthReportBuilder.cs
+- Détail     : Après UDIS, si ConfidenceScore < 50 et GlobalScore > 60 → plafonné à 60.
+               Si ConfidenceScore < 70 et GlobalScore > 75 → plafonné à 75.
+
+E) OÙ LE TXT UNIFIÉ EST GÉNÉRÉ
+-------------------------------
+- Fichier    : Services/UnifiedReportBuilder.cs
+- Méthode    : BuildUnifiedReportAsync(...)
+- Détail     : STATUT COLLECTE écrit avec diagnostics.CollectionStatus (OK/PARTIAL/FAILED).
+
+F) OÙ LES CAPTEURS C# SONT DÉFINIS
+------------------------------------
+- Fichier    : Services/HardwareSensorsCollector.cs
+- Détail     : MetricValue<double>.Available et .Value définis dans les collecteurs.
+               DataSanitizer normalise les valeurs invalides (sentinelle 0, hors plage).
+
+G) ÉCRITURE DU JSON COMBINÉ
+----------------------------
+- Fichier    : ViewModels/MainViewModel.cs
+- Méthode    : WriteCombinedResultAsync(...)
+- Détail     : CombinedScanResult { ScanPowershell, SensorsCsharp } → scan_result_combined.json.
+
+H) SNAPSHOT DIAGNOSTIQUE (schemaVersion 2.2.0)
+-----------------------------------------------
+- Fichier    : Services/DiagnosticSnapshotBuilder.cs
+- Constante  : DiagnosticSnapshot.CURRENT_SCHEMA_VERSION = "2.2.0"
+- Détail     : TryMapSection filtre les sections PS vides/erreur (bruit).
+               Validation contractuelle dans Build() : available=false → reason obligatoire.
+               Logging conditionnel (DEBUG uniquement en release).
+
+I) EXTRACTION missingData / topPenalties
+-----------------------------------------
+- Fichier    : Services/CollectorDiagnosticsService.cs
+- Détail     : ExtractMissingDataFlexible et ExtractTopPenaltiesFlexible gèrent
+               les formats array et objet du PowerShell.
+
+J) MODÈLE HealthReport
+-----------------------
+- Fichier    : Models/HealthReport.cs
+- Champs     : GlobalScore, Grade, GlobalMessage, ScoreV2, Errors, MissingData,
+               ConfidenceModel, Divergence, CollectionStatus, CollectorErrorsLogical.
+- Divergence : GradeEngineScore = score UDIS (nom de champ legacy conservé pour compat JSON).
+
+================================================================================
+FIN ARCH_MAP.txt
+================================================================================

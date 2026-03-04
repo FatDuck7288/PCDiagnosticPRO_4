@@ -1,0 +1,616 @@
+﻿<UserControl x:Class="PCDiagnosticPro.Views.FullReportView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:PCDiagnosticPro.ViewModels"
+             xmlns:conv="clr-namespace:PCDiagnosticPro.Converters"
+             xmlns:svc="clr-namespace:PCDiagnosticPro.Services"
+             xmlns:views="clr-namespace:PCDiagnosticPro.Views"
+             mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="900"
+             Background="#0D1117"
+             PreviewMouseWheel="UserControl_PreviewMouseWheel">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <conv:IssueLevelToBrushConverter x:Key="IssueLevelToBrush"/>
+        <conv:IssueLevelToIconConverter x:Key="IssueLevelToIcon"/>
+        <conv:ScoreToBrushConverter x:Key="ScoreToBrush"/>
+        <conv:ScoreToPerformanceBrushConverter x:Key="ScoreToPerformanceBrush"/>
+        <conv:PerformanceScoreToDisplayConverter x:Key="PerformanceScoreToDisplay"/>
+        <conv:CollectionNotEmptyToVisibilityConverter x:Key="CollectionNotEmptyToVisibility"/>
+        <conv:ScoreToScaleFactorConverter x:Key="ScoreToScaleFactor"/>
+        <conv:StringNotEmptyToVisibilityConverter x:Key="StringNotEmptyToVisibility"/>
+        <conv:EqualsToVisibilityConverter x:Key="EqualsToVisibility"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#E6EDF3"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#8B949E"/>
+        <SolidColorBrush x:Key="BorderGlass" Color="#40FFFFFF"/>
+        <SolidColorBrush x:Key="AccentRedBrush" Color="{DynamicResource AccentRed}"/>
+        <SolidColorBrush x:Key="AccentAmber" Color="#FFA726"/>
+        <SolidColorBrush x:Key="AccentCyan" Color="#58A6FF"/>
+        <SolidColorBrush x:Key="BgCard" Color="#CC0D1117"/>
+        <Style x:Key="SidebarItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1F222A34"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ExpandableBoxActiveBrush}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="BorderThickness" Value="1.5"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource BorderActiveBrush}"/>
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect Color="{DynamicResource AccentGlow}" BlurRadius="14" ShadowDepth="0" Opacity="0.55"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ===== DataTemplate for a SINGLE selected section (ContentControl) ===== -->
+        <DataTemplate x:Key="SectionDetailTemplate" DataType="{x:Type vm:ReportSectionViewModel}">
+            <Border Margin="0,0,0,20"
+                    Background="{StaticResource BgCard}" Opacity="0.95"
+                    BorderBrush="{Binding SectionScore, Converter={StaticResource ScoreToBrush}}" BorderThickness="2"
+                    CornerRadius="14" Padding="16">
+                <Border.Effect>
+                    <DropShadowEffect Color="#20FFFFFF" BlurRadius="20" ShadowDepth="0" Opacity="0.5"/>
+                </Border.Effect>
+                <StackPanel>
+                    <!-- Header: Title + badge + ! + score -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <Border Margin="8,0,0,0" Padding="6,2" CornerRadius="4" 
+                                    Background="{Binding Level, Converter={StaticResource IssueLevelToBrush}}">
+                                <TextBlock Text="{Binding Level}" FontSize="10" Foreground="White"/>
+                            </Border>
+                            <TextBlock Text="!" FontSize="14" FontWeight="Bold" Foreground="{StaticResource AccentRedBrush}" Margin="6,0,0,0"
+                                       Visibility="{Binding HasCritical, Converter={StaticResource BoolToVisibility}}"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center" FontFamily="Consolas" FontSize="12"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   Text="{Binding SectionScore, Converter={StaticResource PerformanceScoreToDisplay}, ConverterParameter=WithSuffix}"/>
+                    </Grid>
+                    <!-- Summary -->
+                    <TextBlock Text="{Binding SummaryLine1}" FontSize="12" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                    <TextBlock Text="{Binding SummaryLine2}" FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <Border Visibility="{Binding SectionHeaderBadge, Converter={StaticResource StringNotEmptyToVisibility}}"
+                            Background="#132B2A" BorderBrush="#2FA870" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="{Binding SectionHeaderBadge}" FontSize="11" FontWeight="SemiBold" Foreground="#7EE787"/>
+                            <TextBlock Text="{Binding SectionHeaderBadgeDetail}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- KEY/VALUE TABLE: always visible so section data is never hidden by binding issues -->
+                    <DataGrid ItemsSource="{Binding KeyValues}" AutoGenerateColumns="False" IsReadOnly="True"
+                              HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0"
+                              Background="Transparent" AlternatingRowBackground="#1A2129"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              SelectionUnit="FullRow"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserResizeColumns="True"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              ClipboardCopyMode="IncludeHeader"
+                              Margin="0,0,0,12">
+                        <!-- Tooltip de provenance sur chaque ligne — affiche Source JSON + Raison si disponibles -->
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="ToolTip">
+                                    <Setter.Value>
+                                        <ToolTip MaxWidth="500">
+                                            <StackPanel Margin="4">
+                                                <TextBlock Text="{Binding JsonPath, StringFormat='Source JSON : {0}'}"
+                                                           FontSize="11" FontFamily="Consolas" Foreground="#8B949E"
+                                                           Visibility="{Binding JsonPath, Converter={StaticResource StringNotEmptyToVisibility}}"/>
+                                                <TextBlock Text="{Binding Reason, StringFormat='Raison : {0}'}"
+                                                           FontSize="11" Foreground="{DynamicResource DangerBrush}" Margin="0,3,0,0"
+                                                           Visibility="{Binding Reason, Converter={StaticResource StringNotEmptyToVisibility}}"
+                                                           TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding Provenance, StringFormat='Provenance : {0}'}"
+                                                           FontSize="10" Foreground="#58A6FF" Margin="0,3,0,0"
+                                                           Visibility="{Binding Provenance, Converter={StaticResource StringNotEmptyToVisibility}}"/>
+                                                <TextBlock Text="{Binding Confidence, StringFormat='Confiance : {0}'}"
+                                                           FontSize="10" Foreground="#3FB950" Margin="0,2,0,0"
+                                                           Visibility="{Binding Confidence, Converter={StaticResource StringNotEmptyToVisibility}}"/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </DataGrid.RowStyle>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Clé"
+                                                Binding="{Binding Key}"
+                                                Width="{x:Static svc:IntegralReportPresenter.TableKeyColumnWidth}"
+                                                MinWidth="{x:Static svc:IntegralReportPresenter.TableKeyColumnMinWidth}">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Valeur"
+                                                Binding="{Binding Value}"
+                                                Width="{x:Static svc:IntegralReportPresenter.TableValueColumnWidth}"
+                                                MinWidth="{x:Static svc:IntegralReportPresenter.TableValueColumnMinWidth}">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Unité"
+                                                Binding="{Binding Unit}"
+                                                Width="{x:Static svc:IntegralReportPresenter.TableUnitColumnWidth}"
+                                                MinWidth="{x:Static svc:IntegralReportPresenter.TableUnitColumnMinWidth}">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Provenance" Binding="{Binding Provenance}" Width="120" MinWidth="100"/>
+                            <DataGridTextColumn Header="Source JSON" Binding="{Binding JsonPath}" Width="220" MinWidth="180"/>
+                            <DataGridTextColumn Header="Raison" Binding="{Binding Reason}" Width="220" MinWidth="160"/>
+                            <DataGridTextColumn Header="Confiance" Binding="{Binding Confidence}" Width="90" MinWidth="80"/>
+                            <DataGridTextColumn Header="Manque expliqué" Binding="{Binding MissingDataDisplay}" Width="110" MinWidth="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Bouton "Vérifier BIOS" — visible uniquement pour la section Plateforme/Firmware -->
+                    <Border Visibility="{Binding ShowBiosUpdateCheck, Converter={StaticResource BoolToVisibility}}"
+                            Background="#0D1F2D" BorderBrush="#1F3A50" BorderThickness="1" CornerRadius="8"
+                            Padding="12,10" Margin="0,0,0,12">
+                        <Button Content="Vérifier mise à jour BIOS (Windows Update)"
+                                Click="CheckBiosUpdate_Click"
+                                Padding="10,6" FontSize="12"
+                                Background="#1A3A5C" Foreground="#58A6FF"
+                                BorderBrush="#2D6A9F" BorderThickness="1"
+                                Cursor="Hand" HorizontalAlignment="Left"/>
+                    </Border>
+
+                    <StackPanel Margin="0,0,0,12"
+                                Visibility="{Binding ServicesStartupTaskRows, Converter={StaticResource CollectionNotEmptyToVisibility}}">
+                        <TextBlock Text="Services / Démarrage / Tâches" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentAmber}" Margin="0,0,0,4"/>
+                        <DataGrid ItemsSource="{Binding ServicesStartupTaskRows}" AutoGenerateColumns="False" IsReadOnly="True"
+                                  HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0"
+                                  CanUserResizeColumns="True"
+                                  Background="Transparent" AlternatingRowBackground="#1A2129">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Catégorie" Binding="{Binding Category}" Width="160"/>
+                                <DataGridTextColumn Header="Métrique" Binding="{Binding Metric}" Width="200"/>
+                                <DataGridTextColumn Header="Valeur" Binding="{Binding Value}" Width="100"/>
+                                <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+
+                    <!-- ISSUES (always visible if any) -->
+                    <StackPanel Visibility="{Binding DataContext.IsSummaryMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                        <TextBlock Text="Problèmes et limites" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentAmber}" Margin="0,4,0,4"/>
+                        <ItemsControl ItemsSource="{Binding Issues}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#21262D" CornerRadius="4" Padding="8,6" Margin="0,0,0,4">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="8" Height="8" CornerRadius="4" Margin="0,3,8,0" VerticalAlignment="Top"
+                                                    Background="{Binding Level, Converter={StaticResource IssueLevelToBrush}}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Message}" FontSize="11" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- TABLES (array data, hidden in summary mode) -->
+                    <ItemsControl ItemsSource="{Binding Tables}" Margin="0,8,0,0"
+                                  Visibility="{Binding DataContext.IsSummaryMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,4"/>
+                                    <DataGrid ItemsSource="{Binding Rows}" AutoGenerateColumns="True" IsReadOnly="True"
+                                              HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0"
+                                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                              Background="Transparent" AlternatingRowBackground="#1A2129"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- EVIDENCE + NOTES (hidden in summary mode) -->
+                    <StackPanel Visibility="{Binding DataContext.IsSummaryMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                        <TextBlock Text="{Binding EvidenceText}" FontSize="10" FontFamily="Consolas" Foreground="{StaticResource TextSecondary}" 
+                                   TextWrapping="Wrap" Margin="0,8,0,4"/>
+                        <TextBlock Text="{Binding NotesText}" FontSize="10" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Performance section: Capability Dashboard (Executive card + Matrix + Bar chart). UI-only; consumes existing data. -->
+        <DataTemplate x:Key="PerformanceSectionTemplate" DataType="{x:Type vm:ReportSectionViewModel}">
+            <Border Margin="0,0,0,20" Background="{StaticResource BgCard}" Opacity="0.95"
+                    BorderBrush="{Binding SectionScore, Converter={StaticResource ScoreToPerformanceBrush}}" BorderThickness="2"
+                    CornerRadius="14" Padding="16">
+                <Border.Effect>
+                    <DropShadowEffect Color="#20FFFFFF" BlurRadius="20" ShadowDepth="0" Opacity="0.5"/>
+                </Border.Effect>
+                <StackPanel>
+                    <!-- Section title (minimal) -->
+                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,12"/>
+
+                    <!-- Unavailable state: RequireExternal + dataset failed (Requirement 2A) -->
+                    <Border Visibility="{Binding PerformanceIsUnavailable, Converter={StaticResource BoolToVisibility}}"
+                            Background="{DynamicResource DangerSurfaceBrush}" CornerRadius="8" Padding="20" Margin="0,0,0,12" BorderBrush="{DynamicResource BorderActiveBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="⚠ Évaluation indisponible (dataset externe requis)" Foreground="{DynamicResource DangerBrush}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding PerformanceUnavailableReason}" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding PerformanceCacheInfo}" Foreground="{StaticResource TextSecondary}" FontSize="10" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Fallback warning: no scenario data but not "unavailable" mode -->
+                    <Border Visibility="{Binding ScenarioScores, Converter={StaticResource CollectionNotEmptyToVisibility}, ConverterParameter=Invert}"
+                            Background="#1A2129" CornerRadius="8" Padding="20" Margin="0,0,0,12">
+                        <TextBlock Text="Performance data unavailable" Foreground="{StaticResource TextSecondary}" FontSize="13" HorizontalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Dashboard content (visible when ScenarioScores has data) -->
+                    <StackPanel Visibility="{Binding ScenarioScores, Converter={StaticResource CollectionNotEmptyToVisibility}}">
+                        <!-- 1) Executive Summary Card (score only, no descriptive text) -->
+                        <Border Background="#161B22" CornerRadius="10" Padding="14" Margin="0,0,0,14" BorderBrush="#30363D" BorderThickness="1">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="0" Opacity="0.3"/>
+                            </Border.Effect>
+                            <TextBlock FontSize="28" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"
+                                       Text="{Binding SectionScore, Converter={StaticResource PerformanceScoreToDisplay}, ConverterParameter=WithSuffix}"/>
+                        </Border>
+
+                        <!-- Fallback/warning banner (Requirement 2B) — only shown when non-empty -->
+                        <Border Visibility="{Binding PerformanceFallbackWarning, Converter={StaticResource StringNotEmptyToVisibility}}"
+                                Background="#2D2A17" CornerRadius="6" Padding="10,6" Margin="0,0,0,14" BorderBrush="#FFA726" BorderThickness="1">
+                            <TextBlock Text="{Binding PerformanceFallbackWarning}" Foreground="#FFA726" FontSize="11" TextWrapping="Wrap"/>
+                        </Border>
+
+                        <!-- 2) Capability Matrix: retiré du Rapport Intégral (filtre IntegralReportPerformanceFilter) -->
+                        <StackPanel Visibility="{Binding ShowPerformanceScenarios, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Score par scénario" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,8"/>
+                            <Grid Margin="0,0,0,14" Width="520">
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                    <Border MinWidth="1400" HorizontalAlignment="Left">
+                                    <ItemsControl ItemsSource="{Binding ScenarioScores}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#21262D" CornerRadius="8" Padding="10,8" Margin="0,0,8,8" MinWidth="160"
+                                                    BorderBrush="#30363D" BorderThickness="1">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimary}" FontSize="11" TextWrapping="Wrap"/>
+                                                    <Grid Margin="0,4,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="100"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Grid.Column="0" Height="8" CornerRadius="4" Margin="0,0,6,0"
+                                                                Background="#30363D" ClipToBounds="True">
+                                                            <Border Height="8" CornerRadius="4" HorizontalAlignment="Left"
+                                                                    Width="100"
+                                                                    Background="{Binding Score, Converter={StaticResource ScoreToPerformanceBrush}}">
+                                                                <Border.RenderTransform>
+                                                                    <ScaleTransform ScaleX="{Binding Score, Converter={StaticResource ScoreToScaleFactor}}" ScaleY="1"/>
+                                                                </Border.RenderTransform>
+                                                                <Border.RenderTransformOrigin>
+                                                                    <Point X="0" Y="0.5"/>
+                                                                </Border.RenderTransformOrigin>
+                                                            </Border>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="1" Text="{Binding ScoreDisplay}" FontSize="10" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                    <Border Margin="0,4,0,0" Padding="4,2" CornerRadius="4"
+                                                            Background="{Binding Score, Converter={StaticResource ScoreToPerformanceBrush}}">
+                                                        <TextBlock Text="{Binding Classification}" FontSize="9" Foreground="White"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <Border.ToolTip>
+                                                    <ToolTip MaxWidth="450">
+                                                        <StackPanel>
+                                                            <TextBlock FontWeight="SemiBold" FontSize="12">
+                                                                <Run Text="{Binding Name}"/>
+                                                                <Run Text=" — "/>
+                                                                <Run Text="{Binding Classification}"/>
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding ScoreDisplay, StringFormat=Score: {0}/100}" 
+                                                                       FontSize="11" Foreground="{StaticResource AccentCyan}" Margin="0,4,0,0"/>
+                                                            <TextBlock Text="{Binding ExplanationTooltip}" 
+                                                                       TextWrapping="Wrap" FontSize="10" 
+                                                                       Foreground="{StaticResource TextSecondary}" Margin="0,4,0,0"/>
+                                                        </StackPanel>
+                                                    </ToolTip>
+                                                </Border.ToolTip>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Border>
+                                </ScrollViewer>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- 3) Scenario scores: retiré du Rapport Intégral (filtre IntegralReportPerformanceFilter) -->
+                        <StackPanel Visibility="{Binding ShowPerformanceScenarios, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Scenario scores" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,8"/>
+                            <Border Background="#161B22" CornerRadius="10" Padding="12" BorderBrush="#30363D" BorderThickness="1">
+                                <ItemsControl ItemsSource="{Binding ScenarioScores}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,4,0,4" Padding="0" ToolTip="{Binding Classification}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="150"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="40"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimary}" FontSize="11" VerticalAlignment="Center"/>
+                                                    <Border Grid.Column="1" Height="16" CornerRadius="6" Margin="6,0" Background="#21262D" ClipToBounds="True">
+                                                        <Border Height="16" CornerRadius="8" HorizontalAlignment="Left"
+                                                                Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Border}}"
+                                                                Background="{Binding Score, Converter={StaticResource ScoreToPerformanceBrush}}">
+                                                            <Border.RenderTransform>
+                                                                <ScaleTransform ScaleX="{Binding Score, Converter={StaticResource ScoreToScaleFactor}}" ScaleY="1"/>
+                                                            </Border.RenderTransform>
+                                                            <Border.RenderTransformOrigin>
+                                                                <Point X="0" Y="0.5"/>
+                                                            </Border.RenderTransformOrigin>
+                                                            <Border.Effect>
+                                                                <DropShadowEffect Color="#40FFFFFF" BlurRadius="4" ShadowDepth="0" Opacity="0.4"/>
+                                                            </Border.Effect>
+                                                        </Border>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Classification}" FontSize="9" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- 4) Market Position Table (Table B) - Score sur le marché (placed high so visible without scrolling) -->
+                        <TextBlock Text="Classer mon PC" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,8"/>
+                        <TextBlock Text="Position relative sur le marché actuel basée sur un dataset externe évolutif" 
+                                   FontSize="10" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                        
+                        <!-- Market Position Table: s'adapte à la largeur disponible; barre horizontale en bas si espace insuffisant -->
+                        <Border Background="#161B22" CornerRadius="10" Padding="0" BorderBrush="#30363D" BorderThickness="1" MinHeight="140">
+                            <ScrollViewer x:Name="MarketPositionScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                <Grid MinWidth="500" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+                                    <!-- Header Row -->
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <Border Grid.Row="0" Background="#21262D" Padding="12,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="70"/>
+                                                <ColumnDefinition Width="180"/>
+                                                <ColumnDefinition Width="80"/>
+                                                <ColumnDefinition Width="90"/>
+                                                <ColumnDefinition Width="100"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Composant" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"/>
+                                            <TextBlock Grid.Column="1" Text="Modèle détecté" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"/>
+                                            <TextBlock Grid.Column="2" Text="Score bench" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                                            <TextBlock Grid.Column="3" Text="Percentile" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                                            <TextBlock Grid.Column="4" Text="Rang" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    
+                                    <ItemsControl Grid.Row="1" ItemsSource="{Binding MarketPositionScores}" Padding="12,4,12,8">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,4,0,4" Padding="0">
+                                                    <Border.ToolTip>
+                                                        <ToolTip MaxWidth="400">
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Component}" FontWeight="SemiBold" FontSize="12"/>
+                                                                <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Margin="0,4,0,4"/>
+                                                                <TextBlock FontSize="10" Foreground="#8B949E">
+                                                                    <Run Text="Catégorie marché: "/><Run Text="{Binding MarketTier}"/>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </ToolTip>
+                                                    </Border.ToolTip>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="70"/>
+                                                            <ColumnDefinition Width="180"/>
+                                                            <ColumnDefinition Width="80"/>
+                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="100"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        
+                                                        <!-- Component Name -->
+                                                        <TextBlock Grid.Column="0" Text="{Binding Component}" 
+                                                                   Foreground="{StaticResource TextPrimary}" FontSize="11" 
+                                                                   VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                                        
+                                                        <!-- Detected Model -->
+                                                        <TextBlock Grid.Column="1" Text="{Binding DetectedModel}" 
+                                                                   Foreground="{StaticResource TextSecondary}" FontSize="10" 
+                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                                   ToolTip="{Binding DetectedModel}"/>
+                                                        
+                                                        <!-- Benchmark Score -->
+                                                        <TextBlock Grid.Column="2" Text="{Binding BenchmarkScore, StringFormat={}{0:N0}}" 
+                                                                   Foreground="{StaticResource TextSecondary}" FontSize="10" 
+                                                                   VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                                        
+                                                        <!-- Percentile -->
+                                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                                            <TextBlock Text="{Binding PercentileDisplay}" FontSize="12" 
+                                                                       Foreground="{StaticResource AccentCyan}" FontWeight="Bold"/>
+                                                        </StackPanel>
+                                                        
+                                                        <!-- Rank -->
+                                                        <TextBlock Grid.Column="4" Text="{Binding RankDisplay}" 
+                                                                   Foreground="{StaticResource TextSecondary}" FontSize="10" 
+                                                                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+                            </ScrollViewer>
+                        </Border>
+                        
+                        <!-- Source info for Market Position -->
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="Source marché: " FontSize="9" Foreground="{StaticResource TextSecondary}"/>
+                            <TextBlock FontSize="9" Foreground="{StaticResource TextSecondary}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0} (cache: {1})">
+                                        <Binding Path="PerformanceDataSource"/>
+                                        <Binding Path="PerformanceCacheInfo"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- 5) Task Capability Table (Table A) - Capacités par tâches -->
+                        <TextBlock Text="Capacités par tâches" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Margin="0,14,0,8"/>
+                        <TextBlock Text="Score indiquant à quel point le PC peut accomplir chaque tâche (100 = répond à tous les besoins)" 
+                                   FontSize="10" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                        <Border Background="#161B22" CornerRadius="10" Padding="12" BorderBrush="#30363D" BorderThickness="1" Margin="0,0,0,14">
+                            <ItemsControl ItemsSource="{Binding TaskCapabilityScores}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,4,0,4" Padding="0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="150"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="50"/>
+                                                    <ColumnDefinition Width="80"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding TaskName}" Foreground="{StaticResource TextPrimary}" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                                <Border Grid.Column="1" Height="16" CornerRadius="6" Margin="6,0" Background="#21262D" ClipToBounds="True">
+                                                    <Border Height="16" CornerRadius="8" HorizontalAlignment="Left"
+                                                            Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Border}}"
+                                                            Background="{Binding Score, Converter={StaticResource ScoreToPerformanceBrush}}">
+                                                        <Border.RenderTransform>
+                                                            <ScaleTransform ScaleX="{Binding Score, Converter={StaticResource ScoreToScaleFactor}}" ScaleY="1"/>
+                                                        </Border.RenderTransform>
+                                                        <Border.RenderTransformOrigin>
+                                                            <Point X="0" Y="0.5"/>
+                                                        </Border.RenderTransformOrigin>
+                                                    </Border>
+                                                </Border>
+                                                <TextBlock Grid.Column="2" Text="{Binding Score, StringFormat={}{0}/100}" FontSize="10" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                                <Border Grid.Column="3" CornerRadius="4" Padding="6,2" Margin="4,0,0,0" HorizontalAlignment="Right"
+                                                        Background="{Binding Score, Converter={StaticResource ScoreToPerformanceBrush}}">
+                                                    <TextBlock Text="{Binding Classification}" FontSize="9" Foreground="White" FontWeight="SemiBold"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Score to bar width: 0-100 -> 0 to 200px (or similar). Need a converter. -->
+        <conv:ScoreToBarWidthConverter x:Key="ScoreToBarWidth"/>
+
+        <views:PerformanceSectionTemplateSelector x:Key="SectionTemplateSelector"
+            DefaultTemplate="{StaticResource SectionDetailTemplate}"
+            PerformanceTemplate="{StaticResource PerformanceSectionTemplate}"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- SIDEBAR -->
+        <Border Grid.Column="0" Background="#161B22" BorderBrush="{StaticResource BorderGlass}" BorderThickness="0,0,1,0" Padding="0,16,0,0">
+            <StackPanel>
+                <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" Margin="16,0,16,12"/>
+                <ToggleButton x:Name="SummaryToggleButton"
+                              Content="Synthèse"
+                              IsChecked="{Binding IsSummaryMode}"
+                              Margin="12,0,12,8"
+                              Click="SummaryToggleButton_Click"
+                              Style="{StaticResource ReportToggleButtonStyle}"/>
+                <ListBox x:Name="SectionListBox"
+                         ItemsSource="{Binding Sections}"
+                         SelectedItem="{Binding SelectedSection, Mode=TwoWay}"
+                         ItemContainerStyle="{StaticResource SidebarItemStyle}"
+                         BorderThickness="0" Background="Transparent"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:ReportSectionViewModel">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding HasCritical, Converter={StaticResource IssueLevelToIcon}}" 
+                                           Foreground="{StaticResource AccentRedBrush}" FontWeight="Bold" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Indicateur Couverture UI : champs mappés / champs détectés -->
+                <Border Margin="10,12,10,8" Padding="8,6" CornerRadius="6"
+                        Background="#131C24" BorderBrush="#1F3A50" BorderThickness="1"
+                        Visibility="{Binding UiCoverageDisplay, Converter={StaticResource StringNotEmptyToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding UiCoverageDisplay}"
+                                   FontSize="10" Foreground="#58A6FF" TextWrapping="Wrap"
+                                   ToolTip="Ratio de champs JSON affichés dans l'interface vs total détecté"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- CONTENT: ContentControl bound to SelectedSection. HorizontalScrollBarVisibility=Auto : barre en bas si contenu trop large -->
+        <ScrollViewer x:Name="ContentScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                      Padding="24,16,24,24" Background="Transparent">
+            <ContentControl Content="{Binding SelectedSection}"
+                            ContentTemplateSelector="{StaticResource SectionTemplateSelector}"/>
+        </ScrollViewer>
+    </Grid>
+</UserControl>
